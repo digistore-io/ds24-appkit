@@ -1,0 +1,50 @@
+{
+  "_comment": "Zentrale Produkt-Registry (Source of Truth). Jedes Angebot = EIN Digistore24-Produkt. 'productId' wird von scripts/ds24/sync-products.mjs nach createProduct/updateProduct zurueckgeschrieben und ist in ALLEN Umgebungen dieselbe Live-Produkt-ID. Preis/Intervall werden je Produkt als DS24-Payment-Plan gepflegt (in der DS24-Oberflaeche); die hier gelisteten priceCents/billingInterval/credits sind fuer App-Anzeige und Billing-on-Demand.",
+  "products": {
+    "basis_monatlich": {
+      "name": "Basis (monatlich)",
+      "description": "Monatliches Basis-Abo.",
+      "kind": "subscription",
+      "billingInterval": "1_month",
+      "priceCents": 1900,
+      "currency": "EUR",
+      "productId": null
+    },
+    "basis_jaehrlich": {
+      "name": "Basis (jaehrlich)",
+      "description": "Jaehrliches Basis-Abo.",
+      "kind": "subscription",
+      "billingInterval": "12_month",
+      "priceCents": 19000,
+      "currency": "EUR",
+      "productId": null
+    },
+    "starter": {
+      "name": "Starter Token",
+      "description": "Token-Paket Starter.",
+      "kind": "token",
+      "credits": 1000,
+      "priceCents": 900,
+      "currency": "EUR",
+      "productId": null
+    },
+    "pro": {
+      "name": "Pro Token",
+      "description": "Token-Paket Pro.",
+      "kind": "token",
+      "credits": 5000,
+      "priceCents": 3900,
+      "currency": "EUR",
+      "productId": null
+    },
+    "business": {
+      "name": "Business Token",
+      "description": "Token-Paket Business.",
+      "kind": "token",
+      "credits": 15000,
+      "priceCents": 9900,
+      "currency": "EUR",
+      "productId": null
+    }
+  }
+}
