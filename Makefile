@@ -27,11 +27,24 @@ help: ## Diese Übersicht anzeigen
 
 # ── Start / Stop ────────────────────────────────────────────────────────────
 .PHONY: start
-start: .env node_modules db-up db-migrate ## Alles starten: DB + Migrationen + App (http://localhost:$(PORT))
+start: env node_modules db-up db-migrate ## Alles starten: DB + Migrationen + App (http://localhost:$(PORT))
 	@mkdir -p $(DEV_DIR)
 	@if [ -f $(DEV_PID) ] && kill -0 "$$(cat $(DEV_PID))" 2>/dev/null; then \
 	  echo "App läuft bereits (PID $$(cat $(DEV_PID))) — http://localhost:$(PORT)"; \
 	  exit 0; \
+	fi
+	@# Belegten App-Port vorher abfangen — sonst kommt nur ein Node-Stacktrace.
+	@. scripts/dev/ports.sh; \
+	if port_belegt $(PORT); then \
+	  FREI=$$(freier_port $$(($(PORT) + 1))); \
+	  echo "✗ Auf Port $(PORT) läuft bereits etwas anderes (anderes Projekt?)."; \
+	  echo ""; \
+	  echo "  Starte die App auf einem freien Port — $$FREI ist gerade frei:"; \
+	  echo ""; \
+	  echo "     make start PORT=$$FREI"; \
+	  echo ""; \
+	  echo "  (Stoppen dann ebenfalls mit: make stop PORT=$$FREI)"; \
+	  exit 1; \
 	fi
 	@# setsid: eigene Prozessgruppe, damit `make stop` npm UND next zuverlässig
 	@# beendet (ohne bleibt sonst ein Kindprozess zurück).
@@ -79,7 +92,7 @@ logs: ## Log der laufenden App verfolgen (Strg-C zum Beenden)
 	@touch $(DEV_LOG) && tail -f $(DEV_LOG)
 
 .PHONY: dev
-dev: .env node_modules db-up db-migrate ## App im Vordergrund starten (Logs direkt im Terminal)
+dev: env node_modules db-up db-migrate ## App im Vordergrund starten (Logs direkt im Terminal)
 	npm run dev -- --port $(PORT)
 
 # ── Tests & Qualität ────────────────────────────────────────────────────────
@@ -87,6 +100,10 @@ dev: .env node_modules db-up db-migrate ## App im Vordergrund starten (Logs dire
 test: node_modules ## Tests (vitest) + TypeScript-Prüfung
 	npm run typecheck
 	npm run test
+
+.PHONY: smoke
+smoke: ## Jede Seite einmal aufrufen — findet "Internal Server Error" (App muss laufen)
+	node scripts/dev/smoke.mjs $(ARGS)
 
 .PHONY: lint
 lint: node_modules ## Linten
@@ -143,13 +160,23 @@ user-create: ## Benutzer anlegen/Rolle setzen (ARGS='--email … --role owner --
 user-list: ## Benutzer + Rollen auflisten (ARGS='--role owner')
 	node scripts/users/list-users.mjs $(ARGS)
 
+# ── E-Mail-Versand (Login) ──────────────────────────────────────────────────
+.PHONY: mail-setup
+mail-setup: ## E-Mail-Versand einrichten (Postmark oder SMTP) + Testmail
+	node scripts/dev/mail-setup.mjs
+
 # ── Digistore24-Setup ───────────────────────────────────────────────────────
+.PHONY: ds24-connect
+ds24-connect: ## API-Key holen (öffnet den Browser) und in .env speichern
+	node scripts/ds24/connect-api-key.mjs $(ARGS)
+
 .PHONY: ds24-sync
-ds24-sync: ## Produkte aus config/digistore-products.json anlegen (ARGS=--apply)
+ds24-sync: ## Produkte + IPN-Anbindung anlegen/aktualisieren (idempotent; ARGS=--apply)
 	node scripts/ds24/sync-products.mjs $(ARGS)
+	node scripts/ds24/ipn-setup.mjs --auto $(ARGS)
 
 .PHONY: ds24-ipn
-ds24-ipn: ## IPN-Anbindung einrichten (ARGS="--url … --saas … --apply")
+ds24-ipn: ## IPN-Anbindung manuell einrichten (ARGS="--url … --domain … --apply")
 	node scripts/ds24/ipn-setup.mjs $(ARGS)
 
 .PHONY: tunnel
@@ -161,7 +188,12 @@ node_modules: package-lock.json
 	npm install
 	@touch node_modules
 
+# Legt die .env an (falls nötig) und füllt ein leeres AUTH_SECRET.
+# Als phony-Ziel, damit auch eine bestehende .env mit leerem Secret repariert
+# wird — ein Datei-Ziel würde bei vorhandener Datei nie laufen.
+.PHONY: env
+env: ## .env sicherstellen (anlegen + AUTH_SECRET erzeugen)
+	@bash scripts/dev/ensure-env.sh
+
 .env:
-	@cp .env.example .env
-	@echo "→ .env aus .env.example erzeugt. Bitte AUTH_SECRET setzen:"
-	@echo "  openssl rand -hex 32"
+	@bash scripts/dev/ensure-env.sh

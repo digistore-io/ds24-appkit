@@ -13,8 +13,11 @@ nichts Technisches auswendig können.
 
 - **Grün lokal:** `npm run typecheck && npm run test && npm run build` ohne Fehler.
 - **Env vollständig:** `AUTH_SECRET` (`openssl rand -hex 32`), `DATABASE_URL`
-  (managed Postgres), `APP_URL` (= Live-Domain), mindestens ein Auth-Provider,
-  ggf. `DIGISTORE_DEVELOPER_KEY`. Alle in `.env.example` gelistet.
+  (managed Postgres), `APP_URL` (= Live-Domain), mindestens ein Auth-Provider.
+  Alle in `.env.example` gelistet. Dazu `DIGISTORE_API_KEY` und
+  `DIGISTORE_IPN_PASSPHRASE` — lokal von `make ds24-connect` in die `.env`
+  geschrieben, für PROD beim Hoster als Secrets hinterlegen.
+  (`DIGISTORE_DEVELOPER_KEY` ist optional — der Connect-Flow läuft ohne.)
 - **Migrationen bereit:** `drizzle/` aktuell (`npm run db:generate` nach Schemaänderungen).
 
 ## 2. Hosten
@@ -47,9 +50,13 @@ Vor dem Verkauf einmalig:
    → setzt je Produkt `approval_status = requested` (via `updateProduct`). Die
    Siteowner-ID des DS24-Marktplatzes steht im DS24-Konto. Produkte werden erst
    nach Freigabe durch Digistore24 öffentlich verkaufbar.
-4. **IPN auf die Live-Domain** setzen (im Onboarding ablesen oder per Skript):
-   `node scripts/ds24/ipn-setup.mjs --url "https://DEINE-DOMAIN/api/ipn/<vendor>" --saas "..." --env prod --apply`
-   In Digistore24 **SHA512** wählen; Passphrase = die aus dem Onboarding/Skript.
+4. **IPN auf die Live-Domain** setzen: Sobald `APP_URL` auf die öffentliche
+   Domain zeigt, registriert `make ds24-sync ARGS=--apply` die IPN automatisch
+   per API (URL ist immer `/api/ipn`) und schreibt die erzeugte SHA512-Passphrase
+   als `DIGISTORE_IPN_PASSPHRASE` in die `.env`. Diesen Wert **und** die
+   `DIGISTORE_IPN_DOMAIN_ID` beim Hoster als Secrets hinterlegen. Einzeln geht es
+   mit `node scripts/ds24/ipn-setup.mjs --url "https://DEINE-DOMAIN/api/ipn"
+   --domain "DEINE-DOMAIN" --apply`.
 
 > Lokal testen (DEV): IPNs via kostenlosem Cloudflare Quick Tunnel empfangen —
 > `bash scripts/dev/tunnel.sh`, dann die trycloudflare-URL als IPN-Ziel setzen
@@ -58,6 +65,10 @@ Vor dem Verkauf einmalig:
 ## 5. Smoke-Test (live)
 
 - `https://DEINE-DOMAIN/api/healthz` → `{"status":"ok"}`, `/api/readyz` → `ready`.
+- **Jede Seite aufrufen:** `make smoke ARGS=--url https://DEINE-DOMAIN` bzw.
+  `node scripts/dev/smoke.mjs --url https://DEINE-DOMAIN`. Kein 5xx — sonst ist
+  der Launch nicht fertig. Produktion trifft Fehler, die lokal nie auftraten
+  (fehlende Env-Werte, nicht eingespielte Migrationen).
 - Login testen (Google/E-Mail).
 - **Kauf-Fluss:** in Digistore24 „Verbindung testen" auslösen (IPN `connection_test`
   → 200) und einen echten/Test-Kauf durchspielen → Bestellung erscheint, Zugang

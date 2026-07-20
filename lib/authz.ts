@@ -6,24 +6,20 @@
 // `middleware.ts` schützt nur "eingeloggt vs. nicht" — die *Rollen*-Prüfung
 // passiert serverseitig in der jeweiligen Seite/Route über requireOwner().
 //
-// Die reinen Prädikate (isOwner/hasRole) sind bewusst frei vom schweren
-// Auth-Import, damit sie ohne Server-Runtime testbar sind; requireOwner lädt
-// auth() erst zur Laufzeit (dynamischer Import). `redirect` bleibt statisch —
-// next/navigation ist leichtgewichtig und liefert die `never`-Typverengung.
+// Die reinen Prädikate (isOwner/hasRole/roleLabel) stehen in lib/roles.ts und
+// werden hier re-exportiert — sie sind damit auch aus Client-Komponenten
+// importierbar, ohne dass der Bundler auth.ts (und den Mailversand) mitzieht.
+// requireOwner lädt auth() erst zur Laufzeit (dynamischer Import); `redirect`
+// bleibt statisch — next/navigation ist leichtgewichtig und liefert die
+// `never`-Typverengung.
 import { redirect } from "next/navigation";
 
-/** true, wenn die Rolle Betreiber-/Admin-Rechte hat. */
-export function isOwner(role?: string | null): boolean {
-  return role === "owner";
-}
-
-/** true, wenn die Rolle in der erlaubten Liste ist. */
-export function hasRole(
-  role: string | null | undefined,
-  allowed: readonly string[],
-): boolean {
-  return role != null && allowed.includes(role);
-}
+// Rollen-Definitionen und -Prädikate liegen in lib/roles.ts (ohne Server-
+// Abhängigkeiten, damit auch Client-Komponenten sie importieren können) und
+// werden hier weitergereicht — Server-Code braucht so nur einen Import.
+export { ROLES, isRole, roleLabel, isOwner, hasRole } from "./roles";
+export type { Role } from "./roles";
+import { isOwner } from "./roles";
 
 /**
  * Guard für Betreiber-/Admin-Bereiche.

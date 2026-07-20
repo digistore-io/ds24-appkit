@@ -3,7 +3,7 @@
 // Enthält:
 //  - Auth.js-Tabellen (users, accounts, sessions, verificationTokens) für den
 //    @auth/drizzle-adapter.
-//  - Digistore-Tabellen (vendorSettings, orders) — siehe schema-digistore.ts,
+//  - Digistore-Tabellen (orders, subscriptions, …) — siehe schema-digistore.ts,
 //    das hier re-exportiert wird, damit `drizzle-kit` alles in einer Schema-Datei sieht.
 import {
   pgTable,
@@ -24,7 +24,10 @@ export const users = pgTable("users", {
   emailVerified: timestamp("emailVerified", { mode: "date" }),
   image: text("image"),
   // Rolle für einfache Autorisierung (z. B. "owner" = SAAS-Betreiber).
+  // Kanonische Werte: "owner" (Admin) | "member" (Kunde) — siehe lib/authz.ts.
   role: text("role").notNull().default("member"),
+  // Anlagedatum — wird in der Benutzerverwaltung angezeigt.
+  createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
 });
 
 export const accounts = pgTable(

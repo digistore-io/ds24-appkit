@@ -1,5 +1,10 @@
-// Digistore24 IPN-Webhook: POST /api/ipn/<vendor>
-// <vendor> ist die userId des SAAS-Betreibers (aus dem Onboarding).
+// Digistore24 IPN-Webhook: POST /api/ipn
+//
+// Ein-Betreiber-Modell: Es gibt genau ein Digistore24-Konto pro Installation.
+// Die Passphrase zur Signaturprüfung kommt aus der Umgebung
+// (DIGISTORE_IPN_PASSPHRASE, gesetzt von `make ds24-connect` bzw.
+// `make ds24-ipn`), Eigentümer der Datensätze ist der Benutzer mit
+// role = "owner" — siehe lib/digistore/settings.ts.
 //
 // Ablauf: Signatur (SHA512) prüfen → connection_test beantworten →
 // Event auf Order-Status abbilden → Order idempotent per ds24OrderId schreiben.
@@ -8,7 +13,7 @@
 //   - Abo-Event mit purchase_id → subscriptions upserten (Status, Intervall,
 //     Verwaltungs-Links für Kündigung/Bezahldaten/Rechnung).
 import { db } from "@/db";
-import { vendorSettings, orders, subscriptions } from "@/db/schema";
+import { orders, subscriptions } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import {
   verifyIpnSignature,
@@ -16,6 +21,7 @@ import {
   mapEventToSubscriptionStatus,
   type IpnParams,
 } from "@/lib/digistore/ipn";
+import { ds24IpnPassphrase, getOwnerUserId } from "@/lib/digistore/settings";
 import { creditTokens } from "@/lib/tokens/account";
 import { parseTokenCustomMarker, getTokenPackage } from "@/lib/tokens/packages";
 
@@ -28,41 +34,34 @@ export function GET() {
   return new Response("OK");
 }
 
-export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ vendor: string }> },
-) {
-  const { vendor } = await params;
-
+export async function POST(request: Request) {
   // form-urlencoded Body einlesen.
   const raw = await request.text();
   const body: IpnParams = Object.fromEntries(new URLSearchParams(raw));
 
-  const settings = await db.query.vendorSettings.findFirst({
-    where: eq(vendorSettings.userId, vendor),
-  });
-  if (!settings) return new Response("Vendor not found", { status: 404 });
-  if (!settings.ds24IpnPassphrase) {
+  // Signaturprüfung — fail-closed. Ohne Passphrase wird nichts verarbeitet.
+  const passphrase = ds24IpnPassphrase();
+  if (!passphrase) {
     return new Response("IPN not configured", { status: 403 });
   }
-
-  // Signaturprüfung — fail-closed.
-  if (!verifyIpnSignature(body, settings.ds24IpnPassphrase)) {
+  if (!verifyIpnSignature(body, passphrase)) {
     return new Response("Invalid signature", { status: 403 });
-  }
-
-  // Erste gültige Zustellung markiert die IPN-Verbindung als verifiziert.
-  if (!settings.ds24IpnVerified) {
-    await db
-      .update(vendorSettings)
-      .set({ ds24IpnVerified: true, updatedAt: new Date() })
-      .where(eq(vendorSettings.userId, vendor));
   }
 
   const event = body["event"] || body["order_event"] || "";
 
-  // Verbindungstest aus dem DS24-Backend: einfach mit "OK" antworten.
+  // Verbindungstest aus dem DS24-Backend: einfach mit "OK" antworten. Bewusst
+  // vor der Owner-Auflösung — der Test soll auch auf einer frisch aufgesetzten
+  // Instanz ohne Betreiber-Account durchgehen.
   if (event === "connection_test") return new Response("OK");
+
+  const vendor = await getOwnerUserId();
+  if (!vendor) {
+    // Signatur war gültig, aber es gibt niemanden, dem die Bestellung gehört.
+    // 503 statt 200: Digistore24 stellt später erneut zu, statt das Event zu
+    // verwerfen. Behebung: make user-create ARGS="… --role owner --apply"
+    return new Response("Owner not configured", { status: 503 });
+  }
 
   const status = mapEventToStatus(event);
   const orderId = body["order_id"] || body["ds24_order_id"];

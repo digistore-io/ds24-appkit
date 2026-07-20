@@ -39,9 +39,16 @@ Produktion nichts zu suchen.
 
 ## Digistore24 verbinden
 
-1. In der App anmelden → **Onboarding** öffnen.
-2. Digistore24 REST-API-Key eintragen (Digistore24 → Einstellungen → API).
-3. Die angezeigte **IPN-URL** (`https://DEINE-DOMAIN/api/ipn/<vendor>`) und die
-   **Passphrase** in Digistore24 unter *Einstellungen → IPN* hinterlegen
-   (Signatur: **SHA512**).
-4. In Digistore24 „Verbindung testen" auslösen → Status wird in der App grün.
+1. Im Terminal `make ds24-connect` ausführen. Der Browser öffnet sich, du
+   bestätigst bei Digistore24 — der API-Key landet in deiner lokalen `.env`
+   (`DIGISTORE_API_KEY`, dazu `DIGISTORE_IPN_PASSPHRASE`, sofern Digistore24 sie
+   mitliefert). Es gibt bewusst **keine** Oberfläche zum Eintragen von Schlüsseln.
+2. `make ds24-sync ARGS=--apply` ausführen. Legt die Produkte an **und**
+   registriert die IPN-Anbindung per API bei Digistore24 (URL immer
+   `https://DEINE-DOMAIN/api/ipn`, Signatur SHA512) — sofern `APP_URL` auf die
+   öffentliche Domain zeigt. Die erzeugte Passphrase und die stabile
+   `DIGISTORE_IPN_DOMAIN_ID` landen in der `.env`. In der DS24-Oberfläche muss
+   dafür **nichts** von Hand eingetragen werden.
+3. Die relevanten Secrets beim Hoster hinterlegen (nicht ins Repo):
+   `DIGISTORE_API_KEY`, `DIGISTORE_IPN_PASSPHRASE`, `DIGISTORE_IPN_DOMAIN_ID`.
+4. In Digistore24 „Verbindung testen" auslösen → der IPN muss mit `200` antworten.

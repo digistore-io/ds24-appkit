@@ -24,7 +24,10 @@ folgenden Regeln. Sie sind der „goldene Pfad“ — reiße sie nicht heraus.
 
 - **Niemals** API-Keys, Passphrases oder Tokens in den Code, ins Repo oder in Logs.
 - Konfiguration über `.env` (neue Variablen in `.env.example` ergänzen) bzw. die
-  Secret-Verwaltung des Hosters. Vendor-Zugangsdaten liegen in `vendor_settings`.
+  Secret-Verwaltung des Hosters. Die Digistore24-Zugangsdaten des Betreibers
+  (`DIGISTORE_API_KEY`, `DIGISTORE_IPN_PASSPHRASE`) holt `make ds24-connect` in
+  die `.env`; gelesen werden sie über `lib/digistore/settings.ts`. Keine
+  Oberfläche zum Eintragen von Schlüsseln bauen.
 
 ## Kundendaten & DSGVO
 

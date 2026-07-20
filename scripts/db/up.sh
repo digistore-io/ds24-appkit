@@ -9,6 +9,9 @@
 # Aufruf:  bash scripts/db/up.sh   (oder: make db-up)
 set -euo pipefail
 
+# shellcheck source=../dev/ports.sh
+. "$(dirname "${BASH_SOURCE[0]}")/../dev/ports.sh"
+
 # DB_PORT aus der Umgebung oder aus .env; Default 5432 (wie docker-compose.yml).
 db_port="${DB_PORT:-}"
 if [ -z "$db_port" ] && [ -f .env ]; then
@@ -17,13 +20,17 @@ fi
 db_port="${db_port:-5432}"
 
 hint_port_belegt() {
+  # Einen tatsächlich freien Port vorschlagen — ein fest verdrahteter Tipp
+  # laeuft auf Rechnern mit mehreren Projekten sonst in dieselbe Wand.
+  local frei
+  frei="$(freier_port $((db_port + 1)))"
   cat <<EOF
 
   So löst du es: trag in .env einen freien Port ein — und zieh den Port in
-  DATABASE_URL mit (beide müssen zusammenpassen!):
+  DATABASE_URL mit (beide müssen zusammenpassen!). Frei ist gerade $frei:
 
-     DB_PORT=5433
-     DATABASE_URL=postgresql://app:app@localhost:5433/app
+     DB_PORT=$frei
+     DATABASE_URL=postgresql://app:app@localhost:$frei/app
 
   Danach nochmal: make start
 EOF

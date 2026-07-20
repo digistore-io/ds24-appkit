@@ -1,8 +1,12 @@
 // Digistore24-spezifische Tabellen (domänenneutral gehalten).
 //
-// vendorSettings: pro SAAS-Betreiber ("Vendor") die Digistore24-Zugangsdaten.
-// orders:         jede über Digistore24 abgerechnete Bestellung + ihr Status
-//                 (getrieben durch IPN-Events). ds24OrderId ist unique → Idempotenz.
+// orders: jede über Digistore24 abgerechnete Bestellung + ihr Status
+//         (getrieben durch IPN-Events). ds24OrderId ist unique → Idempotenz.
+//
+// Die Digistore24-Zugangsdaten stehen NICHT hier, sondern in der Umgebung
+// (DIGISTORE_API_KEY, DIGISTORE_IPN_PASSPHRASE) — siehe lib/digistore/settings.ts.
+// Die App rechnet über genau ein Digistore24-Konto ab; `userId` in den Tabellen
+// unten ist der Betreiber (role = "owner"), nicht ein Mandant.
 import {
   pgTable,
   text,
@@ -22,24 +26,6 @@ export const orderStatusEnum = pgEnum("order_status", [
   "paused", // on_payment_missed
   "cancelled", // last_paid_day / on_rebill_cancelled
 ]);
-
-export const vendorSettings = pgTable("vendor_settings", {
-  // 1:1 zum SAAS-Betreiber (Auth.js-User).
-  userId: text("user_id")
-    .primaryKey()
-    .references(() => users.id, { onDelete: "cascade" }),
-  // Digistore24 REST-API-Key (Header X-DS-API-KEY). NUR serverseitig lesen.
-  ds24ApiKey: text("ds24_api_key"),
-  ds24ApiKeyVerified: boolean("ds24_api_key_verified").notNull().default(false),
-  // Temporäres Token während des interaktiven Connect-Flows (requestApiKey →
-  // retrieveApiKey). Nach erfolgreichem Abruf wieder geleert.
-  ds24RequestToken: text("ds24_request_token"),
-  // Passphrase zur SHA512-Verifikation eingehender IPN-Calls (sha_sign).
-  ds24IpnPassphrase: text("ds24_ipn_passphrase"),
-  ds24IpnVerified: boolean("ds24_ipn_verified").notNull().default(false),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
 
 export const orders = pgTable("orders", {
   id: text("id")

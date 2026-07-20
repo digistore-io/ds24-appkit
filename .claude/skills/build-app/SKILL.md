@@ -1,6 +1,6 @@
 ---
 name: build-app
-description: Start hier, wenn du auf diesem Template eine SAAS-Anwendung mit Digistore24-Abrechnung baust. Ordnet dein Vorhaben einem Archetyp zu, legt Datenmodell und Seiten an und verweist auf setup-digistore für die Bezahlung sowie guardrails für die Sicherheitsregeln.
+description: DER EINSTIEGSPUNKT für dieses Template — nutze diesen Skill, sobald der Nutzer mit dem Bauen anfangen will, sich orientieren will oder unklar formuliert loslegt ("wie fange ich an?", "Baue meine App", "was kann ich hier machen?"). Klärt zuerst, ob eine Produktidee da ist (sonst Übergabe an market-research), ordnet das Vorhaben einem Archetyp zu, legt Datenmodell und Seiten an und reicht danach an setup-digistore für die Bezahlung weiter. Begleitend gelten die Regeln aus guardrails.
 ---
 
 # Eine SAAS-App auf diesem Template bauen
@@ -9,13 +9,49 @@ Du baust eine **SAAS-Anwendung, die über Digistore24 abrechnet**. Dieses Templa
 liefert Login, Datenbank, Design-System und die komplette Digistore-Anbindung
 bereits mit. Du beschreibst nur noch, was deine App tun soll.
 
-## Schritt 0 — Noch keine klare Idee? Erst recherchieren
+**Ausnahmslos eine SAAS-App — niemals eine einzelne Webseite.** Landingpage,
+Onepager, Firmen- oder Portfolioseite sind hier kein gültiges Ergebnis: ohne
+Nutzerkonten, geschützten Bereich und kaufabhängigen Zugang gibt es nichts, was
+Digistore24 abrechnen könnte. Fragt der Nutzer danach, frag zurück, was die
+Leute *kaufen* und danach *benutzen* sollen — die gewünschte Seite ist fast
+immer die Verkaufsseite der App und gehört als `app/page.tsx` plus
+`app/tarife/page.tsx` hinein, nicht als eigenes Projekt daneben. Details in
+`CLAUDE.md` („Was hier entsteht — ausnahmslos").
 
-Wenn der Nutzer **noch keine konkrete Produktidee** hat (oder sie unsicher/vage
-ist), starte zuerst den Skill **`market-research`**. Er interviewt den Nutzer zu
-Expertise und Reichweite, recherchiert eine Zielgruppe samt Herausforderungen und
-liefert einen konkreten Produktvorschlag + Product-Brief (`docs/product-brief.md`).
-Erst danach hier weitermachen. Steht die Idee bereits fest, überspringe diesen Schritt.
+**Ausnahme: Test-Apps.** Will jemand nur ausprobieren („zeig mir ‚Hello
+World'", eine kleine Seite zum Gefühl-Bekommen), dann bau das direkt als Seite
+unter `app/` — ohne Schritt 0, ohne `market-research`, ohne Nachfrage nach dem
+Produkt. Erst wenn es läuft, in einem Satz anbieten, ob daraus etwas Verkaufbares
+werden soll. Anbieten, nicht drängen.
+
+## Schritt 0 — Die Weiche: Steht die Idee schon?
+
+Dies ist die **einzige Eingangstür** des Templates. Der Nutzer muss keinen
+zweiten Skill kennen — du stellst zuerst genau eine Frage:
+
+> „Hast du schon eine konkrete Idee, was deine App tun soll — oder sollen wir
+> gemeinsam eine finden, die zu deiner Erfahrung und deiner Reichweite passt?"
+
+- **Idee steht** (der Nutzer kann in 1–2 Sätzen sagen, was die App tut und für
+  wen) → weiter bei Schritt 1.
+- **Keine oder vage Idee** („weiß nicht", „irgendwas mit…", nur eine Branche) →
+  starte den Skill **`market-research`**. Er interviewt den Nutzer zu Expertise
+  und Reichweite, recherchiert eine Zielgruppe samt Herausforderungen und liefert
+  einen konkreten Produktvorschlag + Product-Brief (`docs/product-brief.md`).
+  Danach kommt der Nutzer hierher zurück, und du machst bei Schritt 1 weiter.
+
+Rate nicht. Eine vage Antwort ist ein Nein — lieber einmal zu oft in die
+Recherche abbiegen als eine App bauen, die niemand kauft.
+
+- **Nur ausprobieren** („Hello World", eine kleine Testseite) → die Frage
+  entfällt. Direkt bauen, siehe „Ausnahme: Test-Apps" oben. Eine Weiche vor
+  einen Zweizeiler zu stellen, vertreibt genau die Nutzer, die das System
+  gerade erst kennenlernen.
+
+Wenn der Nutzer sich nur **orientieren** will („was kann ich hier machen?",
+„wie fange ich an?"), gib ihm kurz den Weg (Idee → Bauen → Bezahlung →
+Sicherheit → Recht → Live → Vermarktung, siehe `README.md`) und stell dann
+dieselbe Frage.
 
 ## Schritt 1 — Archetyp wählen
 
@@ -47,6 +83,11 @@ die durch Digistore-IPN-Events gefüllt wird.
 - Öffentliche Käufer-Seiten (z. B. Zugang nach Kauf) prüfen den `orders.status`.
 - UI mit shadcn/ui: `npx shadcn@latest add <component>`. Farben nur über Tokens
   aus `app/globals.css`, nichts hart kodieren.
+- Meldungen (Hinweis/Erfolg/Warnung/Fehler) immer über `Callout`
+  (`components/ui/callout.tsx`, Varianten `info` | `success` | `warning` |
+  `danger`) — keine eigenen Farbklassen. Details in `CLAUDE.md`.
+- Jede Seite muss in Hell **und** Dunkel lesbar sein; die App hat einen
+  Umschalter (Standard: System). Mit Tokens ergibt sich das von allein.
 
 ## Schritt 3b — Betreiber-/Admin-Account anlegen
 
@@ -77,10 +118,30 @@ Für **jedes** Feature Tests schreiben und laufen lassen — nicht optional:
   `npm run typecheck`. Die mitgelieferte CI (`.github/workflows/ci.yml`) führt beides
   bei jedem Push automatisch aus.
 
+### Und dann: die App selbst aufrufen
+
+**Melde niemals „fertig", ohne die Seiten geöffnet zu haben.** Grüne Tests und
+ein erfolgreicher Build schließen einen „Internal Server Error" nicht aus —
+`vitest` rendert nicht, `npm run build` läuft ohne Datenbank und ohne echte
+`.env`. Genau dort entsteht der Fehler, den der Nutzer dann als Erstes sieht.
+
+```bash
+make start                # DB + Migrationen + App
+make smoke                # ruft jede Seite auf, meldet Serverfehler
+```
+
+5xx heißt: beheben, bevor du weitermachst — Ursache mit `make logs`. Ein 307 auf
+`/login` ist bei geschützten Seiten korrekt. Dynamische Seiten (`[id]`)
+überspringt `make smoke`; die einmal von Hand mit einem echten Datensatz
+aufrufen.
+
+Sag dem Nutzer erst dann, dass er schauen kann — und schreib dazu, was er
+sehen wird und unter welcher Adresse.
+
 ## Schritt 5 — Bezahlung anschließen
 
 Führe den Skill **`setup-digistore`** aus. Er verbindet Produkt-ID, API-Key,
-IPN-Webhook und Checkout-Link. Der IPN-Handler (`app/api/ipn/[vendor]/route.ts`)
+IPN-Webhook und Checkout-Link. Der IPN-Handler (`app/api/ipn/route.ts`)
 schreibt Käufe automatisch in `orders` — den Code dafür nicht neu erfinden.
 
 Rechnet die App **wiederkehrend (Abo) oder nach Verbrauch (Prepaid-Token)** ab,
@@ -100,6 +161,7 @@ Nacheinander:
 
 - **Login bleibt Pflicht** für alle App-Seiten (außer Start, Login, Opt-in, IPN).
 - **Die IPN-Signaturprüfung niemals abschalten** (`lib/digistore/ipn.ts`).
-- **Keine Secrets/API-Keys im Code.** Immer `.env` bzw. Onboarding-Eingabe.
+- **Keine Secrets/API-Keys im Code.** Immer `.env` (Digistore24-Key per
+  `make ds24-connect`); keine Eingabefelder für Schlüssel in der App.
 - **Bei Geld, Kundendaten, neuen externen Systemen:** erst den Skill `guardrails`
   lesen und im Zweifel stoppen.

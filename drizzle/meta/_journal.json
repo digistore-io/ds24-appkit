@@ -15,6 +15,20 @@
       "when": 1784061614004,
       "tag": "0001_heavy_falcon",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1784547911314,
+      "tag": "0002_nasty_alex_power",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1784564471195,
+      "tag": "0003_sleepy_meggan",
+      "breakpoints": true
     }
   ]
 }

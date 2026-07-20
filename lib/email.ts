@@ -6,22 +6,30 @@
 // ihn dann nicht an). nodemailer wird nur zur Laufzeit (SMTP-Pfad) geladen —
 // niemals in auth.config.ts importieren (sonst landet es im Edge-Middleware-Bundle).
 import type { Provider } from "next-auth/providers";
+import {
+  istPostmarkKonfiguriert,
+  istSmtpKonfiguriert,
+  istEmailKonfiguriert,
+} from "@/lib/env-guard";
 
 /** Produktname für die E-Mail (optional). */
 function appName(): string {
   return process.env.APP_NAME?.trim() || "";
 }
 
+// Die Erkennung liegt in lib/env-guard.ts (reine Env-Prüfungen, ohne
+// nodemailer-Abhängigkeit) — hier nur die Anwendung auf process.env, damit es
+// genau eine Quelle der Wahrheit gibt.
 export function isPostmarkConfigured(): boolean {
-  return Boolean(process.env.POSTMARK_SERVER_TOKEN && process.env.POSTMARK_SENDER);
+  return istPostmarkKonfiguriert(process.env);
 }
 
 export function isSmtpConfigured(): boolean {
-  return Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASSWORD);
+  return istSmtpKonfiguriert(process.env);
 }
 
 export function isEmailLoginEnabled(): boolean {
-  return isPostmarkConfigured() || isSmtpConfigured();
+  return istEmailKonfiguriert(process.env);
 }
 
 /** Absender-Adresse (From) je nach konfiguriertem Transport. */

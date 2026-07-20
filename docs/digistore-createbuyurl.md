@@ -11,12 +11,14 @@ Implementierung: `lib/digistore/buyUrl.ts`.
 
 ```ts
 import { getOrCreateBuyUrl } from "@/lib/digistore/buyUrl";
-import { getVendorSettings } from "@/lib/digistore/vendor";
+import { ds24ApiKey, getOwnerUserId } from "@/lib/digistore/settings";
 
-const settings = await getVendorSettings(userId);
+const userId = await getOwnerUserId();       // Betreiber (role = "owner")
+if (!userId) throw new Error("Kein Betreiber-Benutzer angelegt");
+
 const url = await getOrCreateBuyUrl({
-  apiKey: settings!.ds24ApiKey!,       // writable-Key nötig
-  userId,                              // Vendor = Cache-Namespace
+  apiKey: ds24ApiKey(),                // writable-Key nötig (aus der .env)
+  userId,                              // Betreiber = Cache-Namespace
   offer: {
     key: "gold",                       // stabiler Angebots-Schlüssel
     productId: "123456",               // DS24-Basisprodukt
@@ -47,6 +49,5 @@ const url = await getOrCreateBuyUrl({
 - Preis als Euro-String mit Punkt (`"9.00"`), nicht in Cent, nicht mit Komma.
 - `number_of_installments = 0` bedeutet **unbegrenztes Abo** (nicht „keine Zahlung").
 - Thank-You-URL muss **HTTPS** sein, sonst lehnt Digistore ab.
-- Test vs. Prod über `DIGISTORE_URL` (Test `https://www.digitest24.de`,
-  Prod `https://www.digistore24.com`).
+- API-Basis über `DIGISTORE_URL` (`https://www.digistore24.com`).
 - Bei ungültigem Affiliate-Code wird einmal **ohne** Affiliate wiederholt.

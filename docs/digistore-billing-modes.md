@@ -20,7 +20,7 @@ Code:
 - `lib/tokens/packages.ts` — Token-Pakete (aus der Registry, kind="token").
 - `lib/tokens/account.ts` — Guthaben, Verbrauch, Gutschrift, Auto-Aufladen.
 - `db/schema-tokens.ts` — `subscriptions`, `tokenAccounts`, `tokenLedger`.
-- IPN: `app/api/ipn/[vendor]/route.ts` (Gutschrift + Abo-Upsert).
+- IPN: `app/api/ipn/route.ts` (Gutschrift + Abo-Upsert).
 - Scripts: `scripts/ds24/sync-products.mjs` (anlegen/aktualisieren),
   `scripts/ds24/request-approval.mjs` (Freigabe im Go-Live).
 
@@ -150,8 +150,9 @@ Fehlen Links im IPN-Payload, mit `getPurchase(apiKey, purchaseId)` nachladen.
 
 ```ts
 import { stopRebilling } from "@/lib/digistore/billing";
+import { ds24ApiKey } from "@/lib/digistore/settings";
 // Kündigung nach Bestätigung durch den eingeloggten Kunden:
-await stopRebilling(settings.ds24ApiKey!, sub.ds24PurchaseId);
+await stopRebilling(ds24ApiKey(), sub.ds24PurchaseId);
 // Der IPN setzt subscriptions.status später auf 'cancelled'.
 ```
 
@@ -165,5 +166,6 @@ await stopRebilling(settings.ds24ApiKey!, sub.ds24PurchaseId);
   doppelter IPN bucht nicht erneut.
 - **Lock gegen Doppelabbuchung.** Auto-Aufladen immer über `claimReloadSlot`.
 - **Signaturprüfung (SHA512) bleibt Pflicht** — der IPN-Handler ist fail-closed.
-- **Writable-Key & Passphrase sind Secrets** (liegen in `vendor_settings`).
+- **Writable-Key & Passphrase sind Secrets** (liegen in der `.env` bzw. in der
+  Secret-Verwaltung des Hosters, gelesen über `lib/digistore/settings.ts`).
 - Bei Änderungen an dieser Abrechnungslogik zuerst den Skill **`guardrails`** lesen.

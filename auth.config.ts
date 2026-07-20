@@ -28,9 +28,7 @@ export default {
     // Route-Schutz (greift zusammen mit dem Matcher in middleware.ts).
     authorized({ auth, request }) {
       const path = request.nextUrl.pathname;
-      const requiresAuth =
-        path.startsWith("/dashboard") || path.startsWith("/onboarding");
-      if (requiresAuth) return Boolean(auth?.user);
+      if (path.startsWith("/dashboard")) return Boolean(auth?.user);
       return true;
     },
     jwt({ token, user }) {

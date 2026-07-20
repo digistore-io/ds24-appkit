@@ -2,6 +2,7 @@ import { db } from "@/db";
 import { orders } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { Callout } from "@/components/ui/callout";
 
 // Öffentliche Dankes-/Opt-in-Seite (thankyou_url-Ziel nach dem Kauf).
 // Hält die DSGVO-Einwilligung des Käufers fest. Bewusst ohne Login.
@@ -33,9 +34,9 @@ export default async function OptinPage({
           Bestellung wird verarbeitet … lade die Seite in ein paar Sekunden neu.
         </p>
       ) : order.gdprConsentAt ? (
-        <p className="text-green-600">
-          ✓ Einwilligung erteilt. Du kannst dieses Fenster schließen.
-        </p>
+        <Callout variant="success">
+          Einwilligung erteilt. Du kannst dieses Fenster schließen.
+        </Callout>
       ) : (
         <form action={recordConsent} className="flex flex-col gap-4">
           <label className="flex items-start gap-2 text-sm">

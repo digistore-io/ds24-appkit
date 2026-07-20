@@ -18,7 +18,7 @@ Template zugeschnitten.
 ### 1. Authentifizierung & Zugriffskontrolle
 - Alle nicht-öffentlichen Seiten/Routen sind geschützt (`middleware.ts`-Matcher).
   Öffentlich sind nur Startseite, `/login`, `/optin/*`, `/access/*` (falls genutzt)
-  und `/api/ipn/*`. Neue geschützte Bereiche in den Matcher aufnehmen.
+  und `/api/ipn`. Neue geschützte Bereiche in den Matcher aufnehmen.
 - **IDOR:** Greift eine Server-Action/Route nur auf Daten des eingeloggten Nutzers zu?
   Prüfe jede Abfrage auf `where userId = session.user.id` (bzw. Besitzprüfung).
   Beispiel-Muster: `generateCheckoutLink` prüft `challenge.userId === userId`.
@@ -35,7 +35,17 @@ Template zugeschnitten.
 - Keine API-Keys/Passphrases/Tokens im Code, in Logs oder im Client-Bundle.
   Serverseitige Werte nie an Client-Komponenten durchreichen.
 - `.env` ist **nicht** eingecheckt (`.gitignore`), neue Variablen in `.env.example`.
-- Vendor-Zugangsdaten liegen in `vendor_settings` (DB), nicht im Code.
+- Die Digistore24-Zugangsdaten des Betreibers liegen in der Umgebung
+  (`.env` bzw. Secret-Verwaltung des Hosters) und werden über
+  `lib/digistore/settings.ts` gelesen — nicht in der Datenbank und nicht im Code.
+  Es gibt bewusst **keine** Oberfläche, um Schlüssel einzugeben; ein solches
+  Eingabefeld wäre zusätzliche Angriffsfläche und darf nicht nachgerüstet werden.
+- **Bekannte Ausnahme, kein Fund:** `BUILT_IN_DEVELOPER_KEY` in
+  `scripts/ds24/connect-api-key.mjs`.
+  Ein Digistore24-Developer-Key trägt keine Kontorechte — er identifiziert nur
+  die Anwendung gegenüber `requestApiKey`, wie eine OAuth-Client-ID. Der
+  rechtetragende Key entsteht erst bei der Freigabe durch den Merchant. Nicht
+  entfernen und nicht verschleiern; die Scanner-Marker an der Zeile gehören dazu.
 
 ### 4. Eingaben & Ausgaben
 - Formular-/Action-Eingaben validieren (Pflichtfelder, Typen, Grenzen; `zod` nutzen).

@@ -7,8 +7,7 @@
 // (Geld-relevant: ein fehlgeschlagener Checkout-Call darf nicht als Erfolg gelten.)
 import crypto from "crypto";
 
-// Test- vs. Produktions-Basis über DIGISTORE_URL steuerbar
-// (Test: https://www.digitest24.de, Prod: https://www.digistore24.com).
+// API-Basis über DIGISTORE_URL steuerbar (Standard: https://www.digistore24.com).
 export function ds24BaseUrl(): string {
   return process.env.DIGISTORE_URL || "https://www.digistore24.com";
 }

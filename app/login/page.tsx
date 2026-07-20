@@ -1,6 +1,9 @@
 import { signIn, auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { isEmailLoginEnabled } from "@/lib/email";
+import { devLoginAktiv, demoLoginVorschlag } from "@/lib/auth/dev-login";
+import { Callout } from "@/components/ui/callout";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 // Anmeldeseite. Standard: E-Mail-Token-Login (Magic-Link, Postmark/SMTP).
 // Google-Login optional (nur wenn GOOGLE_CLIENT_ID/SECRET gesetzt).
@@ -9,6 +12,9 @@ export default async function LoginPage() {
   if (session?.user) redirect("/dashboard");
 
   const emailEnabled = isEmailLoginEnabled();
+  // Nur in DEV und nur solange kein Mailversand eingerichtet ist.
+  const devLogin = devLoginAktiv();
+  const demoEmail = await demoLoginVorschlag();
   const googleEnabled = Boolean(
     process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET,
   );
@@ -71,13 +77,56 @@ export default async function LoginPage() {
         </form>
       )}
 
-      {!emailEnabled && !googleEnabled && (
-        <p className="rounded-lg border bg-card p-4 text-sm text-muted-foreground">
-          Kein Login-Verfahren konfiguriert. Hinterlege einen E-Mail-Versand
-          (Postmark oder SMTP) — optional Google. Siehe{" "}
-          <code>docs/auth-setup.md</code> und <code>.env.example</code>.
-        </p>
+      {/* Der Demo-Login hängt an genau einer Bedingung: devLoginAktiv() (also
+          istDevLoginErlaubt). Er erscheint IMMER, wenn der Entwicklungs-Login
+          erlaubt ist — unabhängig davon, ob Google konfiguriert ist.
+
+          Bewusst knapp gehalten: Wer hier landet, will die App ansehen, nicht
+          den Mailversand einrichten. Das Wie steht in docs/ und im Terminal. */}
+      {devLogin && (
+          <form
+            action={async (formData: FormData) => {
+              "use server";
+              await signIn("dev-login", {
+                email: String(formData.get("email")),
+                redirectTo: "/dashboard",
+              });
+            }}
+            className="flex flex-col gap-3 rounded-xl border bg-card p-6"
+          >
+            <Callout variant="warning">
+              Demo-Betrieb ohne Kennwort — logge dich ein als{" "}
+              <strong>{demoEmail ?? "beliebige@adresse.de"}</strong>
+            </Callout>
+            <label htmlFor="dev-email" className="text-sm font-medium">
+              E-Mail-Adresse
+            </label>
+            <input
+              id="dev-email"
+              name="email"
+              type="email"
+              required
+              defaultValue={demoEmail ?? ""}
+              placeholder="du@example.com"
+              className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+            <button className="w-full rounded-lg bg-primary px-4 py-2 font-medium text-primary-foreground">
+              Anmelden
+            </button>
+          </form>
       )}
+
+      {!emailEnabled && !googleEnabled && !devLogin && (
+        <Callout variant="danger" title="Kein Login-Verfahren konfiguriert">
+          Hinterlege einen E-Mail-Versand (Postmark oder SMTP) — optional
+          Google. Siehe <code>docs/auth-setup.md</code> und{" "}
+          <code>.env.example</code>.
+        </Callout>
+      )}
+
+      <div className="flex justify-center">
+        <ThemeToggle />
+      </div>
     </main>
   );
 }

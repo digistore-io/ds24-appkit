@@ -21,10 +21,25 @@ export default async function AdminPage() {
       </p>
 
       <div className="rounded-lg border p-4">
+        <h2 className="font-medium">Benutzer verwalten</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Benutzer anlegen, Rollen zwischen Admin und Nutzer wechseln, Konten
+          löschen.
+        </p>
+        <Link
+          href="/dashboard/admin/users"
+          className="mt-3 inline-block rounded-lg bg-primary px-4 py-2 text-primary-foreground"
+        >
+          Zur Benutzerverwaltung
+        </Link>
+      </div>
+
+      <div className="rounded-lg border p-4">
         <h2 className="font-medium">Nur für Betreiber</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Diese Seite ist über <code>requireOwner()</code> abgesichert. Weitere
-          Admin-Funktionen hier ergänzen. Weitere owner-Accounts anlegen per{" "}
+          Diese Seite ist über <code>requireOwner()</code> abgesichert — Vorbild
+          für eigene Admin-Funktionen. Admins lassen sich auch im Terminal
+          anlegen:{" "}
           <code>make user-create ARGS=&quot;--email … --role owner --apply&quot;</code>.
         </p>
       </div>

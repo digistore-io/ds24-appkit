@@ -1,49 +1,76 @@
 {
-  "_comment": "Zentrale Produkt-Registry (Source of Truth). Jedes Angebot = EIN Digistore24-Produkt. 'productId' wird von scripts/ds24/sync-products.mjs nach createProduct/updateProduct zurueckgeschrieben und ist in ALLEN Umgebungen dieselbe Live-Produkt-ID. Preis/Intervall werden je Produkt als DS24-Payment-Plan gepflegt (in der DS24-Oberflaeche); die hier gelisteten priceCents/billingInterval/credits sind fuer App-Anzeige und Billing-on-Demand.",
+  "_comment": "Zentrale Produkt-Registry (Source of Truth) — hier stehen deine Tarife. Jedes Angebot = EIN Digistore24-Produkt. Diese Liste ist bewusst hart kodiert: gestalte sie um oder loesche, was du nicht brauchst. Sie speist BEIDES: die Tarif-Seite (/tarife) und das Sync-Skript (scripts/ds24/sync-products.mjs), das die Produkte bei Digistore24 anlegt und die 'productId' hier zurueckschreibt. Der PREIS wird NICHT am DS24-Produkt gepflegt (die API verwirft data[amount]), sondern beim Checkout aus 'priceCents'/'billingInterval' als payment_plan mitgegeben — siehe lib/digistore/buyUrl.ts und docs/digistore-billing-modes.md.",
   "products": {
     "basis_monatlich": {
       "name": "Basis (monatlich)",
-      "description": "Monatliches Basis-Abo.",
+      "tagline": "Der unkomplizierte Einstieg",
+      "description": "Voller Zugang zu allen Basis-Funktionen. Monatlich kuendbar.",
       "kind": "subscription",
       "billingInterval": "1_month",
       "priceCents": 1900,
       "currency": "EUR",
+      "features": [
+        "Alle Basis-Funktionen",
+        "Unbegrenzte Nutzung",
+        "E-Mail-Support",
+        "Monatlich kuendbar"
+      ],
+      "imageUrl": null,
       "productId": null
     },
     "basis_jaehrlich": {
       "name": "Basis (jaehrlich)",
-      "description": "Jaehrliches Basis-Abo.",
+      "tagline": "Zwei Monate geschenkt",
+      "description": "Derselbe Funktionsumfang wie das Monatsabo, jaehrlich abgerechnet.",
       "kind": "subscription",
       "billingInterval": "12_month",
       "priceCents": 19000,
       "currency": "EUR",
+      "highlight": true,
+      "features": [
+        "Alle Basis-Funktionen",
+        "Unbegrenzte Nutzung",
+        "E-Mail-Support",
+        "Guenstiger als 12 Monatsabos"
+      ],
+      "imageUrl": null,
       "productId": null
     },
     "starter": {
       "name": "Starter Token",
-      "description": "Token-Paket Starter.",
+      "tagline": "Zum Ausprobieren",
+      "description": "1.000 Token als einmaliges Guthaben. Kein Abo.",
       "kind": "token",
       "credits": 1000,
       "priceCents": 900,
       "currency": "EUR",
+      "features": ["1.000 Token", "Kein Abo", "Guthaben verfaellt nicht"],
+      "imageUrl": null,
       "productId": null
     },
     "pro": {
       "name": "Pro Token",
-      "description": "Token-Paket Pro.",
+      "tagline": "Fuer regelmaessige Nutzung",
+      "description": "5.000 Token als einmaliges Guthaben. Kein Abo.",
       "kind": "token",
       "credits": 5000,
       "priceCents": 3900,
       "currency": "EUR",
+      "highlight": true,
+      "features": ["5.000 Token", "Kein Abo", "Guthaben verfaellt nicht"],
+      "imageUrl": null,
       "productId": null
     },
     "business": {
       "name": "Business Token",
-      "description": "Token-Paket Business.",
+      "tagline": "Bester Preis je Token",
+      "description": "15.000 Token als einmaliges Guthaben. Kein Abo.",
       "kind": "token",
       "credits": 15000,
       "priceCents": 9900,
       "currency": "EUR",
+      "features": ["15.000 Token", "Kein Abo", "Guthaben verfaellt nicht"],
+      "imageUrl": null,
       "productId": null
     }
   }

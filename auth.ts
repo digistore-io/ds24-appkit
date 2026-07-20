@@ -8,11 +8,18 @@ import authConfig from "@/auth.config";
 import { db } from "@/db";
 import { users, accounts, sessions, verificationTokens } from "@/db/schema";
 import { buildEmailProvider } from "@/lib/email";
+import { buildDevLoginProvider } from "@/lib/auth/dev-login";
 
 const emailProvider = buildEmailProvider();
-const providers = emailProvider
-  ? [...authConfig.providers, emailProvider]
-  : authConfig.providers;
+// Entwicklungs-Login: nur lokal und nur solange KEIN Mailversand eingerichtet
+// ist (die Bedingungen stehen in lib/auth/dev-login.ts und sind dort getestet).
+const devLoginProvider = buildDevLoginProvider();
+
+const providers = [
+  ...authConfig.providers,
+  ...(emailProvider ? [emailProvider] : []),
+  ...(devLoginProvider ? [devLoginProvider] : []),
+];
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,

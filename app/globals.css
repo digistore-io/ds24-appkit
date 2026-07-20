@@ -1,5 +1,13 @@
 @import "tailwindcss";
 
+/* `dark:`-Klassen folgen der `.dark`-Klasse am <html>, nicht der
+   Systemeinstellung des Browsers. Die setzt next-themes (components/theme-
+   provider.tsx) — bei „System" aus der Systemeinstellung abgeleitet, bei
+   „Hell"/„Dunkel" aus der Wahl des Nutzers. Ohne diese Zeile wuerde Tailwind v4
+   weiterhin nur prefers-color-scheme auswerten und der Umschalter bliebe ohne
+   Wirkung. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* shadcn/ui Design-Tokens (neutral, Light + Dark). Farben immer über Tokens
    verwenden — nicht hart kodieren. `npx shadcn@latest add <component>` nutzen. */
 :root {
@@ -14,6 +22,23 @@
   --border: hsl(0 0% 89.8%);
   --ring: hsl(0 0% 3.9%);
   --radius: 0.625rem;
+
+  /* Meldungen (Callout). Vier Absichten, je Flaeche/Rand/Schrift. Die
+     Schriftfarbe ist bewusst dunkel genug fuer >= 7:1 Kontrast auf der
+     zugehoerigen Flaeche (WCAG AAA) — Meldungen muessen ohne Anstrengung
+     lesbar sein, gerade Warnungen und Fehler. */
+  --info: hsl(214 95% 96%);
+  --info-border: hsl(214 85% 80%);
+  --info-foreground: hsl(215 60% 25%);
+  --success: hsl(145 70% 95%);
+  --success-border: hsl(145 55% 70%);
+  --success-foreground: hsl(150 65% 20%);
+  --warning: hsl(45 95% 94%);
+  --warning-border: hsl(40 85% 65%);
+  --warning-foreground: hsl(28 80% 24%);
+  --danger: hsl(0 90% 96%);
+  --danger-border: hsl(0 75% 78%);
+  --danger-foreground: hsl(0 70% 32%);
 }
 
 .dark {
@@ -27,6 +52,22 @@
   --muted-foreground: hsl(0 0% 63.9%);
   --border: hsl(0 0% 14.9%);
   --ring: hsl(0 0% 83.1%);
+
+  /* Dunkel gespiegelt: gedaempfte Flaeche, heller Rand, sehr helle Schrift.
+     Nicht die Hell-Werte invertieren — kraeftige Farbflaechen blenden im
+     Dunkelmodus und druecken den Kontrast der Schrift. */
+  --info: hsl(215 55% 16%);
+  --info-border: hsl(214 60% 40%);
+  --info-foreground: hsl(213 95% 88%);
+  --success: hsl(150 45% 13%);
+  --success-border: hsl(148 45% 35%);
+  --success-foreground: hsl(145 75% 82%);
+  --warning: hsl(35 55% 14%);
+  --warning-border: hsl(38 60% 40%);
+  --warning-foreground: hsl(45 95% 82%);
+  --danger: hsl(0 45% 16%);
+  --danger-border: hsl(0 55% 45%);
+  --danger-foreground: hsl(0 95% 88%);
 }
 
 @theme inline {
@@ -40,6 +81,18 @@
   --color-muted-foreground: var(--muted-foreground);
   --color-border: var(--border);
   --color-ring: var(--ring);
+  --color-info: var(--info);
+  --color-info-border: var(--info-border);
+  --color-info-foreground: var(--info-foreground);
+  --color-success: var(--success);
+  --color-success-border: var(--success-border);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-border: var(--warning-border);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-danger: var(--danger);
+  --color-danger-border: var(--danger-border);
+  --color-danger-foreground: var(--danger-foreground);
   --radius-lg: var(--radius);
 }
 

@@ -7,5 +7,5 @@ export const { auth: middleware } = NextAuth(authConfig);
 
 export const config = {
   // Öffentlich bleiben: Startseite, Login, Auth-Routen, Opt-in, IPN-Webhook.
-  matcher: ["/dashboard/:path*", "/onboarding/:path*"],
+  matcher: ["/dashboard/:path*"],
 };
