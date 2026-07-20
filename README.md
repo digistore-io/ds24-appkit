@@ -5,10 +5,10 @@ gebaut, damit du es **gemeinsam mit Claude Code** ausbauen kannst, auch ohne
 Programmiererfahrung.
 
 **Stack:** Next.js 15 (App Router) · TypeScript · Drizzle ORM + Postgres ·
-Auth.js v5 (Google + E-Mail) · Tailwind v4 + shadcn/ui.
+Auth.js v5 (E-Mail-Token, optional Google) · Tailwind v4 + shadcn/ui.
 
 Enthält fertig verdrahtet:
-- 🔐 **Anmeldung** (Google-Login und/oder E-Mail-Magic-Link)
+- 🔐 **Anmeldung** (E-Mail-Token/Magic-Link via Postmark oder SMTP; optional Google)
 - 💳 **Digistore24-Abrechnung**: IPN-Webhook mit **SHA512-Signaturprüfung**,
   Checkout-Link-Erzeugung (`createBuyUrl`), Onboarding-Wizard, DSGVO-Opt-in
 - 🗄️ **Datenbank** mit Bestell-Statusmaschine (bezahlt/erstattet/Chargeback/…)
@@ -38,27 +38,47 @@ Beim Bauen (Schritt 1) werden **automatisch Tests** geschrieben und ausgeführt
 
 Hast du schon eine klare Idee? Dann starte bei Schritt 1 („**Baue meine App**").
 Sonst beginne mit Schritt 0 („**Ich weiß noch nicht, was ich bauen soll**").
+Erst mal nur schauen, wie sich das anfühlt? Der Probelauf
+[„Hello World"](docs/hello-world-prompt.md) baut in wenigen Minuten eine kleine
+App mit Admin- und Nutzer-Login.
 
 ## Schnellstart (lokal)
 
 ```bash
-# 1. Abhängigkeiten
-npm install
-
-# 2. Postgres starten
-docker compose up -d
-
-# 3. Env vorbereiten
-cp .env.example .env
-#   AUTH_SECRET setzen:  openssl rand -hex 32
-#   Mindestens einen Auth-Provider (Google ODER Resend) eintragen.
-
-# 4. Datenbank-Schema anlegen
-npm run db:push
-
-# 5. Loslegen
-npm run dev        # http://localhost:3000
+make start         # → http://localhost:3000
 ```
+
+`make start` erledigt alles: Abhängigkeiten installieren, `.env` aus
+`.env.example` anlegen, Postgres per Docker starten, Datenbank-Migrationen
+einspielen und die App hochfahren. Beim ersten Mal danach noch zwei Dinge in
+`.env` eintragen:
+
+- `AUTH_SECRET` — erzeugen mit `openssl rand -hex 32`
+- E-Mail-Versand für den Login (Postmark **oder** SMTP; siehe [`docs/auth-setup.md`](docs/auth-setup.md))
+
+Dann `make restart`.
+
+### Die wichtigsten Befehle
+
+| Befehl | Was passiert |
+|---|---|
+| `make start` | Datenbank + App starten (inkl. Migrationen) |
+| `make stop` | App + Datenbank stoppen |
+| `make test` | Tests (vitest) + TypeScript-Prüfung |
+| `make db-migrate` | ausstehende Datenbank-Migrationen einspielen |
+| `make db-reset` | lokale Datenbank leeren, neu migrieren, Seed einspielen |
+| `make logs` | Log der laufenden App verfolgen |
+| `make` | alle Befehle anzeigen |
+
+Läuft auf deinem Rechner schon etwas auf Port 5432 oder 3000? Dann `DB_PORT` in
+`.env` ändern (und den Port in `DATABASE_URL` mitziehen) bzw. `make start PORT=3001`.
+
+### Erste App zum Ausprobieren
+
+Ein fertiger Prompt für eine kleine „Hello-World"-App mit Admin- und
+Nutzer-Login — der Admin kann den Text ändern und Accounts verwalten:
+[`docs/hello-world-prompt.md`](docs/hello-world-prompt.md). Guter Probelauf,
+bevor du deine echte App baust.
 
 ## Deployment
 
@@ -79,11 +99,16 @@ config/             Produkt-Registry (digistore-products.json — Source of Trut
 db/                 Drizzle-Schema + Verbindung (inkl. Abos + Token-Guthaben)
 lib/digistore/      DS24-Client, IPN-Verifikation, Produkt-Links, Billing-on-Demand
 lib/tokens/         Prepaid-Token: Pakete, Guthaben/Verbrauch, Auto-Aufladen
+drizzle/            Datenbank-Migrationen (eingecheckt, laufen überall gleich)
+scripts/db/         reset.mjs (lokale DB neu aufbauen) + seed.mjs (Ausgangsdaten)
 scripts/ds24/       Setup: Produkte synchronisieren, Freigabe, IPN einrichten
+scripts/users/      Accounts/Rollen per CLI anlegen
 scripts/dev/        tunnel.sh (Cloudflare Quick Tunnel für lokale IPNs)
 .claude/skills/     geführte Skills für den Ausbau mit Claude Code
+Makefile            alle Befehle für den Alltag (make = Übersicht)
 ```
 
+Datenbank & Migrationen: siehe [`docs/database.md`](docs/database.md).
 Umgebungen (DEV/STAGING/PROD) & lokale Webhooks: siehe [`docs/environments.md`](docs/environments.md).
 
 ## Sicherheit

@@ -8,7 +8,10 @@ services:
       POSTGRES_PASSWORD: app
       POSTGRES_DB: app
     ports:
-      - "5432:5432"
+      # Läuft auf deinem Rechner schon eine Postgres (oder ein anderes Projekt)
+      # auf 5432? Dann DB_PORT in .env auf einen freien Port setzen (z. B. 5433)
+      # und die Portangabe in DATABASE_URL mitziehen.
+      - "${DB_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:

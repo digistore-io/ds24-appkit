@@ -37,7 +37,9 @@ die durch Digistore-IPN-Events gefüllt wird.
 - Neue Tabellen in `db/schema.ts` (bzw. eine eigene Datei, die dort re-exportiert
   wird — Vorbild: `db/schema-digistore.ts`).
 - Verknüpfe kaufabhängige Inhalte mit `orders` (Feld `ds24ProductId` / `userId`).
-- Danach: `npm run db:generate && npm run db:push`.
+- Danach eine **Migration** erzeugen und einspielen: `make db-generate` →
+  erzeugte Datei in `drizzle/` prüfen → `make db-migrate`. Die Migration gehört
+  mit in den Commit (siehe `docs/database.md`). Kein `db:push`.
 
 ## Schritt 3 — Seiten & Logik
 
@@ -45,6 +47,23 @@ die durch Digistore-IPN-Events gefüllt wird.
 - Öffentliche Käufer-Seiten (z. B. Zugang nach Kauf) prüfen den `orders.status`.
 - UI mit shadcn/ui: `npx shadcn@latest add <component>`. Farben nur über Tokens
   aus `app/globals.css`, nichts hart kodieren.
+
+## Schritt 3b — Betreiber-/Admin-Account anlegen
+
+Damit sich der Nutzer selbst als **Betreiber (Admin)** einloggen kann, lege einen
+`owner`-Account an. **Frag den Nutzer nach seiner E-Mail-Adresse** (die, mit der er
+sich später einloggt) und lege den Account per CLI an — sobald die DB läuft
+(`make start`):
+
+```bash
+node scripts/users/create-user.mjs --email <seine-mail> --role owner --apply
+# oder: make user-create ARGS="--email <seine-mail> --role owner --apply"
+```
+
+Der Login ist passwortlos (E-Mail-Magic-Link) — der vorab angelegte `owner`-Account
+wird beim ersten Login wiederverwendet. Admin-only-Seiten mit `requireOwner()`
+(`lib/authz.ts`) schützen; Vorbild: `app/dashboard/admin/page.tsx`. Normale Kunden
+bleiben `member` (Default). Details: `scripts/users/README.md`.
 
 ## Schritt 4 — Tests schreiben UND ausführen (Pflicht)
 

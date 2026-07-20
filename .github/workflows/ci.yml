@@ -21,3 +21,40 @@ jobs:
       - run: npm run build
         env:
           AUTH_SECRET: ci_dummy_secret
+
+  # Prüft, dass die Migrationen in drizzle/ auf einer leeren Datenbank sauber
+  # durchlaufen — und dass niemand eine Schemaänderung ohne Migration eincheckt.
+  migrations:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app
+          POSTGRES_DB: app
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U app" --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://app:app@localhost:5432/app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - name: Migrationen einspielen
+        run: npm run db:migrate
+      - name: Schema und Migrationen sind synchron
+        # Erzeugt drizzle-kit eine neue Datei, fehlt eine Migration zum Schema.
+        run: |
+          npm run db:generate
+          if [ -n "$(git status --porcelain drizzle/)" ]; then
+            echo "::error::db/schema.ts wurde geändert, ohne eine Migration zu erzeugen."
+            echo "Lokal ausführen: make db-generate && make db-migrate — und drizzle/ mit committen."
+            git status --porcelain drizzle/
+            exit 1
+          fi

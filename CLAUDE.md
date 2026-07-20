@@ -37,6 +37,10 @@ nächsten):
 - **Keine Secrets im Code.** Aus `process.env` lesen, neue Variablen in
   `.env.example` ergänzen. Vendor-Zugangsdaten liegen in `vendor_settings`.
 - **Kein Mock-/Demo-Fallback** bei Digistore-API-Fehlern — Fehler werfen.
+- **Datenbankänderungen nur per Migration.** Schema in `db/schema.ts` ändern,
+  dann `make db-generate` → `make db-migrate`; die Datei in `drizzle/` wird
+  eingecheckt und nach dem Einspielen nie mehr editiert. `db:push` nur gegen eine
+  leere lokale DB, niemals gegen Staging/Produktion. Siehe `docs/database.md`.
 - **Design-System nutzen.** shadcn/ui + Tokens aus `app/globals.css`, keine
   hart kodierten Farben, keine eigene UI erfinden.
 - **Tests sind Pflicht.** Jedes Feature bekommt `vitest`-Tests (Vorbilder in
@@ -46,20 +50,51 @@ nächsten):
 
 ## Ein Feature hinzufügen
 
-1. Datenmodell in `db/schema.ts` erweitern → `npm run db:generate && npm run db:push`.
+1. Datenmodell in `db/schema.ts` erweitern → `make db-generate` (erzeugt eine
+   Migration in `drizzle/`) → Datei prüfen → `make db-migrate`. Die Migration
+   gehört mit in den Commit. Details: `docs/database.md`.
 2. Geschützte Seite/Route unter `app/dashboard/…` bauen; kaufabhängige Inhalte an
    `orders.status` koppeln.
 3. UI-Komponenten via `npx shadcn@latest add <component>`.
 4. **Tests schreiben** (`vitest`) für die neue Logik/Regeln.
 5. `npm run typecheck && npm run test` (grün) vor dem Deploy.
 
+## Benutzer & Rollen
+
+Die `users`-Tabelle hat ein `role`-Feld (`db/schema.ts`):
+- **`owner`** — SAAS-Betreiber (Admin). Zugriff auf Admin-Bereiche.
+- **`member`** — normaler Kunde (Default beim Selbst-Login per Magic-Link).
+
+**Admin-Bereiche absichern:** In Server-Komponenten `requireOwner()` aus
+`lib/authz.ts` als erste Zeile aufrufen (kein Login → `/login`, kein owner →
+`/dashboard`). Vorbild: `app/dashboard/admin/page.tsx`. Für reine Prüfungen gibt
+es `isOwner(role)` / `hasRole(role, [...])`.
+
+**Account per CLI anlegen / Rolle setzen** (idempotenter Upsert nach E-Mail; der
+Betreiber loggt sich danach ganz normal per Magic-Link ein):
+
+```bash
+make user-create ARGS="--email chef@example.de --role owner --apply"
+make user-list                       # oder: ARGS="--role owner"
+# direkt: node scripts/users/create-user.mjs --email … --role owner --apply
+```
+
+Dry-Run ist Standard; erst `--apply` schreibt. Details: `scripts/users/README.md`.
+
 ## Lokale Befehle
 
-- `docker compose up -d` — Postgres starten
-- `npm run dev` — App starten (http://localhost:3000)
-- `npm run db:push` — Schema in die DB übernehmen
-- `npm run test` — Tests (u. a. IPN-Signaturprüfung)
-- `npm run build` — Produktions-Build
+Alles läuft über das `Makefile` (`make` allein zeigt die Übersicht):
+
+- `make start` — Datenbank + Migrationen + App (http://localhost:3000)
+- `make stop` — App + Datenbank stoppen · `make restart` · `make logs` · `make status`
+- `make test` — TypeScript-Prüfung + Tests (u. a. IPN-Signaturprüfung)
+- `make db-generate` / `make db-migrate` — Migration erzeugen / einspielen
+- `make db-reset` — lokale DB leeren, migrieren, Seed (**nur lokal**)
+- `make user-create ARGS="--email … --role owner --apply"` — Betreiber-/Admin-Account anlegen
+- `make build` — Produktions-Build
+
+Die npm-Skripte dahinter (`npm run dev`, `npm run db:migrate`, …) bleiben
+nutzbar; im Zweifel den `make`-Befehl nennen, der ist für Nicht-Entwickler gedacht.
 
 ## STOPP-Kriterien
 

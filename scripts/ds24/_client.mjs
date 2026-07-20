@@ -5,6 +5,10 @@
 //   DIGISTORE_API_KEY  (erforderlich zum Ausführen; für Produkt-/IPN-Verwaltung
 //                       i. d. R. ein "writable"- bzw. "developer"-Key)
 //   DIGISTORE_URL      (optional; Default Prod)
+//
+// .env wird automatisch geladen (scripts/lib/env.mjs); gesetzte Shell-Variablen
+// haben Vorrang.
+import "../lib/env.mjs";
 
 export function baseUrl() {
   return process.env.DIGISTORE_URL || "https://www.digistore24.com";

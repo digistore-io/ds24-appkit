@@ -7,8 +7,10 @@ auf jedem Node-Hoster. Hier die drei einfachsten Wege. Überall gilt:
 `DATABASE_URL`, `AUTH_SECRET`, `AUTH_TRUST_HOST=true`, `APP_URL` (deine Domain)
 und mindestens einen Auth-Provider (`GOOGLE_*` oder `AUTH_RESEND_KEY`+`EMAIL_FROM`).
 
-Nach dem ersten Deploy einmalig das Schema anlegen: `npm run db:migrate`
-(oder lokal gegen die Prod-`DATABASE_URL`: `npm run db:push`).
+Nach dem ersten Deploy einmalig das Schema anlegen: `npm run db:migrate`.
+Bei jedem weiteren Deploy laufen die Migrationen **vor** dem Start der neuen
+Version — Hintergrund und Regeln: [`database.md`](database.md). `db:push` hat in
+Produktion nichts zu suchen.
 
 ---
 

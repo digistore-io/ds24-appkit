@@ -1,12 +1,12 @@
-// Edge-sichere Auth-Konfiguration (KEIN DB-Import!).
-// Wird sowohl vom Middleware (Edge-Runtime) als auch vom vollen auth.ts genutzt.
+// Edge-sichere Auth-Konfiguration (KEIN DB-Import, KEIN nodemailer!).
+// Wird vom Middleware (Edge-Runtime) UND vom vollen auth.ts genutzt.
 //
-// Provider werden abhängig von gesetzten Env-Variablen aktiviert:
-//   - Google OAuth   → GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET
-//   - E-Mail Magic-Link (Resend) → AUTH_RESEND_KEY / EMAIL_FROM
+// Hier stehen nur edge-sichere Provider. Der E-Mail-Magic-Link-Provider
+// (Postmark/SMTP) wird in auth.ts (Node-Runtime) ergänzt — siehe lib/email.ts.
+//   - E-Mail-Token-Login (Standard) → Postmark ODER SMTP (Setup: docs/auth-setup.md)
+//   - Google OAuth (optional)        → GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET
 import type { NextAuthConfig } from "next-auth";
 import Google from "next-auth/providers/google";
-import Resend from "next-auth/providers/resend";
 
 const providers: NextAuthConfig["providers"] = [];
 
@@ -15,15 +15,6 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
     Google({
       clientId: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    }),
-  );
-}
-
-if (process.env.AUTH_RESEND_KEY && process.env.EMAIL_FROM) {
-  providers.push(
-    Resend({
-      apiKey: process.env.AUTH_RESEND_KEY,
-      from: process.env.EMAIL_FROM,
     }),
   );
 }

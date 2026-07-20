@@ -81,8 +81,9 @@ DS24-Limit: 10 Buchungen/Tag, 1/Minute je purchase_id.
 
 ## Schritt 5 — Tests & Datenbank
 
-- Schema übernehmen: `npm run db:generate && npm run db:push` (die Migration für
-  `subscriptions`/`token_accounts`/`token_ledger` liegt in `drizzle/`).
+- Schema übernehmen: `make db-migrate` (die Migration für
+  `subscriptions`/`token_accounts`/`token_ledger` liegt bereits in `drizzle/`).
+  Eigene Schemaänderungen vorher mit `make db-generate` in eine Migration gießen.
 - **Tests schreiben** für deine Abrechnungs-Regeln (Vorbilder: `lib/tokens/
   tokens.test.ts`, `lib/digistore/billing.test.ts`). `npm run typecheck && npm run
   test` müssen grün sein.
