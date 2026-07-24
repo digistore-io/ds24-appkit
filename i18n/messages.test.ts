@@ -4,6 +4,8 @@ import { USER_ERROR_CODES } from "@/lib/users/rules";
 import { TOKEN_ERROR_CODES } from "@/lib/tokens/rules";
 import { GRANT_ERROR_CODES } from "@/lib/entitlements/grant-rules";
 import { CREDENTIAL_ERROR_CODES } from "@/lib/credentials/rules";
+import { EMAIL_CHANGE_ERROR_CODES } from "@/lib/email-change/rules";
+import { CREDENTIAL_CHANGES } from "@/lib/email";
 import de from "@/messages/de.json";
 import en from "@/messages/en.json";
 
@@ -96,6 +98,7 @@ const ERROR_CODE_UNIONS: Record<string, readonly string[]> = {
   "lib/tokens/rules.ts": TOKEN_ERROR_CODES,
   "lib/entitlements/grant-rules.ts": GRANT_ERROR_CODES,
   "lib/credentials/rules.ts": CREDENTIAL_ERROR_CODES,
+  "lib/email-change/rules.ts": EMAIL_CHANGE_ERROR_CODES,
 };
 
 describe("Error codes", () => {
@@ -113,6 +116,29 @@ describe("Error codes", () => {
         }
       });
     }
+  }
+});
+
+// The mail texts are looked up with a COMPUTED key — `credentialSubject_${change}`
+// in lib/email.ts. The parity test above cannot see that: de.json and en.json
+// agreed with each other perfectly while a subject line was missing from BOTH,
+// and the notice went out with the literal string
+// "email.credentialSubject_emailChanged" where its subject should have been.
+// Every test was green. This walks the union instead.
+describe("Credential-change mail texts", () => {
+  for (const locale of LOCALES) {
+    it(`${locale}: has a subject and a body for every credential change`, () => {
+      for (const change of CREDENTIAL_CHANGES) {
+        expect(
+          messageAt(ALL_MESSAGES[locale], `email.credentialSubject_${change}`),
+          `${locale}: email.credentialSubject_${change}`,
+        ).toBeTypeOf("string");
+        expect(
+          messageAt(ALL_MESSAGES[locale], `email.credential_${change}`),
+          `${locale}: email.credential_${change}`,
+        ).toBeTypeOf("string");
+      }
+    });
   }
 });
 

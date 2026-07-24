@@ -191,11 +191,34 @@ export async function sendLoginEmail(to: string, url: string): Promise<void> {
 // whose account may already be in the wrong hands. lib/email.test.ts asserts it.
 // What the recipient does with it is contact the Operator.
 
+/**
+ * Every kind of credential change, as a value rather than only a type.
+ *
+ * It exists so a test can walk it. The texts are looked up with a COMPUTED key
+ * (`credentialSubject_${change}`), which no parity check can see: adding a
+ * fourth change and forgetting its subject shipped the literal string
+ * "email.credentialSubject_emailChanged" as a subject line once already, and
+ * every test was green while it did. `i18n/messages.test.ts` now walks this.
+ */
+export const CREDENTIAL_CHANGES = [
+  "passwordSet",
+  "passwordChanged",
+  "passwordRemoved",
+  "emailChanged",
+] as const;
+
 /** Which credential moved. Deliberately closed — see the i18n keys below. */
 export type CredentialChange =
   | "passwordSet"
   | "passwordChanged"
-  | "passwordRemoved";
+  | "passwordRemoved"
+  /**
+   * Sent to the address the account has just LEFT — the only party who needs
+   * warning is the one losing the account. It names the address it moved to,
+   * deliberately: if this was not the owner, that string is the single most
+   * useful thing they can hand the Operator.
+   */
+  | "emailChanged";
 
 export interface CredentialTexts {
   locale: string;
@@ -209,6 +232,7 @@ export interface CredentialTexts {
 async function credentialTexts(
   change: CredentialChange,
   at: Date,
+  detail?: string,
 ): Promise<CredentialTexts> {
   const { getLocale, getTranslations, getFormatter } = await import(
     "next-intl/server"
@@ -237,7 +261,13 @@ async function credentialTexts(
     locale: await getLocale(),
     subject: name ? t("credentialSubjectApp", { subject, app: name }) : subject,
     heading: t("credentialHeading"),
-    what: t(`credential_${change}`),
+    // `emailChanged` is the one that carries a value — the address the account
+    // moved to. next-intl requires every placeholder a message declares, so the
+    // others are called without one.
+    what:
+      change === "emailChanged"
+        ? t("credential_emailChanged", { email: detail ?? "" })
+        : t(`credential_${change}`),
     when: t("credentialWhen", { when }),
     notYou: t("credentialNotYou"),
   };
@@ -276,10 +306,52 @@ export async function sendCredentialChangeEmail(
   to: string,
   change: CredentialChange,
   at: Date,
+  /** For `emailChanged`: the address the account moved to. */
+  detail?: string,
 ): Promise<void> {
-  const texts = await credentialTexts(change, at);
+  const texts = await credentialTexts(change, at, detail);
   const { html, text } = credentialBodies(texts);
   return deliver({ to, subject: texts.subject, text, html });
+}
+
+// --- Address-change confirmation ---------------------------------------------
+
+/**
+ * The link that actually moves an account, sent to the address it would move
+ * TO — and to no other. Following it is the entire proof that the requester can
+ * read mail there, which is the one thing standing between this feature and a
+ * one-click account transfer for anybody who finds an unlocked screen.
+ *
+ * This one IS a link, unlike the notice above. The two shapes sit side by side
+ * on purpose: what a mail is allowed to contain follows from who is supposed to
+ * act on it. Here the recipient must act; there they must only be told.
+ */
+export async function sendEmailChangeConfirmation(
+  to: string,
+  url: string,
+): Promise<void> {
+  const { getLocale, getTranslations } = await import("next-intl/server");
+  const t = await getTranslations("email");
+  const name = appName();
+
+  const texts: MailTexts = {
+    locale: await getLocale(),
+    subject: name
+      ? t("confirmEmailSubjectForApp", { app: name })
+      : t("confirmEmailSubject"),
+    heading: t("confirmEmailHeading"),
+    body: t("confirmEmailBody", { email: to }),
+    cta: t("confirmEmailCta"),
+    fallback: t("fallback"),
+    intro: t("confirmEmailText", { email: to }),
+  };
+
+  return deliver({
+    to,
+    subject: texts.subject,
+    text: textBody(url, texts),
+    html: htmlBody(url, texts),
+  });
 }
 
 /**

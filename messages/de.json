@@ -137,7 +137,16 @@
     "passwordDialogHint": "Mindestens {min} Zeichen. Länge zählt mehr als Sonderzeichen — nimm lieber etwas Langes, das du dir merkst.",
     "passwordSubmit": "Speichern",
     "passwordSaved": "Kennwort gespeichert.",
-    "passwordRemoved": "Kennwort entfernt. Du meldest dich jetzt wieder per Anmelde-Link an."
+    "passwordRemoved": "Kennwort entfernt. Du meldest dich jetzt wieder per Anmelde-Link an.",
+    "emailHint": "Hier gehen Anmelde-Links hin. Eine Änderung gilt erst, wenn du sie im neuen Postfach bestätigst.",
+    "emailChange": "Adresse ändern",
+    "emailChangeAgain": "Andere Adresse",
+    "emailChangeHint": "Wir schicken einen Bestätigungslink an die neue Adresse. Bis du ihn anklickst, bleibt alles wie es ist — deine alte Adresse funktioniert weiter.",
+    "emailNew": "Neue E-Mail-Adresse",
+    "emailChangeSubmit": "Bestätigungslink senden",
+    "emailChangeRequested": "Bestätigungslink an {email} gesendet. Bis du ihn anklickst, ändert sich nichts.",
+    "pendingTitle": "Adressänderung wartet auf Bestätigung",
+    "pendingBody": "Wir haben einen Link an {email} geschickt — gültig bis {until}. Deine jetzige Adresse funktioniert bis dahin ganz normal weiter. Falls du dich vertippt hast, fordere die Änderung einfach mit der richtigen Adresse neu an; die alte Anfrage wird dabei ersetzt."
   },
   "admin": {
     "title": "Admin",
@@ -393,7 +402,15 @@
     "credentialSubject_passwordSet": "Sicherheitshinweis: für dein Konto wurde ein Kennwort erstellt",
     "credentialSubject_passwordChanged": "Sicherheitshinweis: dein Kennwort wurde geändert",
     "credentialSubject_passwordRemoved": "Sicherheitshinweis: dein Kennwort wurde entfernt",
-    "credentialSubjectApp": "{subject} ({app})"
+    "credentialSubjectApp": "{subject} ({app})",
+    "confirmEmailSubject": "Bestätige deine neue E-Mail-Adresse",
+    "confirmEmailSubjectForApp": "Bestätige deine neue E-Mail-Adresse für {app}",
+    "confirmEmailHeading": "Neue Adresse bestätigen",
+    "confirmEmailBody": "Jemand möchte ein Konto auf {email} umziehen. Warst du das, dann klicke auf den Button — erst dadurch wird die Änderung wirksam. Der Link ist 24 Stunden gültig. Warst du das nicht, ignoriere diese Mail einfach; dann passiert nichts.",
+    "confirmEmailCta": "Adresse bestätigen",
+    "confirmEmailText": "Öffne diesen Link, um {email} als neue Adresse deines Kontos zu bestätigen (24 Stunden gültig). Warst du das nicht, ignoriere diese Mail — dann passiert nichts:",
+    "credential_emailChanged": "Dein Konto wurde auf die Adresse {email} umgezogen. Über diese Adresse hier kommst du nicht mehr hinein.",
+    "credentialSubject_emailChanged": "Sicherheitshinweis: dein Konto wurde auf eine andere Adresse umgezogen"
   },
   "errors": {
     "unknown": "Unbekannter Fehler.",
@@ -431,6 +448,19 @@
     "passwordWrong": "Das aktuelle Kennwort stimmt nicht.",
     "noPasswordSet": "Für dieses Konto ist kein Kennwort gesetzt.",
     "tooManyAttempts": "Zu viele Fehlversuche. Warte ein paar Minuten und versuche es dann noch einmal.",
-    "credentialUserNotFound": "Dieses Konto gibt es nicht mehr."
+    "credentialUserNotFound": "Dieses Konto gibt es nicht mehr.",
+    "emailUnchanged": "Das ist bereits deine Adresse — es gibt nichts zu ändern.",
+    "changeNotFound": "Dieser Bestätigungslink ist ungültig oder wurde durch eine neuere Anfrage ersetzt.",
+    "changeExpired": "Dieser Bestätigungslink ist abgelaufen."
+  },
+  "confirmEmail": {
+    "title": "E-Mail-Adresse bestätigen",
+    "successTitle": "Adresse geändert",
+    "successBody": "Dein Konto ist ab sofort unter {email} erreichbar. Anmelde-Links gehen von jetzt an dorthin.",
+    "alreadyBody": "Diese Änderung war schon bestätigt — dein Konto ist bereits unter {email} erreichbar. Du musst nichts weiter tun.",
+    "failedTitle": "Das hat nicht geklappt",
+    "failedHint": "Melde dich an und fordere die Änderung unter „Mein Zugang“ neu an. Deine bisherige Adresse funktioniert unverändert weiter.",
+    "ctaAccount": "Zu meinem Zugang",
+    "ctaLogin": "Zur Anmeldung"
   }
 }

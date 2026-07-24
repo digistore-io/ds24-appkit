@@ -137,7 +137,16 @@
     "passwordDialogHint": "At least {min} characters. Length counts for more than special characters — pick something long that you will remember.",
     "passwordSubmit": "Save",
     "passwordSaved": "Password saved.",
-    "passwordRemoved": "Password removed. You sign in with a link by email again now."
+    "passwordRemoved": "Password removed. You sign in with a link by email again now.",
+    "emailHint": "This is where sign-in links go. A change only takes effect once you confirm it from the new mailbox.",
+    "emailChange": "Change address",
+    "emailChangeAgain": "Different address",
+    "emailChangeHint": "We'll send a confirmation link to the new address. Until you follow it nothing changes — your current address keeps working.",
+    "emailNew": "New email address",
+    "emailChangeSubmit": "Send confirmation link",
+    "emailChangeRequested": "Confirmation link sent to {email}. Nothing changes until you follow it.",
+    "pendingTitle": "Address change waiting for confirmation",
+    "pendingBody": "We sent a link to {email} — valid until {until}. Your current address keeps working normally until then. If you mistyped it, simply request the change again with the right address; that replaces this one."
   },
   "admin": {
     "title": "Admin",
@@ -393,7 +402,15 @@
     "credentialSubject_passwordSet": "Security notice: a password was created for your account",
     "credentialSubject_passwordChanged": "Security notice: your password was changed",
     "credentialSubject_passwordRemoved": "Security notice: your password was removed",
-    "credentialSubjectApp": "{subject} ({app})"
+    "credentialSubjectApp": "{subject} ({app})",
+    "confirmEmailSubject": "Confirm your new email address",
+    "confirmEmailSubjectForApp": "Confirm your new email address for {app}",
+    "confirmEmailHeading": "Confirm your new address",
+    "confirmEmailBody": "Somebody wants to move an account to {email}. If that was you, use the button — the change only takes effect once you do. The link is valid for 24 hours. If it was not you, just ignore this mail and nothing will happen.",
+    "confirmEmailCta": "Confirm address",
+    "confirmEmailText": "Open this link to confirm {email} as your account's new address (valid for 24 hours). If this was not you, ignore this mail and nothing will happen:",
+    "credential_emailChanged": "Your account was moved to the address {email}. You can no longer get in using this one.",
+    "credentialSubject_emailChanged": "Security notice: your account was moved to a different address"
   },
   "errors": {
     "unknown": "Unknown error.",
@@ -431,6 +448,19 @@
     "passwordWrong": "That is not your current password.",
     "noPasswordSet": "This account has no password set.",
     "tooManyAttempts": "Too many failed attempts. Wait a few minutes, then try again.",
-    "credentialUserNotFound": "That account no longer exists."
+    "credentialUserNotFound": "That account no longer exists.",
+    "emailUnchanged": "That is already your address — there is nothing to change.",
+    "changeNotFound": "This confirmation link is not valid, or a newer request replaced it.",
+    "changeExpired": "This confirmation link has expired."
+  },
+  "confirmEmail": {
+    "title": "Confirm your email address",
+    "successTitle": "Address changed",
+    "successBody": "Your account is now reachable at {email}. Sign-in links go there from now on.",
+    "alreadyBody": "This change was already confirmed — your account is reachable at {email}. There is nothing left to do.",
+    "failedTitle": "That did not work",
+    "failedHint": "Sign in and request the change again under “My access”. Your current address keeps working exactly as before.",
+    "ctaAccount": "Go to my access",
+    "ctaLogin": "Go to sign-in"
   }
 }

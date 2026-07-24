@@ -1,0 +1,175 @@
+// The imperative shell for changing the account address.
+//
+// Two halves that must stay apart:
+//
+//   requestEmailChange()  writes NOTHING about the account. It records an
+//                         intention and hands back a token. Until the token
+//                         comes back, the account is exactly as it was — the
+//                         old address still signs in, a password still works,
+//                         and an abandoned request stays abandoned for ever.
+//
+//   confirmEmailChange()  is the only thing that moves the address, and it runs
+//                         only for somebody holding a token that was mailed to
+//                         the NEW address. That is the whole proof.
+//
+// What this deliberately does NOT do is claim purchases or send mail. Both
+// belong to the caller: a failed claim must not fail the change (see the page),
+// and a mail needs the request's language.
+import { and, eq, ne } from "drizzle-orm";
+import { createHash, randomBytes } from "node:crypto";
+
+import { db } from "@/db";
+import { emailChanges, users } from "@/db/schema";
+import { normalizeEmail } from "@/lib/users/rules";
+import {
+  EmailChangeError,
+  checkRequestedEmail,
+  expiryFrom,
+  isExpired,
+} from "@/lib/email-change/rules";
+
+/** 32 bytes of CSPRNG output, URL-safe. */
+function newToken(): string {
+  return randomBytes(32).toString("base64url");
+}
+
+/** What is stored. The token itself never touches the database. */
+function hashToken(token: string): string {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+export interface PendingChange {
+  newEmail: string;
+  expiresAt: Date;
+}
+
+/** The change this Member is waiting on, if any. Never returns the token. */
+export async function pendingChangeFor(
+  userId: string,
+): Promise<PendingChange | null> {
+  const [row] = await db
+    .select({ newEmail: emailChanges.newEmail, expiresAt: emailChanges.expiresAt })
+    .from(emailChanges)
+    .where(eq(emailChanges.memberId, userId));
+  if (!row) return null;
+  // An expired row is not a pending change — showing one would tell the Member
+  // to keep waiting for a link that no longer works.
+  if (isExpired(row.expiresAt, new Date())) return null;
+  return row;
+}
+
+/**
+ * Records that this Member would like to move to `rawEmail`, and returns the
+ * token to mail there. Changes nothing about the account.
+ */
+export async function requestEmailChange(
+  userId: string,
+  rawEmail: unknown,
+): Promise<{ newEmail: string; token: string; expiresAt: Date }> {
+  const newEmail = normalizeEmail(rawEmail);
+
+  const [me] = await db
+    .select({ email: users.email })
+    .from(users)
+    .where(eq(users.id, userId));
+  if (!me) throw new EmailChangeError("changeNotFound");
+
+  const denial = checkRequestedEmail(me.email, newEmail);
+  if (denial) throw new EmailChangeError(denial);
+
+  // Told straight away rather than at confirmation time. This does confirm to
+  // the requester that an account exists at that address — judged acceptable
+  // for a single-operator SAAS, and cheaper than spending a mail and the
+  // Member's day on a request that was never going to succeed.
+  const [taken] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(and(eq(users.email, newEmail as string), ne(users.id, userId)));
+  if (taken) throw new EmailChangeError("emailTaken");
+
+  const token = newToken();
+  const expiresAt = expiryFrom(new Date());
+
+  // At most one pending change per Member: the new request REPLACES the old
+  // one, which is how a typo'd address is corrected. Any link already in flight
+  // stops working at this moment — that is the point, not a side effect.
+  await db.transaction(async (tx) => {
+    await tx.delete(emailChanges).where(eq(emailChanges.memberId, userId));
+    await tx.insert(emailChanges).values({
+      memberId: userId,
+      newEmail: newEmail as string,
+      tokenHash: hashToken(token),
+      expiresAt,
+    });
+  });
+
+  return { newEmail: newEmail as string, token, expiresAt };
+}
+
+export type ConfirmResult =
+  | { applied: true; memberId: string; oldEmail: string | null; newEmail: string }
+  /** The link was already used. Not an error — say so and stop. */
+  | { applied: false; alreadyDone: true; newEmail: string };
+
+/**
+ * Moves the account, for whoever proves they can read mail at the new address.
+ *
+ * Authenticated by the token and by nothing else — deliberately. The mail is
+ * read on whichever device the Member happens to have their inbox on, which is
+ * routinely not the one they made the request from, and demanding a session
+ * here would strand exactly the person the feature is for.
+ */
+export async function confirmEmailChange(
+  rawToken: string,
+): Promise<ConfirmResult> {
+  const [row] = await db
+    .select()
+    .from(emailChanges)
+    .where(eq(emailChanges.tokenHash, hashToken(rawToken)));
+  if (!row) throw new EmailChangeError("changeNotFound");
+
+  const [member] = await db
+    .select({ email: users.email, blockedAt: users.blockedAt })
+    .from(users)
+    .where(eq(users.id, row.memberId));
+  if (!member) throw new EmailChangeError("changeNotFound");
+
+  // Already there: the link was followed twice, or a mail scanner opened it
+  // before the Member did. Nothing to do, and nothing that deserves a red page.
+  if (member.email === row.newEmail) {
+    return { applied: false, alreadyDone: true, newEmail: row.newEmail };
+  }
+
+  if (member.blockedAt) throw new EmailChangeError("userBlocked");
+  if (isExpired(row.expiresAt, new Date())) {
+    throw new EmailChangeError("changeExpired");
+  }
+
+  // Asked a SECOND time, and this is the one that counts: between the request
+  // and this click, somebody else may have taken the address.
+  const [taken] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(and(eq(users.email, row.newEmail), ne(users.id, row.memberId)));
+  if (taken) throw new EmailChangeError("emailTaken");
+
+  const oldEmail = member.email;
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(users)
+      .set({
+        email: row.newEmail,
+        // SET, not cleared — and this is the opposite of what the Operator's
+        // setUserEmail() does, on purpose. There, an address is asserted by
+        // somebody else and has proved nothing. Here, following this link IS
+        // the proof, so the account ends up in a stronger state than it began.
+        emailVerified: new Date(),
+      })
+      .where(eq(users.id, row.memberId));
+    // The row has done its job. No history is kept — see db/schema-email-changes.ts.
+    await tx.delete(emailChanges).where(eq(emailChanges.id, row.id));
+  });
+
+  return { applied: true, memberId: row.memberId, oldEmail, newEmail: row.newEmail };
+}

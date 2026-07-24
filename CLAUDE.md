@@ -376,18 +376,50 @@ protected by the fact that the page is.
 An Operator can change somebody's address here **without a confirmation link**,
 and that is right for this page: they are acting on a support call, and a link
 sent to the customer's mailbox is one they cannot click. It is exactly wrong as
-a self-service mechanism — do not expose `setUserEmail()` to the Member.
+a self-service mechanism — do not expose `setUserEmail()` to the Member. Their
+own path is `lib/email-change/`, and it confirms (see below).
 
 There is no "set a password for this user" here either, and there will not be:
 a password the Operator chose is a password the Operator knows.
 
 **The Member's own page is `/dashboard/account`** — balance, plans, and the
-sign-in section where they manage their own password
+sign-in section where they manage their own address and password
 (`app/dashboard/account/{page,ui,actions}.tsx`). Its actions start with
 `requireActiveUser()`, not `requireOwner()`, and none of them takes a user id
 from the form: the account acted on is always the session's own, which is what
 makes an IDOR impossible rather than merely unlikely. Build Member-facing
 settings there rather than starting a second page.
+
+**A Member changes their own address by proving they can read mail at the new
+one** (`lib/email-change/`). That proof is the entire feature — without it the
+field would be a one-click account transfer for anybody who finds an unlocked
+screen. What holds:
+
+- **Requesting changes nothing.** A row in `email_changes` and a link in the new
+  mailbox. Until the link is followed, the old address still signs in, a
+  password still works, and an abandoned request stays abandoned for ever.
+- **One pending change per Member.** A new request replaces the old one and
+  kills its link — that is how a typo'd address is corrected, and why there is
+  no cancel button to build.
+- **Confirming SETS `emailVerified`**, where the Operator's `setUserEmail()`
+  clears it. Not an inconsistency to tidy away: there an address is asserted by
+  somebody else and has proved nothing; here following the link IS the proof.
+- **`/account/confirm-email` is public on purpose.** The mail is read on
+  whichever device holds the inbox, which is routinely not the one that made the
+  request. The token is the authentication — single-use, expiring, and sent only
+  to the address it moves the account to.
+- **Confirming claims purchases** made under the new address, the same pass that
+  runs at first sign-in. A failed claim never fails the change.
+- **The old address is told**, with no link (see above). If the move was not the
+  owner's doing, that mail is the only way they find out.
+- **Nothing the Member owns moves with it.** Attribution runs on `memberId`, not
+  on an address (AD-5), so balance, ledger, grants, role and running
+  subscriptions are untouched by a change.
+
+One consequence worth knowing: the session is a JWT, so it keeps the address
+from sign-in time. The sidebar shows the old one until the next sign-in. The
+account page reads `users.email` from the database for exactly this reason —
+being wrong there would be wrong on the page somebody opens to check.
 
 **One Member, whole:** `/dashboard/admin/users/<id>` — reached from the row menu
 on the list above. This is the support page: token balance with its ledger

@@ -8,8 +8,9 @@ import { entitlementsFor, suspendedKeysFor } from "@/lib/entitlements/manage";
 import { pausedKeys } from "@/lib/entitlements/rules";
 import { getProduct } from "@/lib/digistore/products";
 import { getTokenAccount } from "@/lib/tokens/account";
-import { passwordState } from "@/lib/credentials/manage";
+import { signInState } from "@/lib/credentials/manage";
 import { MIN_PASSWORD_LENGTH } from "@/lib/credentials/rules";
+import { pendingChangeFor } from "@/lib/email-change/manage";
 import { SignInCard } from "./ui";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -104,7 +105,8 @@ export default async function AccountPage() {
   if (!session?.user?.id) redirect("/login");
   const memberId = session.user.id;
 
-  const [entitlements, suspended, account, credentials] = await Promise.all([
+  const [entitlements, suspended, account, credentials, pendingChange] =
+    await Promise.all([
     entitlementsFor(memberId),
     // AC 4 — the case the ACs of Epic 2 forgot. `activeFor` filters a suspended
     // grant out ENTIRELY, so without this read a customer whose card expired
@@ -115,11 +117,15 @@ export default async function AccountPage() {
     // Read as `?? 0`; creating one because somebody looked at their own page
     // would write a row on every visit.
     getTokenAccount(memberId),
-    // Whether a password is set — a boolean, never the hash. There is no shape
-    // here that HAS the hash on it, which is the same structural argument the
-    // note/issuedBy comment above makes: nothing careless can leak what was
-    // never fetched.
-    passwordState(memberId),
+    // The address and whether a password is set — a boolean, never the hash.
+    // There is no shape here that HAS the hash on it, which is the same
+    // structural argument the note/issuedBy comment above makes: nothing
+    // careless can leak what was never fetched.
+    signInState(memberId),
+    // A requested-but-unconfirmed address change, or null. Expired ones read as
+    // null — telling somebody to keep waiting for a dead link is worse than
+    // saying nothing.
+    pendingChangeFor(memberId),
   ]);
 
   // Suspended AND not covered by something else the Member can still use. A key
@@ -269,9 +275,24 @@ export default async function AccountPage() {
             somebody who never wants a password should never have to scroll past
             an invitation to set one. */}
         <SignInCard
-          email={session.user.email ?? ""}
+          email={credentials.email ?? ""}
           hasPassword={credentials.hasPassword}
           minLength={MIN_PASSWORD_LENGTH}
+          pending={
+            pendingChange
+              ? {
+                  newEmail: pendingChange.newEmail,
+                  // Formatted here rather than in the client component: the
+                  // request's language and time zone live on the server, and a
+                  // Date crossing into a client component would be rendered by
+                  // whatever the browser felt like.
+                  expiresAt: format.dateTime(pendingChange.expiresAt, {
+                    dateStyle: "long",
+                    timeStyle: "short",
+                  }),
+                }
+              : null
+          }
         />
       </div>
     </>

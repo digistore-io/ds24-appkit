@@ -18,9 +18,14 @@ import { useTranslations } from "next-intl";
 import { KeyRound, Mail, ShieldCheck, ShieldOff } from "lucide-react";
 
 import { useActionToast } from "@/hooks/use-action-toast";
-import { setPasswordAction, removePasswordAction } from "./actions";
+import {
+  setPasswordAction,
+  removePasswordAction,
+  requestEmailChangeAction,
+} from "./actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Callout } from "@/components/ui/callout";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -46,10 +51,13 @@ export function SignInCard({
   email,
   hasPassword,
   minLength,
+  pending,
 }: {
   email: string;
   hasPassword: boolean;
   minLength: number;
+  /** A requested-but-unconfirmed move, or null. */
+  pending: { newEmail: string; expiresAt: string } | null;
 }) {
   const t = useTranslations("account");
 
@@ -66,15 +74,31 @@ export function SignInCard({
           </CardDescription>
         </div>
 
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-start gap-3">
             <Mail aria-hidden className="text-muted-foreground mt-0.5 size-4" />
             <div>
               <p className="text-sm font-medium">{t("emailLabel")}</p>
               <p className="text-muted-foreground text-sm break-all">{email}</p>
+              <p className="text-muted-foreground mt-1 text-sm">
+                {t("emailHint")}
+              </p>
             </div>
           </div>
+          <ChangeEmailDialog hasPending={Boolean(pending)} />
         </div>
+
+        {/* A change stuck on a typo has to be VISIBLE, or the Member waits for
+            a mail that went to an address that does not exist. Requesting again
+            replaces this one — which is why there is no cancel button. */}
+        {pending && (
+          <Callout variant="info" title={t("pendingTitle")}>
+            {t("pendingBody", {
+              email: pending.newEmail,
+              until: pending.expiresAt,
+            })}
+          </Callout>
+        )}
 
         <div className="flex flex-col gap-4 border-t pt-6 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3">
@@ -112,6 +136,58 @@ export function SignInCard({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function ChangeEmailDialog({ hasPending }: { hasPending: boolean }) {
+  const t = useTranslations("account");
+  const tCommon = useTranslations("common");
+  const [open, setOpen] = useState(false);
+  const [state, action, pending] = useActionState(
+    requestEmailChangeAction,
+    EMPTY,
+  );
+  useActionToast(state);
+  useCloseOnSuccess(state.ok, () => setOpen(false));
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" className="shrink-0">
+          {hasPending ? t("emailChangeAgain") : t("emailChange")}
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <form action={action} className="flex flex-col gap-4">
+          <DialogHeader>
+            <DialogTitle>{t("emailChange")}</DialogTitle>
+            <DialogDescription>{t("emailChangeHint")}</DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="new-email">{t("emailNew")}</Label>
+            <Input
+              id="new-email"
+              name="email"
+              type="email"
+              required
+              autoComplete="email"
+            />
+          </div>
+
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" variant="ghost">
+                {tCommon("cancel")}
+              </Button>
+            </DialogClose>
+            <Button type="submit" disabled={pending}>
+              {t("emailChangeSubmit")}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 

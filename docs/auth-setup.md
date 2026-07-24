@@ -24,7 +24,13 @@ Two consequences worth knowing before you go looking for them:
   process — run several app instances behind a load balancer and each keeps its
   own, which multiplies the effective limit. That is a known limitation of the
   single-process shape this template ships with, not an oversight.
-- **Every credential change mails the Member** — set, changed, removed. Without
+- **Members change their own address**, confirmed by a link sent to the new one
+  (`/dashboard/account` → `/account/confirm-email`). Nothing moves until that
+  link is followed, so an abandoned or mistyped request costs nothing and the
+  old address keeps working throughout. The confirmation page needs no session —
+  the mail is read wherever the inbox is.
+- **Every credential change mails the Member** — set, changed, removed, and the
+  address change tells the address the account just left. Without
   it, somebody who reaches an unlocked machine could set a password on the
   account and the owner would never learn of it. The notice deliberately
   contains **no link**, so it is safe to receive and useless to forge; what the

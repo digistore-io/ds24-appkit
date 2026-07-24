@@ -18,18 +18,31 @@ import {
   recentAttempts,
 } from "@/lib/credentials/rules";
 
-export interface PasswordState {
+export interface SignInState {
+  /** The account's address as the DATABASE holds it — see below. */
+  email: string | null;
   hasPassword: boolean;
 }
 
-/** Does this account have a password? Never returns the hash itself. */
-export async function passwordState(userId: string): Promise<PasswordState> {
+/**
+ * How this account is signed into: the address, and whether a password exists.
+ * Never returns the hash itself.
+ *
+ * ⛔ The address comes from the database and NOT from the session, and that is
+ * not interchangeable here. Sessions are JWTs (auth.config.ts): the email in one
+ * is the email at the moment of sign-in, so a Member who has just confirmed an
+ * address change would be shown their OLD address by the very page that just
+ * changed it. The sidebar still shows the cached one until the next sign-in —
+ * a cosmetic lag, and it corrects itself. Being wrong HERE would not be
+ * cosmetic; it is the page somebody opens to check what their address is.
+ */
+export async function signInState(userId: string): Promise<SignInState> {
   const [row] = await db
-    .select({ passwordHash: users.passwordHash })
+    .select({ passwordHash: users.passwordHash, email: users.email })
     .from(users)
     .where(eq(users.id, userId));
   if (!row) throw new CredentialError("credentialUserNotFound");
-  return { hasPassword: Boolean(row.passwordHash) };
+  return { email: row.email, hasPassword: Boolean(row.passwordHash) };
 }
 
 /**

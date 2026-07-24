@@ -1,0 +1,92 @@
+// Rules for changing the account address — deliberately PURE functions, no
+// database and no crypto.
+//
+// The one thing this feature is: the proof that the Operator's own path
+// (setUserEmail, lib/users/manage.ts) is allowed to skip. An Operator changes an
+// address on a support call, having heard the customer; a Member has only a
+// session, and a session is exactly what an attacker has. Everything below
+// exists so that a session alone cannot move an account.
+//
+// LANGUAGE: codes, never sentences. Translation happens in the delivery layer
+// via the `errors` namespace in `messages/*.json`.
+
+/**
+ * Reasons a change can be refused. `invalidEmail` and `emailTaken` are shared
+ * with lib/users/rules.ts on purpose — same meaning, same text, one entry in
+ * `messages/*.json`. The union is registered in `i18n/messages.test.ts`, which
+ * checks each code has a translation.
+ */
+export const EMAIL_CHANGE_ERROR_CODES = [
+  "invalidEmail",
+  "emailTaken",
+  "emailUnchanged",
+  "changeNotFound",
+  "changeExpired",
+  "userBlocked",
+] as const;
+
+export type EmailChangeErrorCode = (typeof EMAIL_CHANGE_ERROR_CODES)[number];
+
+/** Result of a check. `null` = allowed, otherwise the reason. */
+export type Denial = EmailChangeErrorCode | null;
+
+export class EmailChangeError extends Error {
+  readonly code: EmailChangeErrorCode;
+
+  constructor(code: EmailChangeErrorCode) {
+    super(code);
+    this.name = "EmailChangeError";
+    this.code = code;
+  }
+}
+
+/**
+ * How long a confirmation link stays usable.
+ *
+ * The same 24 hours as the magic link (`buildEmailProvider`, lib/email.ts).
+ * Deliberately matched: a person who has just requested a change and a person
+ * who has just requested a sign-in are in the same situation — waiting on one
+ * mail — and two different answers to "how long do I have?" would be a
+ * difference nobody could explain.
+ */
+export const CONFIRMATION_TTL_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * May `next` become the address of the account that currently holds `current`?
+ *
+ * Takes ALREADY NORMALISED input — normalisation is `normalizeEmail` in
+ * lib/users/rules.ts, and doing it in one place is what makes "Sabine@Neu.de "
+ * and "sabine@neu.de" the same request everywhere in the app.
+ *
+ * Whether the address belongs to somebody else cannot be answered here — that
+ * needs the database, and it is asked twice: once now (so the requester is told
+ * straight away) and once at confirmation time (because it may have been taken
+ * in between).
+ */
+export function checkRequestedEmail(
+  current: string | null,
+  next: string | null,
+): Denial {
+  if (!next) return "invalidEmail";
+  // Not an error. Somebody who types the address they already have has made no
+  // mistake worth a red message — they have simply changed nothing, and saying
+  // "invalid" would be a lie about their own address.
+  if (current && next === current) return "emailUnchanged";
+  return null;
+}
+
+/**
+ * Has this confirmation link run out?
+ *
+ * Expiry is compared, never scheduled. No job prunes this table: a row that has
+ * timed out is refused the moment somebody presents it, which is the only
+ * moment the answer matters.
+ */
+export function isExpired(expiresAt: Date, now: Date): boolean {
+  return expiresAt.getTime() <= now.getTime();
+}
+
+/** When a link requested at `now` stops working. */
+export function expiryFrom(now: Date): Date {
+  return new Date(now.getTime() + CONFIRMATION_TTL_MS);
+}

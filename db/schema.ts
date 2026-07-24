@@ -106,3 +106,8 @@ export * from "./schema-tokens";
 // `grants` — the app's own answer to "may this person use this". The one table
 // an access question touches. See schema-entitlements.ts.
 export * from "./schema-entitlements";
+
+// --- Self-service account management -----------------------------------------
+// `email_changes` — a Member's requested address change, until it is confirmed.
+// See schema-email-changes.ts.
+export * from "./schema-email-changes";

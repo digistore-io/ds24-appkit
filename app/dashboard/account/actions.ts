@@ -29,12 +29,33 @@ import { unstable_rethrow } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { getTranslations } from "next-intl/server";
 
+import { headers } from "next/headers";
+
 import { requireActiveUser } from "@/lib/authz";
 import { setPassword, removePassword } from "@/lib/credentials/manage";
 import { CredentialError } from "@/lib/credentials/rules";
+import { requestEmailChange } from "@/lib/email-change/manage";
+import { EmailChangeError } from "@/lib/email-change/rules";
 import type { CredentialChange } from "@/lib/email";
 
 const PAGE = "/dashboard/account";
+
+/**
+ * Absolute base for the confirmation link.
+ *
+ * `APP_URL` first because it is the deliberate answer — it is what the operator
+ * configured and what every other outbound URL in this app uses. The request's
+ * own origin is the fallback for a local machine where the app moved to another
+ * port before `.env` caught up.
+ */
+async function appOrigin(): Promise<string> {
+  const configured = process.env.APP_URL?.trim();
+  if (configured) return configured.replace(/\/+$/, "");
+  const h = await headers();
+  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
+  const proto = h.get("x-forwarded-proto") ?? "http";
+  return `${proto}://${host}`;
+}
 
 /**
  * Tells the Member their credentials moved — and NEVER lets that failure undo
@@ -82,6 +103,7 @@ async function toState(error: unknown): Promise<ActionState> {
   unstable_rethrow(error);
   const t = await getTranslations("errors");
   if (error instanceof CredentialError) return { error: t(error.code), ok: null };
+  if (error instanceof EmailChangeError) return { error: t(error.code), ok: null };
 
   console.error("[account] unexpected error:", error);
   return { error: t("unknown"), ok: null };
@@ -109,6 +131,42 @@ export async function setPasswordAction(
     revalidatePath(PAGE);
     const t = await getTranslations("account");
     return { error: null, ok: t("passwordSaved") };
+  } catch (error) {
+    return toState(error);
+  }
+}
+
+/**
+ * Asks to move the account to a new address.
+ *
+ * Nothing about the account changes here — not the address, not what can sign
+ * in. All this does is record the wish and put a link in the new mailbox. If
+ * the link is never followed, nothing ever happens.
+ *
+ * A failed send DOES fail this action, unlike the credential notice. The
+ * difference: there the change had already happened and hiding a mail failure
+ * would have lost it. Here the mail IS the mechanism — reporting success while
+ * no link went anywhere would leave the Member waiting for a mail that does not
+ * exist.
+ */
+export async function requestEmailChangeAction(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  try {
+    const session = await requireActiveUser();
+    const { newEmail, token } = await requestEmailChange(
+      session.user.id as string,
+      formData.get("email"),
+    );
+
+    const url = `${await appOrigin()}/account/confirm-email?token=${encodeURIComponent(token)}`;
+    const { sendEmailChangeConfirmation } = await import("@/lib/email");
+    await sendEmailChangeConfirmation(newEmail, url);
+
+    revalidatePath(PAGE);
+    const t = await getTranslations("account");
+    return { error: null, ok: t("emailChangeRequested", { email: newEmail }) };
   } catch (error) {
     return toState(error);
   }
