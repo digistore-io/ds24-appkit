@@ -810,6 +810,28 @@ executable and needs neither. Both rules are written out at the top of `run.mjs`
 the table above and fails the test run if one shows up. It is the reason this
 does not quietly rot back into a Linux-only project — don't switch it off.
 
+## What the app stores about people
+
+`docs/data-protection.md` is the inventory: every table holding personal data,
+what reaches Digistore24 / the mail provider / the host, what is pruned and
+after how long. `compliance-check` drafts the privacy policy from it.
+
+**Keep it current when you add a table.** A privacy policy is only as true as
+the list it was written from, and a customer's is written from that file.
+
+Three things in it that are easy to get wrong:
+
+- **Sign-in security processes IP addresses** — in memory, fifteen minutes, to
+  stop one password being tried across many accounts. Nothing is stored, and
+  processing without storing is still processing.
+- **Operator notes are personal data.** `grants.note` and `token_ledger.note`
+  hold what the operator wrote *about* a customer. The app never shows them to
+  that customer, which is a decision about tone and not an exemption from a
+  subject access request.
+- **Orders are not deletable on request** while the statutory retention runs —
+  they are accounting records. Deleting one would be the violation, not the
+  remedy.
+
 ## STOP criteria
 
 For changes to billing logic, signature/auth checks, the export/deletion

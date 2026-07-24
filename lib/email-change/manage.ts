@@ -15,7 +15,7 @@
 // What this deliberately does NOT do is claim purchases or send mail. Both
 // belong to the caller: a failed claim must not fail the change (see the page),
 // and a mail needs the request's language.
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, lt, ne } from "drizzle-orm";
 import { createHash, randomBytes } from "node:crypto";
 
 import { db } from "@/db";
@@ -122,6 +122,16 @@ export async function requestEmailChange(
   // one, which is how a typo'd address is corrected. Any link already in flight
   // stops working at this moment — that is the point, not a side effect.
   await db.transaction(async (tx) => {
+    // Expired rows anywhere in the installation go at the same time, and this
+    // is a data-protection rule rather than housekeeping. `newEmail` is an
+    // address somebody TYPED — on a typo it belongs to a stranger who never
+    // asked to be in this database, and once the link has expired the row can
+    // no longer do anything for anyone. Storage limitation says it should not
+    // outlive its purpose, and its purpose ended at `expiresAt`.
+    //
+    // Done on a write that already runs rather than on a schedule, so an
+    // operator who never sets up cron still gets it. See docs/data-protection.md.
+    await tx.delete(emailChanges).where(lt(emailChanges.expiresAt, new Date()));
     await tx.delete(emailChanges).where(eq(emailChanges.memberId, userId));
     await tx.insert(emailChanges).values({
       memberId: userId,

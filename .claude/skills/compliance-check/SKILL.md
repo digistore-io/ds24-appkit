@@ -36,6 +36,31 @@ Create the missing pages as their own routes and link them in the footer (of eve
 Put clearly recognizable placeholders into the templates, e.g. `[FIRMENNAME]`,
 `[ANSCHRIFT]`, `[E-MAIL]`, and instruct the user to replace them.
 
+## Before drafting the privacy policy: read what the app actually stores
+
+**`docs/data-protection.md` is the inventory.** It lists every table holding
+personal data, what reaches Digistore24 / the mail provider / the host, what is
+already pruned and after how long, and which retention questions are genuinely
+open. It was read out of the code, not remembered.
+
+Do not draft a privacy policy from this checklist alone — a generic one will
+miss things this app really does, and the misses are not obvious:
+
+- **IP addresses are processed** (in memory, fifteen minutes, to stop password
+  guessing). Nothing is stored, but processing without storing is still
+  processing and belongs in the policy. Legitimate interest in securing the
+  service is the basis that normally fits.
+- **`ipn_events` holds the complete raw webhook body**, buyer data and all, for
+  60 days.
+- **`email_changes` can hold a stranger's address** — a mistyped target — for up
+  to 24 hours.
+- **Operator notes on grants and the token ledger are personal data.** The app
+  never shows them to the customer, which is a decision about tone and not an
+  exemption from a subject access request.
+
+If the app has grown since that file was written, update it first. A privacy
+policy is only as true as the list it was drafted from.
+
 ## GDPR basics (check)
 
 - **Data minimization:** only collect what is needed.
@@ -46,6 +71,13 @@ Put clearly recognizable placeholders into the templates, e.g. `[FIRMENNAME]`,
 - **Cookies/tracking:** only with consent (consent banner) — but **only** if
   there really is tracking. No tracking, no banner needed.
 - **Data access/deletion:** provide a way to export/delete customer data on request.
+  Note what this app can and cannot do today: deleting a user account cascades to
+  their sessions but deliberately **not** to their orders, because an order is an
+  accounting record that German law requires to be kept (§147 AO, §257 HGB) and
+  the GDPR exempts from erasure while that obligation runs (Art. 17(3)(b)).
+  Deleting one on request would be the violation. What is genuinely missing is an
+  export, and a plan for what happens once the retention period ends — see §6 of
+  `docs/data-protection.md`.
 
 ## Procedure
 
