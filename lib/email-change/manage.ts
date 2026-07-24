@@ -21,6 +21,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { db } from "@/db";
 import { emailChanges, users } from "@/db/schema";
 import { normalizeEmail } from "@/lib/users/rules";
+import { hasEmailConfig } from "@/lib/env-guard";
 import {
   CONFIRMATION_ACCOUNT_BUCKET,
   CONFIRMATION_LIMIT,
@@ -72,6 +73,19 @@ export async function requestEmailChange(
   userId: string,
   rawEmail: unknown,
 ): Promise<{ newEmail: string; token: string; expiresAt: Date }> {
+  // FIRST, before anything is read or written. Mail is not a delivery detail of
+  // this feature, it IS the mechanism: the link is the only thing that can move
+  // an address. Without a transport there is nothing to send and therefore
+  // nothing this function can usefully do.
+  //
+  // Checked here rather than left to the send failing later, because the row is
+  // written before the send. Discovering it afterwards left a Member reading
+  // "unknown error" while their account page announced a change waiting for a
+  // confirmation that was never posted — the app looking like it had worked.
+  if (!hasEmailConfig(process.env)) {
+    throw new EmailChangeError("mailNotConfigured");
+  }
+
   const newEmail = normalizeEmail(rawEmail);
 
   const [me] = await db

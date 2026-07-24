@@ -52,12 +52,20 @@ export function SignInCard({
   hasPassword,
   minLength,
   pending,
+  mailConfigured,
 }: {
   email: string;
   hasPassword: boolean;
   minLength: number;
   /** A requested-but-unconfirmed move, or null. */
   pending: { newEmail: string; expiresAt: string } | null;
+  /**
+   * Whether a mail transport exists. The address change is impossible without
+   * one — the confirmation link is the entire mechanism — so the action is not
+   * offered rather than offered and failing. The password below is unaffected:
+   * it needs no mail at all.
+   */
+  mailConfigured: boolean;
 }) {
   const t = useTranslations("account");
 
@@ -85,7 +93,18 @@ export function SignInCard({
               </p>
             </div>
           </div>
-          <ChangeEmailDialog hasPending={Boolean(pending)} />
+          {mailConfigured ? (
+            <ChangeEmailDialog hasPending={Boolean(pending)} />
+          ) : (
+            // No transport, so no link, so no change is possible. Saying that
+            // beats a button that accepts the click and then fails: the Member
+            // would be left reading an error about something they did nothing
+            // wrong in. Only reachable on a DEV machine — STAGING and PROD
+            // refuse to start without mail delivery.
+            <p className="text-muted-foreground max-w-xs shrink-0 text-sm">
+              {t("emailChangeNoMail")}
+            </p>
+          )}
         </div>
 
         {/* A change stuck on a typo has to be VISIBLE, or the Member waits for

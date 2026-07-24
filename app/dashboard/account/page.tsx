@@ -11,6 +11,7 @@ import { getTokenAccount } from "@/lib/tokens/account";
 import { signInState } from "@/lib/credentials/manage";
 import { MIN_PASSWORD_LENGTH } from "@/lib/credentials/rules";
 import { pendingChangeFor } from "@/lib/email-change/manage";
+import { isEmailLoginEnabled } from "@/lib/email";
 import { SignInCard } from "./ui";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -278,6 +279,7 @@ export default async function AccountPage() {
           email={credentials.email ?? ""}
           hasPassword={credentials.hasPassword}
           minLength={MIN_PASSWORD_LENGTH}
+          mailConfigured={isEmailLoginEnabled()}
           pending={
             pendingChange
               ? {

@@ -146,7 +146,8 @@
     "emailChangeSubmit": "Bestätigungslink senden",
     "emailChangeRequested": "Bestätigungslink an {email} gesendet. Bis du ihn anklickst, ändert sich nichts.",
     "pendingTitle": "Adressänderung wartet auf Bestätigung",
-    "pendingBody": "Wir haben einen Link an {email} geschickt — gültig bis {until}. Deine jetzige Adresse funktioniert bis dahin ganz normal weiter. Falls du dich vertippt hast, fordere die Änderung einfach mit der richtigen Adresse neu an; die alte Anfrage wird dabei ersetzt."
+    "pendingBody": "Wir haben einen Link an {email} geschickt — gültig bis {until}. Deine jetzige Adresse funktioniert bis dahin ganz normal weiter. Falls du dich vertippt hast, fordere die Änderung einfach mit der richtigen Adresse neu an; die alte Anfrage wird dabei ersetzt.",
+    "emailChangeNoMail": "Adresse ändern geht erst, wenn für diese App ein E-Mail-Versand eingerichtet ist — die Änderung wird per Bestätigungslink bestätigt."
   },
   "admin": {
     "title": "Admin",
@@ -452,7 +453,8 @@
     "emailUnchanged": "Das ist bereits deine Adresse — es gibt nichts zu ändern.",
     "changeNotFound": "Dieser Bestätigungslink ist ungültig oder wurde durch eine neuere Anfrage ersetzt.",
     "changeExpired": "Dieser Bestätigungslink ist abgelaufen.",
-    "tooManyRequests": "Zu viele Anfragen in kurzer Zeit. Warte etwa eine Stunde und versuche es dann noch einmal — deine jetzige Adresse funktioniert unverändert weiter."
+    "tooManyRequests": "Zu viele Anfragen in kurzer Zeit. Warte etwa eine Stunde und versuche es dann noch einmal — deine jetzige Adresse funktioniert unverändert weiter.",
+    "mailNotConfigured": "Für diese App ist noch kein E-Mail-Versand eingerichtet. Ohne ihn kann kein Bestätigungslink verschickt werden — und ohne den ändert sich keine Adresse. Deine jetzige Adresse funktioniert unverändert weiter."
   },
   "confirmEmail": {
     "title": "E-Mail-Adresse bestätigen",

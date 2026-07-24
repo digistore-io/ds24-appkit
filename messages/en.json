@@ -146,7 +146,8 @@
     "emailChangeSubmit": "Send confirmation link",
     "emailChangeRequested": "Confirmation link sent to {email}. Nothing changes until you follow it.",
     "pendingTitle": "Address change waiting for confirmation",
-    "pendingBody": "We sent a link to {email} — valid until {until}. Your current address keeps working normally until then. If you mistyped it, simply request the change again with the right address; that replaces this one."
+    "pendingBody": "We sent a link to {email} — valid until {until}. Your current address keeps working normally until then. If you mistyped it, simply request the change again with the right address; that replaces this one.",
+    "emailChangeNoMail": "Changing your address needs email delivery set up for this app — the change is confirmed by a link sent to the new address."
   },
   "admin": {
     "title": "Admin",
@@ -452,7 +453,8 @@
     "emailUnchanged": "That is already your address — there is nothing to change.",
     "changeNotFound": "This confirmation link is not valid, or a newer request replaced it.",
     "changeExpired": "This confirmation link has expired.",
-    "tooManyRequests": "Too many requests in a short time. Wait about an hour and try again — your current address keeps working exactly as before."
+    "tooManyRequests": "Too many requests in a short time. Wait about an hour and try again — your current address keeps working exactly as before.",
+    "mailNotConfigured": "This app has no email delivery set up yet. Without it no confirmation link can be sent — and without that link no address changes. Your current address keeps working exactly as before."
   },
   "confirmEmail": {
     "title": "Confirm your email address",

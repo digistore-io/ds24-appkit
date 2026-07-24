@@ -24,6 +24,7 @@ export const EMAIL_CHANGE_ERROR_CODES = [
   "changeExpired",
   "userBlocked",
   "tooManyRequests",
+  "mailNotConfigured",
 ] as const;
 
 export type EmailChangeErrorCode = (typeof EMAIL_CHANGE_ERROR_CODES)[number];
