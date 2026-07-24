@@ -9,7 +9,8 @@ Auth.js v5 (email token, Google optional) · Tailwind v4 + shadcn/ui.
 
 Wired up and ready to use:
 - 🔐 **Sign-in** (email token/magic link via Postmark or SMTP; Google optional)
-  — locally you get straight in **without a mail account** (development login)
+  — plus an **optional password** each customer may set on themselves, and
+  locally you get straight in **without a mail account** (development login)
 - 👥 **User management** with two roles (admin/user) — admins manage accounts
   under `/dashboard/admin/users`
 - 🏷️ **Plan page** (`/plans`) with monthly/yearly subscription and token
@@ -39,8 +40,8 @@ hands over to the next:
 | 7 | **Marketing** | `go-to-market` | positioning, channels, launch plan + ready-made content (landing page, emails, **video scripts**) |
 
 While building (step 1), **tests are written and run automatically**
-(`npm run test`); the bundled CI checks every push. Throughout, **`guardrails`**
-watches over money, secrets and customer data.
+(`npm run test`) — locally, on your machine, before anything moves on.
+Throughout, **`guardrails`** watches over money, secrets and customer data.
 
 **You don't have to remember any of this.** Start Claude Code in the project
 folder and say:

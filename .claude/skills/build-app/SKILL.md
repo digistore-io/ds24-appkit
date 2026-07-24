@@ -124,8 +124,11 @@ node scripts/users/create-user.mjs --email <their-email> --role owner --apply
 # or: node run.mjs user-create --email <their-email> --role owner --apply
 ```
 
-Sign-in is passwordless (email magic link) — the `owner` account created in
-advance is reused at the first sign-in. Protect admin-only pages with
+Sign-in is by email magic link — the `owner` account created in advance is
+reused at the first sign-in. On top of that every customer may set a password
+on themselves under `/dashboard/account`; it is optional, it never replaces the
+magic link, and there is nothing to configure for it. Protect admin-only pages
+with
 `requireOwner()` (`lib/authz.ts`); model to follow:
 `app/dashboard/admin/page.tsx`. Normal customers stay `member` (default).
 Details: `scripts/users/README.md`.
@@ -140,8 +143,8 @@ Write tests for **every** feature and run them — not optional:
   refunded → gone, cancelled → still there until the paid period ends), input
   validation, edge and error cases.
 - **Running them:** `npm run test` must be **green** before anything continues.
-  On top of that `npm run typecheck`. The bundled CI
-  (`.github/workflows/ci.yml`) runs both automatically on every push.
+  On top of that `npm run typecheck` — `node run.mjs test` does both in one go.
+  You run them yourself; nothing runs them for you after a push.
 
 ### And then: open the app yourself
 

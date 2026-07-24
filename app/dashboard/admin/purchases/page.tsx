@@ -1,7 +1,13 @@
 import { getTranslations } from "next-intl/server";
 
 import { requireOwner } from "@/lib/authz";
-import { listUnattributedOrders } from "@/lib/digistore/purchases";
+import { listOrders } from "@/lib/digistore/purchases";
+import {
+  isFiltered,
+  parsePurchaseFilter,
+  type RawSearchParams,
+} from "@/lib/digistore/purchase-filter";
+import { allProducts } from "@/lib/digistore/products";
 import { listIpnEvents } from "@/lib/digistore/ipn-log";
 import { listUsers } from "@/lib/users/manage";
 import { PageHeader } from "@/components/page-header";
@@ -12,17 +18,34 @@ export async function generateMetadata() {
   return { title: t("title") };
 }
 
-// Purchases that reached nobody — admins only (requireOwner as the first line).
+// Every purchase the app has recorded — admins only (requireOwner as the first
+// line).
 //
-// A purchase lands here when the buyer paid without being signed in and no
-// account carries their address. Most resolve themselves: the buyer signs in
-// and the claim attaches them automatically (lib/digistore/claim.ts). What is
-// left is the mismatch case — paid under one address, account under another —
-// and that is what this page is for.
-export default async function AdminPurchasesPage() {
+// The list is the whole financial record, of every status: a refund is part of
+// what the Operator is asked about. Four filters narrow it (buyer address,
+// product, order id, whether an account is attached) and they live in the URL,
+// so the view survives a reload, a copied link and the re-render after an
+// attach — story 3.7 §D4.
+//
+// The old work queue is one of those filters: `?assignment=unassigned` is
+// exactly the set this page used to show. A purchase lands there when the buyer
+// paid without being signed in and no account carries their address. Most
+// resolve themselves — the buyer signs in and the claim attaches them
+// automatically (lib/digistore/claim.ts). What is left is the mismatch case,
+// paid under one address and account under another, and that is what the attach
+// is for.
+export default async function AdminPurchasesPage({
+  searchParams,
+}: {
+  searchParams: Promise<RawSearchParams>;
+}) {
   await requireOwner();
-  const [rows, users, ipnEvents] = await Promise.all([
-    listUnattributedOrders(),
+  // `searchParams` is a Promise in this Next.js version — awaiting it is not
+  // optional, and forgetting it compiles cleanly and fails on the first request.
+  const filter = parsePurchaseFilter(await searchParams);
+
+  const [purchases, users, ipnEvents] = await Promise.all([
+    listOrders(filter),
     listUsers(),
     listIpnEvents(),
   ]);
@@ -32,12 +55,21 @@ export default async function AdminPurchasesPage() {
     <>
       <PageHeader
         title={t("title")}
-        description={t("description", { count: rows.length })}
+        description={
+          isFiltered(filter)
+            ? t("descriptionFiltered", { count: purchases.total })
+            : t("description", { count: purchases.total })
+        }
       />
 
       <PurchasesTabs
-        rows={rows}
+        rows={purchases.rows}
+        filter={filter}
+        products={allProducts().map((p) => ({ key: p.key, name: p.name }))}
         members={users.map((u) => ({ id: u.id, email: u.email }))}
+        page={purchases.page}
+        hasMore={purchases.hasMore}
+        total={purchases.total}
         ipnEvents={ipnEvents}
       />
     </>

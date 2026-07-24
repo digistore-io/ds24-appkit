@@ -4,8 +4,9 @@
 // about the grant lifecycle: a money rule that lives only in a SQL `where` is
 // a rule nothing asserts. This one lived in FOUR `where` clauses, and the only
 // thing catching a mistake was a harness under `.dev/` — which is gitignored,
-// never runs in CI, and is not even part of the template the customer
-// receives. Every mutation of the widened filter passed `node run.mjs test` clean.
+// never runs with the test suite, and is not even part of the template the
+// customer receives. Every mutation of the widened filter passed
+// `node run.mjs test` clean.
 import type { orderStatusEnum } from "@/db/schema";
 
 export type OrderStatus = (typeof orderStatusEnum.enumValues)[number];

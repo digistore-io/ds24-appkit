@@ -71,7 +71,7 @@ function slug(s) {
 // command whose job includes the IPN hookup, so finishing that job rather than
 // printing a hint is the point. Two guards keep it honest:
 //   - never on a dry run (a preview must not publish your machine), and
-//   - never with --no-tunnel, for CI and anyone who wants the old behaviour.
+//   - never with --no-tunnel, for anyone who wants the old behaviour.
 // A public APP_URL never gets this far, so STAGING/PROD are untouched.
 let url = args.url;
 let viaTunnel = false;

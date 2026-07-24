@@ -132,7 +132,7 @@ it happens: an open tunnel makes the machine reachable from the internet.
 The tunnel runs in the **background** (`tunnel.mjs`, state in `.dev/tunnel.*`);
 `node run.mjs status` shows it, `node run.mjs stop` ends it. A running one is reused rather than
 replaced. Never opened: on `--dry-run` (a preview must not publish the machine)
-and with `--no-tunnel` (CI). A public `APP_URL` (STAGING/PROD) wins over any
+and with `--no-tunnel`. A public `APP_URL` (STAGING/PROD) wins over any
 tunnel and never reaches this path.
 
 By hand (a special case, fixed values instead of derivation):

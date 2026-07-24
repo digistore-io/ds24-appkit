@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { ArrowLeft } from "lucide-react";
 
+import { AuthError } from "next-auth";
+
 import { signIn, auth } from "@/auth";
 import { ACCESS_DENIED } from "@/lib/authz";
 import { isUserBlocked } from "@/lib/users/blocked";
@@ -21,6 +23,13 @@ export async function generateMetadata() {
   const t = await getTranslations("login");
   return { title: t("title") };
 }
+
+/**
+ * What Auth.js calls a rejected Credentials sign-in (`AuthError.type`). Ours is
+ * the password provider — see lib/auth/password-login.ts, which returns null
+ * for every kind of "no" rather than saying which.
+ */
+const CREDENTIALS_FAILED = "CredentialsSignin";
 
 // Sign-in page. Default: email token sign-in (magic link, Postmark/SMTP).
 // Google sign-in optional (only if GOOGLE_CLIENT_ID/SECRET are set).
@@ -83,22 +92,69 @@ export default async function LoginPage({
         {error && (
           <Callout
             variant="danger"
-            title={error === ACCESS_DENIED ? t("blockedTitle") : t("errorTitle")}
+            title={
+              error === ACCESS_DENIED
+                ? t("blockedTitle")
+                : error === CREDENTIALS_FAILED
+                  ? t("passwordFailedTitle")
+                  : t("errorTitle")
+            }
           >
-            {error === ACCESS_DENIED ? t("blockedBody") : t("errorBody")}
+            {error === ACCESS_DENIED
+              ? t("blockedBody")
+              : error === CREDENTIALS_FAILED
+                ? // ONE sentence for every password refusal — wrong password,
+                  // no password set on the account, no such account, and too
+                  // many attempts. Splitting them would tell a stranger which
+                  // addresses have accounts here and which of those have a
+                  // password. It still names the way out (request a link) and
+                  // the wait, so a locked-out owner is not left guessing.
+                  t("passwordFailedBody")
+                : t("errorBody")}
           </Callout>
         )}
 
-        {emailEnabled && (
+        {/* ONE form for both ways in, and deliberately not two steps.
+            Asking for the address first and then revealing whether a password
+            field applies would answer "does an account exist here?" to anyone
+            who types one. Here the password field is simply there: fill it in
+            and it signs you in, leave it empty and a link comes by mail. A
+            visitor without a password never sees a dead end, and a stranger
+            learns nothing either way. */}
+        {/* ALWAYS rendered — a password does not depend on mail delivery, and
+            an earlier version of this hid the card whenever the development
+            login was active. That looked tidy locally and meant a password set
+            on this machine could not be used to sign in with. Whatever else is
+            configured, the way in that needs no configuration stays visible. */}
+        {
           <Card>
             <CardContent>
               <form
                 action={async (formData: FormData) => {
                   "use server";
-                  await signIn("email", {
-                    email: String(formData.get("email")),
-                    redirectTo: "/dashboard",
-                  });
+                  const email = String(formData.get("email"));
+                  const password = String(formData.get("password") ?? "");
+                  try {
+                    // An empty password means "mail me a link" — the only place
+                    // the two paths part company.
+                    if (password) {
+                      await signIn("password", {
+                        email,
+                        password,
+                        redirectTo: "/dashboard",
+                      });
+                    } else {
+                      await signIn("email", { email, redirectTo: "/dashboard" });
+                    }
+                  } catch (error) {
+                    // A SUCCESSFUL signIn throws NEXT_REDIRECT, which is not an
+                    // AuthError and therefore falls through to the rethrow
+                    // below. Only genuine refusals land in the redirect.
+                    if (error instanceof AuthError) {
+                      redirect(`/login?error=${error.type}`);
+                    }
+                    throw error;
+                  }
                 }}
                 className="flex flex-col gap-3"
               >
@@ -111,13 +167,39 @@ export default async function LoginPage({
                   autoComplete="email"
                   placeholder={t("emailPlaceholder")}
                 />
+
+                <Label htmlFor="password">{t("passwordLabel")}</Label>
+                <Input
+                  id="password"
+                  name="password"
+                  type="password"
+                  // Required only when there is no mail transport to fall back
+                  // on — then the password is the sole way in.
+                  required={!emailEnabled}
+                  autoComplete="current-password"
+                />
+                <p className="text-muted-foreground text-xs">
+                  {emailEnabled ? t("passwordHint") : t("passwordOnlyHint")}
+                </p>
+
                 <Button type="submit" className="w-full">
                   {t("submit")}
                 </Button>
+
+                {/* Where a "forgot password?" link would sit. There is no reset
+                    flow because there is nothing to reset to: whoever forgets
+                    their password signs in with a link, exactly as before, and
+                    sets a new one on their account page. An unexplained absence
+                    would read as a missing feature. */}
+                {emailEnabled && (
+                  <p className="text-muted-foreground text-xs">
+                    {t("forgotPassword")}
+                  </p>
+                )}
               </form>
             </CardContent>
           </Card>
-        )}
+        }
 
         {emailEnabled && googleEnabled && (
           <div className="text-muted-foreground flex items-center gap-3 text-xs">

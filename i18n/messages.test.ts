@@ -3,6 +3,7 @@ import { LOCALES, DEFAULT_LOCALE, matchLocale, isLocale } from "./config";
 import { USER_ERROR_CODES } from "@/lib/users/rules";
 import { TOKEN_ERROR_CODES } from "@/lib/tokens/rules";
 import { GRANT_ERROR_CODES } from "@/lib/entitlements/grant-rules";
+import { CREDENTIAL_ERROR_CODES } from "@/lib/credentials/rules";
 import de from "@/messages/de.json";
 import en from "@/messages/en.json";
 
@@ -94,6 +95,7 @@ const ERROR_CODE_UNIONS: Record<string, readonly string[]> = {
   "lib/users/rules.ts": USER_ERROR_CODES,
   "lib/tokens/rules.ts": TOKEN_ERROR_CODES,
   "lib/entitlements/grant-rules.ts": GRANT_ERROR_CODES,
+  "lib/credentials/rules.ts": CREDENTIAL_ERROR_CODES,
 };
 
 describe("Error codes", () => {

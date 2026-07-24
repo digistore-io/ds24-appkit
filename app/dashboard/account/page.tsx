@@ -8,6 +8,9 @@ import { entitlementsFor, suspendedKeysFor } from "@/lib/entitlements/manage";
 import { pausedKeys } from "@/lib/entitlements/rules";
 import { getProduct } from "@/lib/digistore/products";
 import { getTokenAccount } from "@/lib/tokens/account";
+import { passwordState } from "@/lib/credentials/manage";
+import { MIN_PASSWORD_LENGTH } from "@/lib/credentials/rules";
+import { SignInCard } from "./ui";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
@@ -101,7 +104,7 @@ export default async function AccountPage() {
   if (!session?.user?.id) redirect("/login");
   const memberId = session.user.id;
 
-  const [entitlements, suspended, account] = await Promise.all([
+  const [entitlements, suspended, account, credentials] = await Promise.all([
     entitlementsFor(memberId),
     // AC 4 — the case the ACs of Epic 2 forgot. `activeFor` filters a suspended
     // grant out ENTIRELY, so without this read a customer whose card expired
@@ -112,6 +115,11 @@ export default async function AccountPage() {
     // Read as `?? 0`; creating one because somebody looked at their own page
     // would write a row on every visit.
     getTokenAccount(memberId),
+    // Whether a password is set — a boolean, never the hash. There is no shape
+    // here that HAS the hash on it, which is the same structural argument the
+    // note/issuedBy comment above makes: nothing careless can leak what was
+    // never fetched.
+    passwordState(memberId),
   ]);
 
   // Suspended AND not covered by something else the Member can still use. A key
@@ -255,6 +263,16 @@ export default async function AccountPage() {
             </>
           )}
         </section>
+
+        {/* How this person gets in. Last on the page on purpose: a Member opens
+            their account to see what they have, not to administer a login — and
+            somebody who never wants a password should never have to scroll past
+            an invitation to set one. */}
+        <SignInCard
+          email={session.user.email ?? ""}
+          hasPassword={credentials.hasPassword}
+          minLength={MIN_PASSWORD_LENGTH}
+        />
       </div>
     </>
   );

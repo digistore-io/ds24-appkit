@@ -9,15 +9,21 @@ import { db } from "@/db";
 import { users, accounts, sessions, verificationTokens } from "@/db/schema";
 import { buildEmailProvider } from "@/lib/email";
 import { buildDevLoginProvider } from "@/lib/auth/dev-login";
+import { buildPasswordProvider } from "@/lib/auth/password-login";
 
 const emailProvider = buildEmailProvider();
 // Development login: local only, and only as long as NO mail transport is set
 // up (the conditions live in lib/auth/dev-login.ts and are tested there).
 const devLoginProvider = buildDevLoginProvider();
+// Password sign-in: always available, in every environment. It authenticates
+// nobody who has not set a password on themselves first, and an account
+// without one simply never matches (lib/credentials/manage.ts).
+const passwordProvider = buildPasswordProvider();
 
 const providers = [
   ...authConfig.providers,
   ...(emailProvider ? [emailProvider] : []),
+  passwordProvider,
   ...(devLoginProvider ? [devLoginProvider] : []),
 ];
 

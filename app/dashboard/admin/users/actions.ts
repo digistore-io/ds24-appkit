@@ -144,9 +144,14 @@ export async function setEmailAction(
 /**
  * Sends the user a sign-in link.
  *
- * This app has no passwords — you sign in with a magic link (see
- * lib/email.ts). There is therefore no "reset password" here; this link is its
- * counterpart.
+ * There is no "reset password" here, and the reason is NOT that the app has no
+ * passwords — a Member may set one on themselves (lib/credentials/). It is that
+ * a password here is never the only way in: whoever forgets theirs signs in
+ * with a magic link (see lib/email.ts) and sets a new one on their own account
+ * page. This link is that same path, offered by the Operator.
+ *
+ * Which is also why this action must never grow a "set their password" sibling:
+ * a password the Operator chose is a password the Operator knows.
  *
  * Delivery deliberately goes through Auth.js's signIn() rather than a
  * hand-rolled token: only that way is it THE SAME mechanism as a normal

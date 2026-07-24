@@ -1,9 +1,29 @@
 # Setting up sign-in
 
-By default the app uses **email token sign-in (magic link)** — no password.
-The user enters their email, gets a sign-in link sent to them and is signed in
-after clicking it. For that the app needs **mail delivery**: either
-**Postmark** or **SMTP**. **Google sign-in is optional** on top of that.
+By default the app uses **email token sign-in (magic link)**. The user enters
+their email, gets a sign-in link sent to them and is signed in after clicking
+it. For that the app needs **mail delivery**: either **Postmark** or **SMTP**.
+**Google sign-in is optional** on top of that.
+
+**A password is optional too — and it is the Member's choice, not yours.**
+Anyone signed in can set one on their own account page (`/dashboard/account`)
+and remove it again just as easily. It saves the round-trip through the inbox
+and works on a machine where their mail is not open. There is nothing to set up
+for it: no environment variable, no provider to enable. An account without a
+password behaves exactly as it always did, which is the common case and stays
+that way.
+
+Two consequences worth knowing before you go looking for them:
+
+- **There is no "forgot password" flow, and none is missing.** Whoever forgets
+  theirs signs in with a magic link exactly as before and sets a new one. The
+  magic link *is* the recovery path, which is why mail delivery stays a hard
+  requirement even for accounts that have a password.
+- **Failed password attempts are rate-limited** per address, in a sliding
+  window (`lib/credentials/rules.ts`). The counter lives in memory, in one
+  process — run several app instances behind a load balancer and each keeps its
+  own, which multiplies the effective limit. That is a known limitation of the
+  single-process shape this template ships with, not an oversight.
 
 All values go into the `.env` (template: `.env.example`). Always set the basics:
 
@@ -90,10 +110,10 @@ has an empty user table too, and the first visitor may be a customer. Handing
 them user management would be an account takeover. There you create your
 account up front instead.
 
-Sign-in is passwordless — accounts otherwise come into being on the first
-magic-link sign-in with role `member`. So that the **operator** can sign in as
-admin (`owner`), create the account **up front** via CLI (the row is reused at
-sign-in):
+Accounts otherwise come into being on the first magic-link sign-in with role
+`member` — a password never creates one, it can only be added to an account
+that already exists. So that the **operator** can sign in as admin (`owner`),
+create the account **up front** via CLI (the row is reused at sign-in):
 
 ```bash
 node scripts/users/create-user.mjs --email owner@example.com --role owner --apply

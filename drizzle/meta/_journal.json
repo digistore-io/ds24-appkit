@@ -148,6 +148,13 @@
       "when": 1784822148584,
       "tag": "0020_sticky_stranger",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1784905955877,
+      "tag": "0021_massive_lady_deathstrike",
+      "breakpoints": true
     }
   ]
 }

@@ -141,8 +141,14 @@ describe("no Adjustment or manual Grant notifies the Member", () => {
         `${relPath} can send mail. AC 5 of story 3.5: a balance correction and a\n` +
           `hand-issued grant are support actions, and the Member is told about\n` +
           `them by their account page — not by an email whose subject line would\n` +
-          `have to explain a correction they never asked about. The only mail path\n` +
-          `in this app is the Auth.js magic link, and it stays that way.`,
+          `have to explain a correction they never asked about.\n` +
+          `\n` +
+          `The rule is about THESE actions, not about mail in general: the app\n` +
+          `also sends the Auth.js magic link, and a Member's own account page\n` +
+          `(app/dashboard/account/actions.ts) may one day notify them that their\n` +
+          `credentials changed. Both are messages about something the recipient\n` +
+          `did. An Operator's correction is not, and that is the difference this\n` +
+          `test protects.`,
       ).toEqual([]);
     });
   }

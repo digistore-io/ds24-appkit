@@ -83,7 +83,7 @@ export function chooseAttribution(input: AttributionInput): Attribution {
  * Pure so that AD-3 — *attribution precedes any credit* — is actually asserted
  * somewhere. Nothing in this repo can test a DB-bound function, so without
  * this predicate the rule would live only inside an `if` in the IPN handler
- * and a future edit re-adding a buyer-email fallback would pass CI.
+ * and a future edit re-adding a buyer-email fallback would pass the test run.
  *
  * `memberId` is the gate, NOT the buyer email. A payment identified by the
  * identity string but arriving without an email must still be credited — that

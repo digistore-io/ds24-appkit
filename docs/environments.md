@@ -73,7 +73,7 @@ named tunnel and your own domain. That is why the connection hangs off a stable
 Two things deliberately do **not** open a tunnel:
 
 - `node run.mjs ds24-sync --dry-run` — a preview must not publish your machine.
-- `node run.mjs ds24-sync --no-tunnel` — for CI, or to get the old behaviour back.
+- `node run.mjs ds24-sync --no-tunnel` — to get the old behaviour back.
 
 If you want to do the registration yourself:
 

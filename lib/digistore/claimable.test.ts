@@ -8,8 +8,9 @@ import {
 
 // These assertions are the ONLY committed coverage of the claim filter. Before
 // this file existed the rule lived in four SQL `where` clauses and was caught
-// exclusively by `.dev/verify-grants.mjs` — gitignored, absent from CI, and not
-// shipped to the customer. Every wrong widening passed `node run.mjs test`.
+// exclusively by `.dev/verify-grants.mjs` — gitignored, never part of the test
+// run, and not shipped to the customer. Every wrong widening passed
+// `node run.mjs test`.
 describe("isClaimable", () => {
   it("lets a cancelled subscription be claimed — access continues to the paid-through date", () => {
     // Story 2.3: cancelling stops billing, not access. Filtered to `paid`, an

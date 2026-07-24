@@ -40,6 +40,17 @@ export const users = pgTable("users", {
   // than a yes/no: this way the database also records SINCE WHEN someone has
   // had no access. How the block is enforced: see lib/users/blocked.ts.
   blockedAt: timestamp("blockedAt", { mode: "date" }),
+  // The member's OPTIONAL password, as a scrypt hash — NULL means "this
+  // account has no password", which is the default and stays the common case.
+  // Signing in by magic link works either way; a password only ever ADDS a
+  // second door (lib/credentials/).
+  //
+  // Never the plaintext, and never readable back: the format is
+  // `scrypt$N$r$p$salt$hash` and lib/credentials/hash.ts is the only file that
+  // writes or reads it. No admin screen, no export and no log line may show
+  // it — an operator who can read a password can impersonate a customer, and
+  // customers reuse passwords elsewhere.
+  passwordHash: text("passwordHash"),
 });
 
 export const accounts = pgTable(

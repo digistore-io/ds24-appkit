@@ -353,9 +353,13 @@ export function UserTable({
                             <AtSign aria-hidden />
                             {t("changeEmail")}
                           </DropdownMenuItem>
-                          {/* No password reset: this app has no passwords. The
-                              counterpart is the sign-in link. Blocked users get
-                              none — it would lead nowhere. */}
+                          {/* No password reset here — and not because there are
+                              no passwords (a Member may set one on themselves
+                              under /dashboard/account). There is no reset for
+                              anyone to run: whoever forgets their password
+                              signs in with a link and sets a new one. This
+                              entry IS that link, from the Operator's side.
+                              Blocked users get none — it would lead nowhere. */}
                           <DropdownMenuItem
                             disabled={isBlocked || !user.email}
                             onSelect={() => run(linkAction, { id: user.id })}

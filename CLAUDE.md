@@ -151,8 +151,9 @@ next one):
   the `.dark` class on `<html>` (`@custom-variant` in `app/globals.css`).
 - **Tests are mandatory.** Every feature gets `vitest` tests (blueprints in
   `lib/digistore/*.test.ts`); `npm run test` and `npm run typecheck` must be green
-  before anything moves on. CI (`.github/workflows/ci.yml`) runs them automatically on
-  every push.
+  before anything moves on. They run **locally** — `node run.mjs test` does both
+  in one go. Nothing runs them for you after a push, so a red test that gets
+  committed stays red until somebody looks.
 - **Call up the app yourself before you say "done".** See below — green
   tests are no proof that the page loads.
 - **Linux, macOS and Windows all count.** This app is built with Claude Code,
@@ -335,7 +336,8 @@ Two things `node run.mjs smoke` cannot do:
 
 The `users` table has a `role` field (`db/schema.ts`):
 - **`owner`** — SAAS operator (admin). Access to admin areas.
-- **`member`** — regular customer (default for self sign-in via magic link).
+- **`member`** — regular customer (default for self sign-in via magic link, or
+  via a password they set on themselves afterwards).
 
 **The first account in a fresh app becomes `owner` by itself** — locally there
 is nothing to set up: sign in at `/login` with any address and the admin area
@@ -370,6 +372,22 @@ self-demotion, self-blocking) as pure functions in
 `lib/users/rules.ts` together with tests. **Every** Server Action starts with
 `requireOwner()` — Actions are HTTP endpoints of their own and are not
 protected by the fact that the page is.
+
+An Operator can change somebody's address here **without a confirmation link**,
+and that is right for this page: they are acting on a support call, and a link
+sent to the customer's mailbox is one they cannot click. It is exactly wrong as
+a self-service mechanism — do not expose `setUserEmail()` to the Member.
+
+There is no "set a password for this user" here either, and there will not be:
+a password the Operator chose is a password the Operator knows.
+
+**The Member's own page is `/dashboard/account`** — balance, plans, and the
+sign-in section where they manage their own password
+(`app/dashboard/account/{page,ui,actions}.tsx`). Its actions start with
+`requireActiveUser()`, not `requireOwner()`, and none of them takes a user id
+from the form: the account acted on is always the session's own, which is what
+makes an IDOR impossible rather than merely unlikely. Build Member-facing
+settings there rather than starting a second page.
 
 **One Member, whole:** `/dashboard/admin/users/<id>` — reached from the row menu
 on the list above. This is the support page: token balance with its ledger
@@ -426,10 +444,43 @@ Blocked users land on `/login` with `?error=AccessDenied` and see the
 message "Account blocked" there — the same path Auth.js takes on every rejected
 sign-in (`pages.error` in `auth.config.ts`).
 
-**There are no passwords** — signing in happens via magic link. The
-counterpart to "reset password" is therefore the menu entry
-**send sign-in link**; it runs through `signIn()` from Auth.js so that exactly
-the same token mechanism applies as with a normal sign-in.
+**Passwords are optional.** Signing in happens via magic link by default, and
+that stays the default — it is the safer credential, because there is nothing
+to leak, reuse or phish. On top of it every Member may set a password on
+themselves, on their own account page (`/dashboard/account`): it saves the trip
+through the inbox, it works on a machine where their mail is not open, and it is
+theirs to add or remove at any time. Nobody is required to have one, and an
+account without one behaves exactly as it always did.
+
+The pieces, if you touch this:
+
+| | |
+|---|---|
+| `lib/credentials/rules.ts` | pure rules — minimum length, no composition rules, and the sliding-window limit on failed attempts |
+| `lib/credentials/hash.ts` | scrypt from `node:crypto`. The **only** file that writes or reads `users.passwordHash` |
+| `lib/credentials/manage.ts` | the shell: set, remove, and the sign-in check. Acts only on the account whose id the caller read from the session |
+| `lib/auth/password-login.ts` | the Auth.js Credentials provider, id `"password"` |
+
+Three rules that are load-bearing rather than stylistic:
+
+- **A password never replaces the magic link, and is never the only way in.**
+  That is what makes the next point safe.
+- **There is no password reset, and none is missing.** Whoever forgets their
+  password signs in with a link exactly as before and sets a new one. A reset
+  mail would be a second recovery channel with identical security properties.
+  The Operator's menu entry **send sign-in link** is the same thing from the
+  other side — it runs through `signIn()` from Auth.js, so the same token
+  mechanism applies as with a normal sign-in.
+- **Failed password attempts are rate-limited** (`lib/credentials/rules.ts`), and
+  that limit is not optional. A magic link is protected by the attacker having
+  to read somebody else's mail; a password is protected by nothing but the
+  number of guesses it allows. Removing the limit would make this app less safe
+  than it was before passwords existed.
+
+The password sign-in is refused for blocked accounts like every other provider,
+and it is checked **twice** — in `verifyPasswordLogin()` and again in the
+`signIn` callback in `auth.ts`. That redundancy is deliberate; do not tidy it
+away.
 
 > Role helpers (`roleLabel`, `isRole`, `ROLES`) live in `lib/roles.ts`, not in
 > `lib/authz.ts`. Client components must import from `lib/roles.ts` — `lib/authz.ts`
@@ -546,7 +597,7 @@ runs, and that is not something to discover afterwards. `node run.mjs stop` ends
 `node run.mjs status` shows it.
 
 Two guards, both deliberate: a **dry run never opens one** (a preview must not
-publish your machine), and `--no-tunnel` switches the behaviour off for CI.
+publish your machine), and `--no-tunnel` switches the behaviour off entirely.
 A public `APP_URL` never reaches this path at all, so STAGING and PROD are
 untouched — there the domain is the right answer and a tunnel would be wrong.
 
