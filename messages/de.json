@@ -383,7 +383,17 @@
     "body": "Klicke auf den Button, um dich anzumelden. Der Link ist 24 Stunden gültig.",
     "cta": "Jetzt anmelden",
     "fallback": "Falls der Button nicht funktioniert, kopiere diesen Link:",
-    "textBody": "Öffne diesen Link, um dich anzumelden (24 Stunden gültig):"
+    "textBody": "Öffne diesen Link, um dich anzumelden (24 Stunden gültig):",
+    "credentialHeading": "Etwas hat sich an deiner Anmeldung geändert",
+    "credential_passwordSet": "Für dein Konto wurde ein Kennwort erstellt. Du kannst dich ab jetzt mit E-Mail-Adresse und Kennwort anmelden — der Anmelde-Link per E-Mail funktioniert weiterhin.",
+    "credential_passwordChanged": "Das Kennwort deines Kontos wurde geändert.",
+    "credential_passwordRemoved": "Das Kennwort deines Kontos wurde entfernt. Du meldest dich ab jetzt wieder per Anmelde-Link an.",
+    "credentialWhen": "Zeitpunkt: {when} (UTC)",
+    "credentialNotYou": "Warst du das nicht? Dann hat jemand Zugriff auf dein Konto. Melde dich umgehend beim Betreiber. Diese Nachricht enthält bewusst keinen Link — niemand, der sich als wir ausgibt, kann darüber etwas an deinem Konto ändern.",
+    "credentialSubject_passwordSet": "Sicherheitshinweis: für dein Konto wurde ein Kennwort erstellt",
+    "credentialSubject_passwordChanged": "Sicherheitshinweis: dein Kennwort wurde geändert",
+    "credentialSubject_passwordRemoved": "Sicherheitshinweis: dein Kennwort wurde entfernt",
+    "credentialSubjectApp": "{subject} ({app})"
   },
   "errors": {
     "unknown": "Unbekannter Fehler.",

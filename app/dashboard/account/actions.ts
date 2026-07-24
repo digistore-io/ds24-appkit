@@ -16,10 +16,13 @@ import { unstable_rethrow } from "next/navigation";
 //     makes an IDOR impossible rather than merely unlikely: there is no
 //     parameter to tamper with.
 //
-// NO MAILER, and no `signIn` import. lib/entitlements/leak-guard.test.ts guards
-// the admin actions for the same reason; this file stays clean by the same
-// argument, so that credential changes cannot quietly grow a mail path without
-// somebody deciding to add one.
+// THIS FILE SENDS MAIL, and the neighbouring admin actions must not — the
+// difference is the point, not an inconsistency. lib/entitlements/leak-guard.test.ts
+// forbids the mailer in `admin/users/[id]/actions.ts` because a balance
+// correction is something an OPERATOR did to a customer, and a mail about it
+// would explain a change the customer never asked about. A credential change is
+// something done to the MEMBER'S OWN way in, and the whole reason to send it is
+// the case where the Member did not do it.
 //
 // LANGUAGE: here — and only here — the codes from lib/credentials/rules.ts
 // become sentences, in the language of the Member currently clicking.
@@ -29,8 +32,44 @@ import { getTranslations } from "next-intl/server";
 import { requireActiveUser } from "@/lib/authz";
 import { setPassword, removePassword } from "@/lib/credentials/manage";
 import { CredentialError } from "@/lib/credentials/rules";
+import type { CredentialChange } from "@/lib/email";
 
 const PAGE = "/dashboard/account";
+
+/**
+ * Tells the Member their credentials moved — and NEVER lets that failure undo
+ * the change itself.
+ *
+ * The order is deliberate: the password is already written when this runs. If
+ * the notice cannot go out — no transport configured locally, provider down,
+ * mailbox full — the Member has still changed their password, and telling them
+ * otherwise would be a lie that also loses the change. So this swallows
+ * everything and leaves a log line instead.
+ *
+ * The mail is loaded at runtime: `lib/email` reaches for `nodemailer`, and a
+ * static import here would drag it into this module's graph for the sake of a
+ * path that most installations never take.
+ */
+async function notify(
+  email: string | null,
+  change: CredentialChange,
+): Promise<void> {
+  if (!email) return;
+  try {
+    const { sendCredentialChangeEmail, isEmailLoginEnabled } = await import(
+      "@/lib/email"
+    );
+    // No transport (a DEV machine before `node run.mjs mail-setup`) is a normal
+    // state here, not an error — do not log it as one.
+    if (!isEmailLoginEnabled()) return;
+    await sendCredentialChangeEmail(email, change, new Date());
+  } catch (error) {
+    console.error(
+      `[account] credential notice to ${email} (${change}) could not be sent:`,
+      error,
+    );
+  }
+}
 
 /** Return value for useActionState — `error`/`ok` are finished messages. */
 export type ActionState = { error: string | null; ok: string | null };
@@ -61,11 +100,12 @@ export async function setPasswordAction(
 ): Promise<ActionState> {
   try {
     const session = await requireActiveUser();
-    await setPassword(session.user.id as string, {
+    const { email, created } = await setPassword(session.user.id as string, {
       password: String(formData.get("password") ?? ""),
       confirmation: String(formData.get("confirmation") ?? ""),
       current: String(formData.get("current") ?? ""),
     });
+    await notify(email, created ? "passwordSet" : "passwordChanged");
     revalidatePath(PAGE);
     const t = await getTranslations("account");
     return { error: null, ok: t("passwordSaved") };
@@ -85,9 +125,10 @@ export async function removePasswordAction(
 ): Promise<ActionState> {
   try {
     const session = await requireActiveUser();
-    await removePassword(session.user.id as string, {
+    const { email } = await removePassword(session.user.id as string, {
       current: String(formData.get("current") ?? ""),
     });
+    await notify(email, "passwordRemoved");
     revalidatePath(PAGE);
     const t = await getTranslations("account");
     return { error: null, ok: t("passwordRemoved") };

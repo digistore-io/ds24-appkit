@@ -460,6 +460,7 @@ The pieces, if you touch this:
 | `lib/credentials/hash.ts` | scrypt from `node:crypto`. The **only** file that writes or reads `users.passwordHash` |
 | `lib/credentials/manage.ts` | the shell: set, remove, and the sign-in check. Acts only on the account whose id the caller read from the session |
 | `lib/auth/password-login.ts` | the Auth.js Credentials provider, id `"password"` |
+| `lib/email.ts` | `sendCredentialChangeEmail()` — the notice below |
 
 Three rules that are load-bearing rather than stylistic:
 
@@ -481,6 +482,34 @@ The password sign-in is refused for blocked accounts like every other provider,
 and it is checked **twice** — in `verifyPasswordLogin()` and again in the
 `signIn` callback in `auth.ts`. That redundancy is deliberate; do not tidy it
 away.
+
+**Every credential change mails the Member.** Setting, changing or removing a
+password sends a notice to the account address, and it is the only defence
+against the case nothing else covers: somebody reaches an unlocked machine,
+opens the account page and sets a password on themselves. They walk away with a
+credential that outlives the borrowed session, and without the notice the owner
+never finds out.
+
+Three rules about that mail, all load-bearing:
+
+- **It carries no link, and must not grow one.** Not a "wasn't me" button, not
+  a revoke link, not a sign-in link. A security notice that acts on a click is a
+  phishing template with your sender address on it; one that cannot act is
+  useless to forge, which is what makes it safe to send to an account that may
+  already be in the wrong hands. `lib/email.test.ts` asserts this.
+- **A failed send never undoes the change.** The password is already written
+  when the notice goes out, so `notify()` in `app/dashboard/account/actions.ts`
+  swallows every error into a log line. Telling the Member it failed would be a
+  lie that also loses their change. A machine with no mail transport configured
+  is a normal state here, not an error.
+- **The subject names which change it was.** It is what somebody reads in a list
+  of unopened mail, and "a password was created" is alarming to a person who
+  created none, where a generic "something changed" is not.
+
+This is the second mail the app sends, and the opposite shape from the first:
+`sendLoginEmail()` is nothing but a link, this one must contain none. That is
+why `lib/email.ts` composes a `Mail` and hands it to one transport, rather than
+every send function taking a `url`.
 
 > Role helpers (`roleLabel`, `isRole`, `ROLES`) live in `lib/roles.ts`, not in
 > `lib/authz.ts`. Client components must import from `lib/roles.ts` — `lib/authz.ts`

@@ -41,12 +41,12 @@ export async function passwordState(userId: string): Promise<PasswordState> {
 export async function setPassword(
   userId: string,
   input: { password: string; confirmation: string; current?: string },
-): Promise<void> {
+): Promise<{ email: string | null; created: boolean }> {
   const denial = checkNewPassword(input.password, input.confirmation);
   if (denial) throw new CredentialError(denial);
 
   const [row] = await db
-    .select({ passwordHash: users.passwordHash })
+    .select({ passwordHash: users.passwordHash, email: users.email })
     .from(users)
     .where(eq(users.id, userId));
   if (!row) throw new CredentialError("credentialUserNotFound");
@@ -63,7 +63,12 @@ export async function setPassword(
 
   // A changed password is a good moment to forget old failures: the guesses
   // that accumulated were against a secret that no longer exists.
-  clearAttempts(await emailOf(userId));
+  clearAttempts(row.email);
+
+  // Returned so the delivery layer can tell the Member what happened. WHICH of
+  // the two it was comes from the database rather than from the form — the
+  // notice must describe what actually occurred.
+  return { email: row.email, created: !row.passwordHash };
 }
 
 /**
@@ -77,9 +82,9 @@ export async function setPassword(
 export async function removePassword(
   userId: string,
   input: { current: string },
-): Promise<void> {
+): Promise<{ email: string | null }> {
   const [row] = await db
-    .select({ passwordHash: users.passwordHash })
+    .select({ passwordHash: users.passwordHash, email: users.email })
     .from(users)
     .where(eq(users.id, userId));
   if (!row) throw new CredentialError("credentialUserNotFound");
@@ -95,15 +100,9 @@ export async function removePassword(
     .set({ passwordHash: null })
     .where(eq(users.id, userId));
 
-  clearAttempts(await emailOf(userId));
-}
+  clearAttempts(row.email);
 
-async function emailOf(userId: string): Promise<string | null> {
-  const [row] = await db
-    .select({ email: users.email })
-    .from(users)
-    .where(eq(users.id, userId));
-  return row?.email ?? null;
+  return { email: row.email };
 }
 
 // --- Sign-in -----------------------------------------------------------------

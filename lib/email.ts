@@ -99,8 +99,23 @@ function textBody(url: string, texts: MailTexts): string {
   return `${texts.heading}\n\n${texts.intro}\n${url}\n`;
 }
 
-async function sendViaPostmark(to: string, url: string): Promise<void> {
-  const texts = await mailTexts();
+/**
+ * One finished message. Everything above this line composes one; everything
+ * below only delivers it.
+ *
+ * The split exists because not every mail this app sends is a link. The sign-in
+ * mail is; the credential-change notice deliberately is NOT, and before the
+ * split every transport function took a `url` as its second argument, which
+ * left no shape for a mail that must not carry one.
+ */
+export interface Mail {
+  to: string;
+  subject: string;
+  text: string;
+  html: string;
+}
+
+async function sendViaPostmark(mail: Mail): Promise<void> {
   const res = await fetch("https://api.postmarkapp.com/email", {
     method: "POST",
     headers: {
@@ -110,10 +125,10 @@ async function sendViaPostmark(to: string, url: string): Promise<void> {
     },
     body: JSON.stringify({
       From: emailFrom(),
-      To: to,
-      Subject: texts.subject,
-      HtmlBody: htmlBody(url, texts),
-      TextBody: textBody(url, texts),
+      To: mail.to,
+      Subject: mail.subject,
+      HtmlBody: mail.html,
+      TextBody: mail.text,
       MessageStream: process.env.POSTMARK_MESSAGE_STREAM || "outbound",
     }),
     signal: AbortSignal.timeout(10_000),
@@ -123,8 +138,7 @@ async function sendViaPostmark(to: string, url: string): Promise<void> {
   }
 }
 
-async function sendViaSmtp(to: string, url: string): Promise<void> {
-  const texts = await mailTexts();
+async function sendViaSmtp(mail: Mail): Promise<void> {
   const nodemailer = await import("nodemailer");
   const transport = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
@@ -133,19 +147,139 @@ async function sendViaSmtp(to: string, url: string): Promise<void> {
     auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD },
   });
   await transport.sendMail({
-    to,
+    to: mail.to,
     from: emailFrom(),
+    subject: mail.subject,
+    text: mail.text,
+    html: mail.html,
+  });
+}
+
+/** Hands one finished message to whichever transport is configured. */
+async function deliver(mail: Mail): Promise<void> {
+  if (isPostmarkConfigured()) return sendViaPostmark(mail);
+  if (isSmtpConfigured()) return sendViaSmtp(mail);
+  throw new Error("No email transport configured (Postmark or SMTP).");
+}
+
+/** Sends the magic link to the destination address. Throws on failure. */
+export async function sendLoginEmail(to: string, url: string): Promise<void> {
+  const texts = await mailTexts();
+  return deliver({
+    to,
     subject: texts.subject,
     text: textBody(url, texts),
     html: htmlBody(url, texts),
   });
 }
 
-/** Sends the magic link to the destination address. Throws on failure. */
-export async function sendLoginEmail(to: string, url: string): Promise<void> {
-  if (isPostmarkConfigured()) return sendViaPostmark(to, url);
-  if (isSmtpConfigured()) return sendViaSmtp(to, url);
-  throw new Error("No email transport configured (Postmark or SMTP).");
+// --- Credential-change notice ------------------------------------------------
+//
+// The second mail this app sends, and the opposite shape from the first.
+//
+// It exists for one case: somebody who is NOT the account's owner reaches an
+// unlocked machine, opens the account page and sets a password on themselves.
+// They walk away with a credential that outlives the session they borrowed, and
+// without this mail the real owner never finds out. Everything else about the
+// design deals with that person having to prove something; this deals with the
+// case where they did not have to.
+//
+// ⛔ IT CARRIES NO LINK, AND MUST NOT GROW ONE. Not a "wasn't me" button, not a
+// revoke link, not a login link. A security notice that acts on a click is a
+// phishing template with our sender address on it — and one that cannot act is
+// useless to forge, which is precisely what makes it safe to send to somebody
+// whose account may already be in the wrong hands. lib/email.test.ts asserts it.
+// What the recipient does with it is contact the Operator.
+
+/** Which credential moved. Deliberately closed — see the i18n keys below. */
+export type CredentialChange =
+  | "passwordSet"
+  | "passwordChanged"
+  | "passwordRemoved";
+
+export interface CredentialTexts {
+  locale: string;
+  subject: string;
+  heading: string;
+  what: string;
+  when: string;
+  notYou: string;
+}
+
+async function credentialTexts(
+  change: CredentialChange,
+  at: Date,
+): Promise<CredentialTexts> {
+  const { getLocale, getTranslations, getFormatter } = await import(
+    "next-intl/server"
+  );
+  const t = await getTranslations("email");
+  const format = await getFormatter();
+  const name = appName();
+
+  // Pinned to UTC and SAID so in the text. A security notice whose timestamp
+  // is ambiguous invites the recipient to talk themselves out of it ("that
+  // might have been me, an hour out") — which is the one reaction it exists to
+  // prevent.
+  const when = format.dateTime(at, {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "UTC",
+  });
+
+  // The subject names WHICH change, not merely that there was one. It is what
+  // the recipient reads in a list of unopened mail, and it is where they decide
+  // whether this needs them right now — "a password was created" is alarming to
+  // somebody who created none, while a generic "something changed" is not.
+  const subject = t(`credentialSubject_${change}`);
+
+  return {
+    locale: await getLocale(),
+    subject: name ? t("credentialSubjectApp", { subject, app: name }) : subject,
+    heading: t("credentialHeading"),
+    what: t(`credential_${change}`),
+    when: t("credentialWhen", { when }),
+    notYou: t("credentialNotYou"),
+  };
+}
+
+/**
+ * The two bodies, built from finished texts. Pure on purpose: this is where the
+ * "no link" rule either holds or quietly stops holding, and a pure function is
+ * one a test can hold to it.
+ */
+export function credentialBodies(texts: CredentialTexts): {
+  html: string;
+  text: string;
+} {
+  const html = `<!doctype html><html lang="${texts.locale}"><body style="font-family:system-ui,Segoe UI,sans-serif;background:#f5f5fa;padding:24px">
+  <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:12px;padding:32px;border:1px solid #eee">
+    <h1 style="font-size:20px;margin:0 0 8px">${escapeHtml(texts.heading)}</h1>
+    <p style="color:#333;margin:0 0 8px">${escapeHtml(texts.what)}</p>
+    <p style="color:#555;margin:0 0 24px">${escapeHtml(texts.when)}</p>
+    <p style="color:#999;font-size:12px;margin:0">${escapeHtml(texts.notYou)}</p>
+  </div></body></html>`;
+
+  const text = `${texts.heading}\n\n${texts.what}\n${texts.when}\n\n${texts.notYou}\n`;
+  return { html, text };
+}
+
+/**
+ * Tells the Member that a credential on their account changed.
+ *
+ * Throws like every other send — the CALLER decides that a failure here must
+ * not undo the change that has already happened (see
+ * app/dashboard/account/actions.ts). Swallowing it in here would hide a broken
+ * mail setup from the logs entirely.
+ */
+export async function sendCredentialChangeEmail(
+  to: string,
+  change: CredentialChange,
+  at: Date,
+): Promise<void> {
+  const texts = await credentialTexts(change, at);
+  const { html, text } = credentialBodies(texts);
+  return deliver({ to, subject: texts.subject, text, html });
 }
 
 /**

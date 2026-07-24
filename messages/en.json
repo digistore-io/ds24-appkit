@@ -383,7 +383,17 @@
     "body": "Click the button to sign in. The link is valid for 24 hours.",
     "cta": "Sign in now",
     "fallback": "If the button doesn't work, copy this link:",
-    "textBody": "Open this link to sign in (valid for 24 hours):"
+    "textBody": "Open this link to sign in (valid for 24 hours):",
+    "credentialHeading": "Something changed about how you sign in",
+    "credential_passwordSet": "A password was created for your account. You can now sign in with your email address and password — the sign-in link by email keeps working.",
+    "credential_passwordChanged": "Your account password was changed.",
+    "credential_passwordRemoved": "Your account password was removed. You sign in with a link by email again from now on.",
+    "credentialWhen": "When: {when} (UTC)",
+    "credentialNotYou": "Was this not you? Then somebody has access to your account. Get in touch with the operator straight away. This message deliberately contains no link — nobody impersonating us can change anything about your account through it.",
+    "credentialSubject_passwordSet": "Security notice: a password was created for your account",
+    "credentialSubject_passwordChanged": "Security notice: your password was changed",
+    "credentialSubject_passwordRemoved": "Security notice: your password was removed",
+    "credentialSubjectApp": "{subject} ({app})"
   },
   "errors": {
     "unknown": "Unknown error.",

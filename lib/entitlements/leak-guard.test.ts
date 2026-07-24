@@ -145,10 +145,9 @@ describe("no Adjustment or manual Grant notifies the Member", () => {
           `\n` +
           `The rule is about THESE actions, not about mail in general: the app\n` +
           `also sends the Auth.js magic link, and a Member's own account page\n` +
-          `(app/dashboard/account/actions.ts) may one day notify them that their\n` +
-          `credentials changed. Both are messages about something the recipient\n` +
-          `did. An Operator's correction is not, and that is the difference this\n` +
-          `test protects.`,
+          `(app/dashboard/account/actions.ts) DOES mail them when a credential\n` +
+          `changes. Both concern the recipient's own way in. An Operator's\n` +
+          `correction does not, and that is the difference this test protects.`,
       ).toEqual([]);
     });
   }
