@@ -127,3 +127,36 @@ export const SIGN_IN_LIMIT: Limit = {
 
 /** The bucket these hits are counted in. */
 export const SIGN_IN_BUCKET = "password-sign-in";
+
+/**
+ * The same thing keyed by origin instead of by address.
+ *
+ * The counter above is keyed by the address being signed into, so it sees one
+ * hit per address and never fires against somebody who varies the address on
+ * every attempt. That is the shape of spraying one common password across many
+ * accounts, and it is exactly the shape per-address limiting cannot see.
+ *
+ * Counted on FAILURES only, like the address counter. An attacker's attempts
+ * all fail, so they all count; an office behind one NAT mostly succeeds, so it
+ * does not. Thirty per quarter hour leaves room for people genuinely fumbling
+ * a password.
+ *
+ * It does not defeat a distributed attempt — nothing keyed by origin does.
+ *
+ * ⚠️ NOT justified by CPU cost, and the record matters because the first
+ * version of this comment claimed it was. The theory was that each attempt
+ * against an unknown account forces the deliberate dummy hash in
+ * lib/credentials/hash.ts, buying ~40 ms of CPU with one cheap request.
+ * Measured against a production build, the sign-in endpoint costs **1.6 ms of
+ * CPU per attempt** — 500 attempts burned 0.82 s where a hash per attempt would
+ * have burned ~20 s. Whatever else that path does, it is not amplification.
+ * This limit is worth having on the credential-guessing argument alone; do not
+ * re-derive a performance argument for it without measuring first.
+ */
+export const SIGN_IN_ORIGIN_LIMIT: Limit = {
+  max: 30,
+  windowMs: ATTEMPT_WINDOW_MS,
+};
+
+/** The bucket for origin-keyed sign-in failures. */
+export const SIGN_IN_ORIGIN_BUCKET = "password-sign-in:origin";

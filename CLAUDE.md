@@ -522,11 +522,16 @@ Three rules that are load-bearing rather than stylistic:
   The Operator's menu entry **send sign-in link** is the same thing from the
   other side — it runs through `signIn()` from Auth.js, so the same token
   mechanism applies as with a normal sign-in.
-- **Failed password attempts are rate-limited** (`lib/rate-limit.ts`, ten per
-  quarter hour per address), and that limit is not optional. A magic link is
-  protected by the attacker having to read somebody else's mail; a password is
-  protected by nothing but the number of guesses it allows. Removing the limit
-  would make this app less safe than it was before passwords existed.
+- **Failed password attempts are rate-limited** (`lib/rate-limit.ts`), and that
+  limit is not optional. A magic link is protected by the attacker having to
+  read somebody else's mail; a password is protected by nothing but the number
+  of guesses it allows. Removing it would make this app less safe than it was
+  before passwords existed. Two counters: **ten per quarter hour per address**,
+  and **thirty per quarter hour per origin** — the second catches one password
+  sprayed across many accounts, which the first cannot see because it only ever
+  gets one hit per address. The origin is `x-forwarded-for`, so it only engages
+  behind a proxy; that is every hoster this template targets, and where there is
+  none the limit withholds nothing it would otherwise have granted.
 
 The password sign-in is refused for blocked accounts like every other provider,
 and it is checked **twice** — in `verifyPasswordLogin()` and again in the

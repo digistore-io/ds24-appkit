@@ -8,7 +8,7 @@ import {
   resetRateLimits,
   withinWindow,
 } from "./rate-limit";
-import { SIGN_IN_LIMIT } from "./credentials/rules";
+import { SIGN_IN_LIMIT, SIGN_IN_ORIGIN_LIMIT } from "./credentials/rules";
 import { CONFIRMATION_LIMIT } from "./email-change/rules";
 
 const NOW = 1_700_000_000_000;
@@ -85,5 +85,28 @@ describe("the limits this app actually uses", () => {
     // inside an hour, and each one is sent to an address the requester chose.
     expect(SIGN_IN_LIMIT).toEqual({ max: 10, windowMs: 15 * 60 * 1000 });
     expect(CONFIRMATION_LIMIT).toEqual({ max: 3, windowMs: 60 * 60 * 1000 });
+  });
+});
+
+describe("the origin-keyed sign-in limit", () => {
+  beforeEach(() => resetRateLimits());
+
+  it("fires against somebody varying the address on every attempt", () => {
+    // The per-address counter cannot: it sees one hit per address. This is
+    // what catches one password sprayed across many accounts from one source.
+    const NOW = 1_700_000_000_000;
+    for (let i = 0; i < SIGN_IN_ORIGIN_LIMIT.max; i++) {
+      expect(isLimited("o", "203.0.113.9", SIGN_IN_ORIGIN_LIMIT, NOW)).toBe(false);
+      record("o", "203.0.113.9", SIGN_IN_ORIGIN_LIMIT, NOW);
+    }
+    expect(isLimited("o", "203.0.113.9", SIGN_IN_ORIGIN_LIMIT, NOW)).toBe(true);
+    // …and only against that origin.
+    expect(isLimited("o", "198.51.100.1", SIGN_IN_ORIGIN_LIMIT, NOW)).toBe(false);
+  });
+
+  it("is looser than the per-address one, because it catches shared origins too", () => {
+    // An office behind one NAT shares an origin. The limit has to leave room
+    // for several people fumbling a password without locking the building out.
+    expect(SIGN_IN_ORIGIN_LIMIT.max).toBeGreaterThan(SIGN_IN_LIMIT.max);
   });
 });

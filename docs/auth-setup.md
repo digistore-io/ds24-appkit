@@ -19,8 +19,14 @@ Two consequences worth knowing before you go looking for them:
   theirs signs in with a magic link exactly as before and sets a new one. The
   magic link *is* the recovery path, which is why mail delivery stays a hard
   requirement even for accounts that have a password.
-- **Three things are rate-limited**, all in a sliding window (`lib/rate-limit.ts`):
-  failed password sign-ins, ten per quarter hour per address; requests to
+- **Four things are rate-limited**, all in a sliding window (`lib/rate-limit.ts`):
+  failed password sign-ins, ten per quarter hour per address **and thirty per
+  quarter hour per origin** — the second catches one password sprayed across
+  many accounts from one source, which the per-address counter cannot see
+  because it only ever gets one hit per address. The origin comes from
+  `x-forwarded-for`, so it is only meaningful behind a proxy that overwrites
+  that header, which every hoster this template targets does; without one the
+  limit simply does not engage. Then: requests to
   change an address, three per hour — counted per account *and* per target
   address, so the same mailbox cannot be hit again from the next account; and
   address *lookups*, twenty per hour per account, which meters the "that address

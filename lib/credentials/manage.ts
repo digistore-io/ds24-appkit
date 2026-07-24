@@ -14,6 +14,8 @@ import {
   CredentialError,
   SIGN_IN_BUCKET,
   SIGN_IN_LIMIT,
+  SIGN_IN_ORIGIN_BUCKET,
+  SIGN_IN_ORIGIN_LIMIT,
   canChangePassword,
   checkNewPassword,
 } from "@/lib/credentials/rules";
@@ -148,9 +150,19 @@ export type SignInResult =
 export async function verifyPasswordLogin(
   email: string,
   password: string,
+  /**
+   * Where the attempt came from, if the caller can tell. Optional so that a
+   * script or a test can call this without inventing one — but the provider
+   * always passes it, and without it the address counter alone bounds nothing:
+   * varying the address on every attempt never lets it fire.
+   */
+  origin?: string | null,
 ): Promise<SignInResult> {
   const key = email.trim().toLowerCase();
   if (isRateLimited(key)) return { ok: false, rateLimited: true };
+  if (origin && isLimited(SIGN_IN_ORIGIN_BUCKET, origin, SIGN_IN_ORIGIN_LIMIT)) {
+    return { ok: false, rateLimited: true };
+  }
 
   const [row] = await db
     .select({
@@ -174,6 +186,7 @@ export async function verifyPasswordLogin(
   // able to quietly open a door for blocked accounts.
   if (!row || !matches || row.blockedAt) {
     recordFailedAttempt(key);
+    if (origin) record(SIGN_IN_ORIGIN_BUCKET, origin, SIGN_IN_ORIGIN_LIMIT);
     return { ok: false, rateLimited: false };
   }
 

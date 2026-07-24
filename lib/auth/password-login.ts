@@ -17,6 +17,29 @@
 import Credentials from "next-auth/providers/credentials";
 import type { Provider } from "next-auth/providers";
 
+/**
+ * Where an attempt came from, for the origin-keyed rate limit.
+ *
+ * `x-forwarded-for` is a header, so it is whatever the sender wrote — trusting
+ * it blindly would let an attacker mint a fresh identity per request and defeat
+ * the very limit it feeds. It is used anyway, and here is why that is sound:
+ * the app runs behind a proxy that OVERWRITES it (Railway, Render, Fly all do),
+ * so the value that arrives is the proxy's, not the client's. Only the FIRST
+ * entry is taken — the leftmost is the original client, and anything appended
+ * after it is noise a client could have supplied.
+ *
+ * The failure mode if an operator does put this app on the open internet
+ * without a proxy: the limit becomes forgeable and stops helping. It never
+ * becomes a way IN — no decision here grants anything, it only withholds.
+ */
+function originOf(request: unknown): string | null {
+  const headers = (request as { headers?: Headers } | undefined)?.headers;
+  if (!headers || typeof headers.get !== "function") return null;
+  const forwarded = headers.get("x-forwarded-for");
+  if (forwarded) return forwarded.split(",")[0]!.trim() || null;
+  return headers.get("x-real-ip")?.trim() || null;
+}
+
 export function buildPasswordProvider(): Provider {
   return Credentials({
     id: "password",
@@ -25,7 +48,7 @@ export function buildPasswordProvider(): Provider {
       email: { label: "Email", type: "email" },
       password: { label: "Password", type: "password" },
     },
-    async authorize(credentials) {
+    async authorize(credentials, request) {
       const email = String(credentials?.email ?? "");
       const password = String(credentials?.password ?? "");
       if (!email || !password) return null;
@@ -34,7 +57,11 @@ export function buildPasswordProvider(): Provider {
       // out of any bundle that only needs the provider's shape.
       const { verifyPasswordLogin } = await import("@/lib/credentials/manage");
 
-      const result = await verifyPasswordLogin(email, password);
+      const result = await verifyPasswordLogin(
+        email,
+        password,
+        originOf(request),
+      );
       if (!result.ok) {
         // Both "wrong" and "too many attempts" return null. Auth.js turns that
         // into one error on /login, and the message there covers both cases in
