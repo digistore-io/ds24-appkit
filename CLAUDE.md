@@ -731,6 +731,7 @@ overview). Arguments go straight through — there is no `ARGS="…"` wrapping.
 - `node run.mjs db-generate` / `node run.mjs db-migrate` — create / apply a migration
 - `node run.mjs db-reset` — clear the local DB, migrate, seed (**locally only**)
 - `node run.mjs user-create --email … --role owner --apply` — create an operator/admin account
+- `node run.mjs data-export --email …` — everything held about one person, as JSON (subject access request)
 - `node run.mjs mail-setup` — set up mail delivery (Postmark or SMTP) + test mail
 - `node run.mjs ds24-connect` — fetch the Digistore24 API key and store it in `.env`
 - `node run.mjs ds24-tunnel` — public address onto the local app **and** the IPN registered
@@ -831,6 +832,14 @@ Three things in it that are easy to get wrong:
 - **Orders are not deletable on request** while the statutory retention runs —
   they are accounting records. Deleting one would be the violation, not the
   remedy.
+
+**An access request is one command:** `node run.mjs data-export --email …`
+produces everything held about one person as JSON. It searches by **address, not
+by account**, because the people most likely to ask are the ones who never got
+one — a purchase made without signing in leaves their name and address on an
+order with no member id. Do not "tidy" it into a member-scoped export, and do
+not strip the operator notes from it: hiding those from the customer's own page
+is about tone, not about what a legal request covers.
 
 ## STOP criteria
 

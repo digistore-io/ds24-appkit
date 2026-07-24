@@ -117,14 +117,47 @@ What genuinely remains open, and what an operator should decide with advice:
    `buyer_last_name` come from Digistore24 and the app never uses them for
    anything. Data minimisation asks why they are stored — a fair answer may be
    "the invoice needs them", but it should be an answer, not an accident.
-3. **How you answer an access or deletion request.** There is no export function
-   and no deletion function in this app beyond deleting a user account, which
-   cascades to sessions but deliberately **not** to orders (see above).
+3. **Deletion.** There is no deletion function beyond deleting a user account,
+   which cascades to sessions but deliberately **not** to orders (see above).
+   Answering an *access* request is solved — see §7.
 
 Everything else has a shape already: `ipn_events` 60 days, `email_changes` 24
 hours, IP addresses fifteen minutes, sessions until they expire.
 
-## 7. What this app does not do
+## 7. Answering a subject access request
+
+Somebody writes and asks what you hold about them. You have **one month**
+(GDPR Art. 15; Art. 20 adds the right to get it in a machine-readable form).
+One command produces it:
+
+```bash
+node run.mjs data-export --email kunde@example.de
+node run.mjs data-export --email kunde@example.de --out auskunft.json
+```
+
+It searches **by address, not by account** — deliberately. The people most
+likely to ask are the ones who never got an account: a purchase made without
+signing in leaves an order carrying their name and address and no member id at
+all. An account-scoped export would have answered "we hold nothing about you"
+while holding exactly that. Where an account does exist, both routes are
+followed and merged.
+
+**Read the file before you send it.** Two things in it need your eyes:
+
+- **`webhookEvents[].payload`** is the raw body Digistore24 posted, and it can
+  carry fields about *other* people — an affiliate, for instance. Third-party
+  data has to come out before the file leaves your hands.
+- **`grants[].note` and `tokenLedger[].note`** are what *you* wrote about this
+  person. They belong in the answer — the app hides them from the customer's own
+  screen as a matter of tone, and that is not an exemption from a legal request.
+  Read them before they are read to you.
+
+Deliberately not in the file: the password (a one-way hash nobody can read back,
+and handing over a credential creates risk rather than satisfying a right),
+OAuth tokens, and spent sign-in tokens. The file says so itself, in an
+`aboutThisFile` block written to be forwarded along with it.
+
+## 8. What this app does not do
 
 Worth stating, because a privacy policy that claims less is easier to keep true:
 

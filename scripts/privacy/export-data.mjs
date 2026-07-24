@@ -1,0 +1,187 @@
+// Everything this app holds about one person, as one JSON file.
+//
+// This is what answers a GDPR subject access request (Art. 15) and a request
+// for portability (Art. 20). The operator has one month to reply to either;
+// this turns that into one command.
+//
+// Usage:
+//   node run.mjs data-export --email kunde@example.de
+//   node run.mjs data-export --email kunde@example.de --out auskunft.json
+//   Direct:  node scripts/privacy/export-data.mjs --email …
+//
+// ── Two things about it that are deliberate and easy to "fix" wrongly ───────
+//
+// 1. IT SEARCHES BY EMAIL ADDRESS, NOT BY ACCOUNT. The people most likely to
+//    ask what you hold about them are the ones who never got an account: a
+//    purchase made without signing in leaves an order with their address and
+//    name and no member id at all (docs/data-protection.md §3). A member-scoped
+//    export would answer "we hold nothing about you" while holding their name
+//    and their purchase. Where an account does exist, both routes are followed
+//    and the results merged.
+//
+// 2. IT INCLUDES THE OPERATOR'S NOTES. `grants.note` and `token_ledger.note`
+//    hold what the operator wrote ABOUT this person — "comped, angry on the
+//    phone". The app never shows those to the customer, and
+//    lib/entitlements/leak-guard.test.ts enforces that. **That rule is about
+//    the Member's own page and does not apply here.** A subject access request
+//    asks what you hold, and you hold those. Stripping them from this file
+//    would be answering the request untruthfully.
+import { writeFileSync } from "node:fs";
+import { connect } from "../users/_db.mjs";
+
+const argv = process.argv.slice(2);
+function arg(name) {
+  const i = argv.indexOf(`--${name}`);
+  return i >= 0 ? argv[i + 1] : undefined;
+}
+
+const rawEmail = arg("email");
+const email = typeof rawEmail === "string" ? rawEmail.trim().toLowerCase() : "";
+if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+  console.error(
+    'ERROR: a valid --email "<address>" is required.\n' +
+      "  Example: node run.mjs data-export --email kunde@example.de",
+  );
+  process.exit(2);
+}
+const outFile = arg("out");
+
+const sql = connect();
+try {
+  // --- The account, if there is one ------------------------------------------
+  const [account] = await sql`
+    select id, email, name, image, role, "createdAt", "emailVerified", "blockedAt"
+    from users where lower(email) = ${email}
+  `;
+  const memberId = account?.id ?? null;
+
+  // --- Sign-in methods (never the credentials themselves) ---------------------
+  const signInMethods = memberId
+    ? await sql`
+        select provider, type, "providerAccountId"
+        from accounts where "userId" = ${memberId}
+      `
+    : [];
+
+  const pendingEmailChange = memberId
+    ? await sql`
+        select "newEmail", "requestedAt", "expiresAt"
+        from email_changes where "memberId" = ${memberId}
+      `
+    : [];
+
+  // --- Purchases: by account AND by address ----------------------------------
+  const orders = await sql`
+    select * from orders
+    where (${memberId}::text is not null and member_id = ${memberId})
+       or lower(btrim(buyer_email)) = ${email}
+    order by created_at
+  `;
+
+  const subscriptions = await sql`
+    select * from subscriptions
+    where (${memberId}::text is not null and member_id = ${memberId})
+       or lower(btrim(buyer_email)) = ${email}
+    order by created_at
+  `;
+
+  // Invoices carry no person at all — they hang off an order id. Reached
+  // through the orders and subscriptions found above, or they would be missed.
+  const orderIds = [
+    ...new Set(
+      [...orders, ...subscriptions].map((r) => r.ds24_order_id).filter(Boolean),
+    ),
+  ];
+  const invoices = orderIds.length
+    ? await sql`select * from invoices where ds24_order_id in ${sql(orderIds)} order by created_at`
+    : [];
+
+  // --- Balance and its journal ------------------------------------------------
+  const tokenAccounts = memberId
+    ? await sql`select * from token_accounts where member_id = ${memberId}`
+    : [];
+  const accountIds = tokenAccounts.map((a) => a.id);
+  // `note` and `issued_by` included on purpose — see the header.
+  const tokenLedger = accountIds.length
+    ? await sql`select * from token_ledger where account_id in ${sql(accountIds)} order by created_at`
+    : [];
+
+  // --- Access ------------------------------------------------------------------
+  const grants = memberId
+    ? await sql`select * from grants where member_id = ${memberId} order by created_at`
+    : [];
+
+  // --- The raw webhooks --------------------------------------------------------
+  // Held for 60 days for diagnosis and pruned after that
+  // (lib/digistore/ipn-log.ts), so this is usually shorter than the order list.
+  const webhookEvents = orderIds.length
+    ? await sql`
+        select id, received_at, event, ds24_order_id, ds24_purchase_id, result, payload
+        from ipn_events where ds24_order_id in ${sql(orderIds)}
+        order by received_at
+      `
+    : [];
+
+  const found =
+    Number(Boolean(account)) +
+    orders.length +
+    subscriptions.length +
+    tokenAccounts.length +
+    grants.length;
+
+  const report = {
+    subject: { email, memberId, hasAccount: Boolean(account) },
+    generatedAt: new Date().toISOString(),
+
+    aboutThisFile: {
+      purpose:
+        "Everything this application holds about the person identified by the address above. Prepared for a data subject access request (GDPR Art. 15) / portability request (Art. 20).",
+      searchedBy: memberId
+        ? "the account with this address, and the address itself on purchase records"
+        : "the address itself on purchase records — there is no account with it",
+      deliberatelyExcluded: [
+        "The password, if one is set. It is stored only as a one-way scrypt hash which nobody — including the operator — can read back, and disclosing a credential would create a risk rather than satisfy a right.",
+        "OAuth access and refresh tokens. Credentials for another service, not information about the person.",
+        "Sign-in link tokens and the address-change confirmation token. Single-use secrets, stored hashed, expired or spent by the time anyone reads this.",
+      ],
+      reviewBeforeSending: [
+        "`webhookEvents[].payload` is the RAW body Digistore24 posted. It can contain fields about OTHER people — an affiliate, for instance. Third-party data must be redacted before this file is handed over; only this person's data belongs in the answer.",
+        "`grants[].note` and `tokenLedger[].note` are what the operator wrote about this person, and `issued_by` is who wrote it. They belong in the answer — the app hides them from the customer's own page as a matter of tone, which is not an exemption. Read them before sending.",
+      ],
+      notHeldAtAll: [
+        "No tracking, profiling or advertising data — this application collects none.",
+        "IP addresses are counted in memory for fifteen minutes to limit failed sign-ins and are never written to the database, so there is nothing here to export.",
+      ],
+      retentionNote:
+        "Orders and invoices are accounting records. German law requires them to be kept (§147 AO, §257 HGB) and the GDPR exempts them from erasure while that obligation runs (Art. 17(3)(b)) — they cannot simply be deleted on request. See docs/data-protection.md §6.",
+    },
+
+    account: account ?? null,
+    signInMethods,
+    pendingEmailChange,
+    orders,
+    subscriptions,
+    invoices,
+    tokenAccounts,
+    tokenLedger,
+    grants,
+    webhookEvents,
+  };
+
+  const json = JSON.stringify(report, null, 2);
+  if (outFile) {
+    writeFileSync(outFile, json + "\n");
+    console.log(`✓ Written to ${outFile}`);
+  } else {
+    console.log(json);
+  }
+
+  const where = outFile ? "" : "  (use --out <file> to write it to a file)";
+  console.error(
+    found === 0
+      ? `\nℹ Nothing found for ${email}. That is itself a valid answer to a subject access request — but check the spelling first.${where}`
+      : `\n✓ ${email}: account ${account ? "yes" : "no"}, ${orders.length} order(s), ${subscriptions.length} subscription(s), ${grants.length} grant(s), ${tokenLedger.length} ledger entr${tokenLedger.length === 1 ? "y" : "ies"}, ${webhookEvents.length} webhook event(s).${where}`,
+  );
+} finally {
+  await sql.end({ timeout: 5 });
+}

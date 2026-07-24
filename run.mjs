@@ -200,6 +200,13 @@ const TASKS = {
     run: (args) => script("scripts/db/prune-ipn-log.mjs", args),
   },
 
+  "data-export": {
+    group: "Database",
+    help: 'Everything held about one person, as JSON (--email "kunde@example.de")',
+    needs: ["env", "node_modules"],
+    run: (args) => script("scripts/privacy/export-data.mjs", args),
+  },
+
   // ── Users & roles ─────────────────────────────────────────────────────────
   "user-create": {
     group: "Users & roles",

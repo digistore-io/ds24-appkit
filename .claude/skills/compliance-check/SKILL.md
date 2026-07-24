@@ -75,9 +75,13 @@ policy is only as true as the list it was drafted from.
   their sessions but deliberately **not** to their orders, because an order is an
   accounting record that German law requires to be kept (§147 AO, §257 HGB) and
   the GDPR exempts from erasure while that obligation runs (Art. 17(3)(b)).
-  Deleting one on request would be the violation. What is genuinely missing is an
-  export, and a plan for what happens once the retention period ends — see §6 of
-  `docs/data-protection.md`.
+  Deleting one on request would be the violation. **Access requests are covered:**
+  `node run.mjs data-export --email <address>` produces everything held about one
+  person as JSON, searching by address rather than by account so that somebody who
+  bought without ever signing up is found too (see §7 of
+  `docs/data-protection.md`, and read the two review warnings there before
+  forwarding a file). What is still missing is a plan for what happens once the
+  retention period ends.
 
 ## Procedure
 
