@@ -19,11 +19,14 @@ Two consequences worth knowing before you go looking for them:
   theirs signs in with a magic link exactly as before and sets a new one. The
   magic link *is* the recovery path, which is why mail delivery stays a hard
   requirement even for accounts that have a password.
-- **Failed password attempts are rate-limited** per address, in a sliding
-  window (`lib/credentials/rules.ts`). The counter lives in memory, in one
-  process — run several app instances behind a load balancer and each keeps its
-  own, which multiplies the effective limit. That is a known limitation of the
-  single-process shape this template ships with, not an oversight.
+- **Two things are rate-limited**, both in a sliding window (`lib/rate-limit.ts`):
+  failed password sign-ins, ten per quarter hour per address; and requests to
+  change an address, three per hour — counted per account *and* per target
+  address, so the same mailbox cannot be hit again from the next account.
+  The counters live in memory, in one process — run several app instances
+  behind a load balancer and each keeps its own, which multiplies every limit
+  by the number of instances. That is a known limitation of the single-process
+  shape this template ships with, not an oversight.
 - **Members change their own address**, confirmed by a link sent to the new one
   (`/dashboard/account` → `/account/confirm-email`). Nothing moves until that
   link is followed, so an abandoned or mistyped request costs nothing and the

@@ -1,14 +1,10 @@
 import { describe, it, expect } from "vitest";
 import {
-  ATTEMPT_WINDOW_MS,
-  MAX_ATTEMPTS,
   MAX_PASSWORD_LENGTH,
   MIN_PASSWORD_LENGTH,
   canChangePassword,
   checkNewPassword,
-  isLockedOut,
   passwordLength,
-  recentAttempts,
 } from "./rules";
 
 const OK = "correct horse battery"; // comfortably over the minimum
@@ -78,40 +74,6 @@ describe("canChangePassword", () => {
   });
 });
 
-describe("rate limiting", () => {
-  const NOW = 1_700_000_000_000;
-
-  it("forgets failures once they leave the window", () => {
-    const old = NOW - ATTEMPT_WINDOW_MS - 1;
-    expect(recentAttempts([old], NOW)).toEqual([]);
-    // Exactly on the boundary counts as expired, not as recent.
-    expect(recentAttempts([NOW - ATTEMPT_WINDOW_MS], NOW)).toEqual([]);
-  });
-
-  it("keeps failures inside the window", () => {
-    const recent = NOW - 1000;
-    expect(recentAttempts([recent], NOW)).toEqual([recent]);
-  });
-
-  it("locks out at the limit, not before", () => {
-    const under = Array.from({ length: MAX_ATTEMPTS - 1 }, () => NOW - 10);
-    expect(isLockedOut(under, NOW)).toBe(false);
-
-    const at = Array.from({ length: MAX_ATTEMPTS }, () => NOW - 10);
-    expect(isLockedOut(at, NOW)).toBe(true);
-  });
-
-  it("lets the window slide — an old burst does not lock anyone out for ever", () => {
-    // The real owner must be able to get back in by waiting. A lockout that
-    // outlives the attack is itself a denial of service.
-    const burst = Array.from(
-      { length: MAX_ATTEMPTS * 2 },
-      () => NOW - ATTEMPT_WINDOW_MS - 1,
-    );
-    expect(isLockedOut(burst, NOW)).toBe(false);
-  });
-
-  it("treats an empty history as unlocked", () => {
-    expect(isLockedOut([], NOW)).toBe(false);
-  });
-});
+// The sliding-window mechanism moved to lib/rate-limit.ts when the
+// change-address mails needed one too — it is tested there, together with the
+// numbers this file decides (SIGN_IN_LIMIT).

@@ -22,11 +22,15 @@ import { db } from "@/db";
 import { emailChanges, users } from "@/db/schema";
 import { normalizeEmail } from "@/lib/users/rules";
 import {
+  CONFIRMATION_ACCOUNT_BUCKET,
+  CONFIRMATION_LIMIT,
+  CONFIRMATION_TARGET_BUCKET,
   EmailChangeError,
   checkRequestedEmail,
   expiryFrom,
   isExpired,
 } from "@/lib/email-change/rules";
+import { isLimited, record } from "@/lib/rate-limit";
 
 /** 32 bytes of CSPRNG output, URL-safe. */
 function newToken(): string {
@@ -87,6 +91,18 @@ export async function requestEmailChange(
     .where(and(eq(users.email, newEmail as string), ne(users.id, userId)));
   if (taken) throw new EmailChangeError("emailTaken");
 
+  // Checked AFTER the refusals above, so a mistyped address does not spend one
+  // of the three: nothing was going to be sent for it anyway. Both counters are
+  // asked before either is written — otherwise a request refused by the second
+  // would still have consumed a slot on the first.
+  const target = newEmail as string;
+  if (
+    isLimited(CONFIRMATION_ACCOUNT_BUCKET, userId, CONFIRMATION_LIMIT) ||
+    isLimited(CONFIRMATION_TARGET_BUCKET, target, CONFIRMATION_LIMIT)
+  ) {
+    throw new EmailChangeError("tooManyRequests");
+  }
+
   const token = newToken();
   const expiresAt = expiryFrom(new Date());
 
@@ -97,13 +113,20 @@ export async function requestEmailChange(
     await tx.delete(emailChanges).where(eq(emailChanges.memberId, userId));
     await tx.insert(emailChanges).values({
       memberId: userId,
-      newEmail: newEmail as string,
+      newEmail: target,
       tokenHash: hashToken(token),
       expiresAt,
     });
   });
 
-  return { newEmail: newEmail as string, token, expiresAt };
+  // Counted at the REQUEST, not at the send. The caller does the sending, and a
+  // transport that fails would otherwise hand an attacker unlimited retries
+  // against an address that is bouncing — which is the shape of the abuse, not
+  // an exception to it.
+  record(CONFIRMATION_ACCOUNT_BUCKET, userId, CONFIRMATION_LIMIT);
+  record(CONFIRMATION_TARGET_BUCKET, target, CONFIRMATION_LIMIT);
+
+  return { newEmail: target, token, expiresAt };
 }
 
 export type ConfirmResult =

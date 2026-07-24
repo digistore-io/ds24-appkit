@@ -451,7 +451,8 @@
     "credentialUserNotFound": "Dieses Konto gibt es nicht mehr.",
     "emailUnchanged": "Das ist bereits deine Adresse — es gibt nichts zu ändern.",
     "changeNotFound": "Dieser Bestätigungslink ist ungültig oder wurde durch eine neuere Anfrage ersetzt.",
-    "changeExpired": "Dieser Bestätigungslink ist abgelaufen."
+    "changeExpired": "Dieser Bestätigungslink ist abgelaufen.",
+    "tooManyRequests": "Zu viele Anfragen in kurzer Zeit. Warte etwa eine Stunde und versuche es dann noch einmal — deine jetzige Adresse funktioniert unverändert weiter."
   },
   "confirmEmail": {
     "title": "E-Mail-Adresse bestätigen",

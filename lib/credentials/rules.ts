@@ -97,9 +97,14 @@ export function canChangePassword(state: { hasPassword: boolean }): Denial {
 //
 // A magic link is protected by the attacker having to read somebody else's
 // mail. A password is protected by nothing except the number of guesses it
-// allows. Without the two rules below, adding a password to this app would
-// make it LESS safe than it was — which is why they live here, as pure
-// functions with their own tests, rather than as a detail of the provider.
+// allows. Without this limit, adding a password to this app would make it LESS
+// safe than it was.
+//
+// The mechanism lives in lib/rate-limit.ts — shared with the change-address
+// mails, which are the other thing here a stranger can trigger repeatedly. Only
+// the numbers are decided in this file.
+
+import type { Limit } from "@/lib/rate-limit";
 
 /** How long failures are remembered. */
 export const ATTEMPT_WINDOW_MS = 15 * 60 * 1000;
@@ -107,25 +112,18 @@ export const ATTEMPT_WINDOW_MS = 15 * 60 * 1000;
 /** Failures tolerated inside that window before sign-in is refused. */
 export const MAX_ATTEMPTS = 10;
 
-/** The failures still inside the window, oldest first. */
-export function recentAttempts(
-  timestamps: readonly number[],
-  now: number,
-): number[] {
-  const since = now - ATTEMPT_WINDOW_MS;
-  return timestamps.filter((t) => t > since);
-}
-
 /**
- * Has this key had too many failures to try again?
+ * Ten guesses per quarter hour, per address.
  *
- * A sliding window rather than a lockout with a fixed end: a lockout that
- * outlives the attack also locks out the real owner, who then has a broken
- * account and no idea why. Here the window simply moves on.
+ * Generous on purpose: the person who most often gets a password wrong ten
+ * times is the one who owns the account. It is nowhere near enough to search a
+ * password of the minimum length above, and the window slides, so waiting is
+ * always a way back in.
  */
-export function isLockedOut(
-  timestamps: readonly number[],
-  now: number,
-): boolean {
-  return recentAttempts(timestamps, now).length >= MAX_ATTEMPTS;
-}
+export const SIGN_IN_LIMIT: Limit = {
+  max: MAX_ATTEMPTS,
+  windowMs: ATTEMPT_WINDOW_MS,
+};
+
+/** The bucket these hits are counted in. */
+export const SIGN_IN_BUCKET = "password-sign-in";

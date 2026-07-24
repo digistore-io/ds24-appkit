@@ -12,11 +12,12 @@ import { users } from "@/db/schema";
 import { hashPassword, verifyPassword } from "@/lib/credentials/hash";
 import {
   CredentialError,
+  SIGN_IN_BUCKET,
+  SIGN_IN_LIMIT,
   canChangePassword,
   checkNewPassword,
-  isLockedOut,
-  recentAttempts,
 } from "@/lib/credentials/rules";
+import { clearKey, isLimited, record, resetRateLimits } from "@/lib/rate-limit";
 
 export interface SignInState {
   /** The account's address as the DATABASE holds it — see below. */
@@ -185,39 +186,22 @@ export async function verifyPasswordLogin(
 
 // --- Failed-attempt bookkeeping ----------------------------------------------
 //
-// In memory, per process, on purpose — and worth knowing precisely rather than
-// discovering later. The template ships as a single Node process, so one Map is
-// the whole picture. Run several instances behind a load balancer and each
-// keeps its own count, which multiplies the effective limit by the number of
-// instances. That is a real limitation, not an oversight: a shared store means
-// Redis or a table on the sign-in path, and neither belongs in a template that
-// promises no new runtime dependency. Revisit when the app is scaled out.
-const attempts = new Map<string, number[]>();
-
-/** Keeps the Map from growing without bound on a long-running process. */
-const MAX_TRACKED_KEYS = 10_000;
+// The counter itself lives in lib/rate-limit.ts, including the note about it
+// being per process. These are the sign-in-shaped names for it.
 
 export function isRateLimited(key: string, now: number = Date.now()): boolean {
-  return isLockedOut(attempts.get(key) ?? [], now);
+  return isLimited(SIGN_IN_BUCKET, key, SIGN_IN_LIMIT, now);
 }
 
 export function recordFailedAttempt(key: string, now: number = Date.now()): void {
-  const kept = recentAttempts(attempts.get(key) ?? [], now);
-  kept.push(now);
-  attempts.set(key, kept);
-
-  if (attempts.size > MAX_TRACKED_KEYS) {
-    for (const [k, timestamps] of attempts) {
-      if (recentAttempts(timestamps, now).length === 0) attempts.delete(k);
-    }
-  }
+  record(SIGN_IN_BUCKET, key, SIGN_IN_LIMIT, now);
 }
 
 export function clearAttempts(key: string | null): void {
-  if (key) attempts.delete(key.trim().toLowerCase());
+  if (key) clearKey(SIGN_IN_BUCKET, key.trim().toLowerCase());
 }
 
-/** Test seam — drops all recorded failures. */
+/** Test seam — drops all recorded failures, in every bucket. */
 export function resetAttempts(): void {
-  attempts.clear();
+  resetRateLimits();
 }

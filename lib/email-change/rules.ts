@@ -23,6 +23,7 @@ export const EMAIL_CHANGE_ERROR_CODES = [
   "changeNotFound",
   "changeExpired",
   "userBlocked",
+  "tooManyRequests",
 ] as const;
 
 export type EmailChangeErrorCode = (typeof EMAIL_CHANGE_ERROR_CODES)[number];
@@ -90,3 +91,33 @@ export function isExpired(expiresAt: Date, now: Date): boolean {
 export function expiryFrom(now: Date): Date {
   return new Date(now.getTime() + CONFIRMATION_TTL_MS);
 }
+
+// --- Rate limiting -----------------------------------------------------------
+//
+// Requesting a change is the one action in this app where a signed-in person
+// chooses BOTH that mail is sent and who it is sent to. Left open, the account
+// page is a way to mail a stranger repeatedly from the operator's own verified
+// sending domain — which costs the operator their sender reputation, not just
+// the stranger their patience.
+//
+// Two counters, because one of them alone is a hole:
+//
+//   per account   stops one session hammering the button.
+//   per address   stops the same target being hit from several accounts, which
+//                 is exactly what somebody who wanted to do this would try.
+//
+// The mechanism is lib/rate-limit.ts; only the numbers are decided here.
+
+/**
+ * Three an hour. A person correcting a typo needs two, and a person who
+ * genuinely needs a fourth within the hour can wait — no access depends on it,
+ * their current address keeps working throughout, and nothing they own is at
+ * risk while they do.
+ */
+export const CONFIRMATION_LIMIT = { max: 3, windowMs: 60 * 60 * 1000 } as const;
+
+/** Hits by the Member who asked. */
+export const CONFIRMATION_ACCOUNT_BUCKET = "email-change:account";
+
+/** Hits against the address the mail would go to. */
+export const CONFIRMATION_TARGET_BUCKET = "email-change:target";

@@ -401,6 +401,13 @@ screen. What holds:
 - **One pending change per Member.** A new request replaces the old one and
   kills its link — that is how a typo'd address is corrected, and why there is
   no cancel button to build.
+- **Requests are rate-limited twice: per account AND per target address**
+  (`lib/rate-limit.ts`, three an hour). This is the one action where a signed-in
+  person chooses both that mail is sent and who it goes to; left open, the
+  account page mails a stranger repeatedly from the operator's own verified
+  sending domain, and it is the operator's sender reputation that pays. The
+  per-target counter is not redundant — without it the same address is reachable
+  again from the next account.
 - **Confirming SETS `emailVerified`**, where the Operator's `setUserEmail()`
   clears it. Not an inconsistency to tidy away: there an address is asserted by
   somebody else and has proved nothing; here following the link IS the proof.
@@ -504,11 +511,11 @@ Three rules that are load-bearing rather than stylistic:
   The Operator's menu entry **send sign-in link** is the same thing from the
   other side — it runs through `signIn()` from Auth.js, so the same token
   mechanism applies as with a normal sign-in.
-- **Failed password attempts are rate-limited** (`lib/credentials/rules.ts`), and
-  that limit is not optional. A magic link is protected by the attacker having
-  to read somebody else's mail; a password is protected by nothing but the
-  number of guesses it allows. Removing the limit would make this app less safe
-  than it was before passwords existed.
+- **Failed password attempts are rate-limited** (`lib/rate-limit.ts`, ten per
+  quarter hour per address), and that limit is not optional. A magic link is
+  protected by the attacker having to read somebody else's mail; a password is
+  protected by nothing but the number of guesses it allows. Removing the limit
+  would make this app less safe than it was before passwords existed.
 
 The password sign-in is refused for blocked accounts like every other provider,
 and it is checked **twice** — in `verifyPasswordLogin()` and again in the

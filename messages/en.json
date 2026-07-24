@@ -451,7 +451,8 @@
     "credentialUserNotFound": "That account no longer exists.",
     "emailUnchanged": "That is already your address — there is nothing to change.",
     "changeNotFound": "This confirmation link is not valid, or a newer request replaced it.",
-    "changeExpired": "This confirmation link has expired."
+    "changeExpired": "This confirmation link has expired.",
+    "tooManyRequests": "Too many requests in a short time. Wait about an hour and try again — your current address keeps working exactly as before."
   },
   "confirmEmail": {
     "title": "Confirm your email address",
