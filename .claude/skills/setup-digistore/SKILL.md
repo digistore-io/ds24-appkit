@@ -76,7 +76,7 @@ deliberately no interface for entering or generating a key.
 
    - Digistore24 does not accept `localhost` as a `return_url` — not as a
      `site_url` either. That's why both run through the public redirect page
-     (`https://digistore24-app-template.com/redir/?port=53682&path=/callback`),
+     (`https://ds24-appkit.com/redir/?port=53682&path=/callback`),
      which sends the browser back to `http://localhost:<port>/callback`. The
      page never sees the API key. Overridable via `DIGISTORE_REDIR_URL`;
      `--no-relay` uses localhost directly (only on test hosts).
@@ -104,7 +104,7 @@ deliberately no interface for entering or generating a key.
    - **The thank-you page goes through the redirect while you develop.**
      Digistore24 stores public https URLs only, so `http://localhost:3000/optin/…`
      is handed over as
-     `https://digistore24-app-template.com/redir/?port=3000&path=/optin/[ORDER_ID]`
+     `https://ds24-appkit.com/redir/?port=3000&path=/optin/[ORDER_ID]`
      — the buyer's browser is sent back to the local app from there. This is
      automatic (`scripts/ds24/_public-url.mjs`, `lib/digistore/public-url.ts`).
      If the user asks why a foreign domain is on their product: that is why, and

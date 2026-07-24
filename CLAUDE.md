@@ -524,7 +524,7 @@ URL travels as a redirect address that leads back to your machine:
 
 ```
 http://localhost:3000/optin/[ORDER_ID]
-  → https://digistore24-app-template.com/redir/?port=3000&path=/optin/[ORDER_ID]
+  → https://ds24-appkit.com/redir/?port=3000&path=/optin/[ORDER_ID]
 ```
 
 That happens by itself — in the scripts (`scripts/ds24/_public-url.mjs`) and in

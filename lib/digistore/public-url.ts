@@ -10,7 +10,7 @@
 // browser is sent back to the local machine from there:
 //
 //   http://localhost:3000/optin/[ORDER_ID]
-//     → https://digistore24-app-template.com/redir/?port=3000&path=/optin/[ORDER_ID]
+//     → https://ds24-appkit.com/redir/?port=3000&path=/optin/[ORDER_ID]
 //     → (302) http://localhost:3000/optin/[ORDER_ID]
 //
 // Only for URLs a BROWSER follows. The IPN endpoint is called by the Digistore24
@@ -21,7 +21,7 @@
 // rules, for `node run.mjs ds24-sync`. Change one, change the other.
 
 /** The redirect page that ships with the template. */
-export const DEFAULT_REDIR_URL = "https://digistore24-app-template.com/redir/";
+export const DEFAULT_REDIR_URL = "https://ds24-appkit.com/redir/";
 
 // http://localhost and http://127.0.0.1 are the same machine; ::1 is its IPv6
 // spelling and 0.0.0.0 is what a server that listens everywhere prints.

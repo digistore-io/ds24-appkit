@@ -58,7 +58,7 @@ likewise:
 
 ```
 http://localhost:3000/optin/[ORDER_ID]
-  → https://digistore24-app-template.com/redir/?port=3000&path=/optin/[ORDER_ID]
+  → https://ds24-appkit.com/redir/?port=3000&path=/optin/[ORDER_ID]
   → (302) http://localhost:3000/optin/[ORDER_ID]
 ```
 
