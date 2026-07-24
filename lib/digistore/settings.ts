@@ -1,52 +1,49 @@
-// Digistore24-Zugangsdaten des Betreibers.
+// The operator's Digistore24 credentials.
 //
-// Ein-Betreiber-Modell: Diese App rechnet über genau EIN Digistore24-Konto ab.
-// Die Zugangsdaten stehen deshalb in der Umgebung und nicht in der Datenbank —
-// abgeholt und in die `.env` geschrieben von `make ds24-connect`
+// Single-operator model: this app bills through exactly ONE Digistore24
+// account. The credentials therefore live in the environment and not in the
+// database — fetched and written into `.env` by `node run.mjs ds24-connect`
 // (scripts/ds24/connect-api-key.mjs).
 //
-// Es gibt bewusst keine Oberfläche, um Schlüssel einzutragen: Ein Eingabefeld
-// für ein Secret ist eine zusätzliche Angriffsfläche, und der Schlüssel gehört
-// dem Betreiber der Installation, nicht einem eingeloggten Benutzer.
-import { db } from "@/db";
-import { users } from "@/db/schema";
-import { eq, asc } from "drizzle-orm";
+// There is deliberately no UI for entering keys: an input field for a secret
+// is additional attack surface, and the key belongs to the operator of the
+// installation, not to a signed-in user.
+//
+// This module reads only the environment — no database. Billing rows are no
+// longer namespaced by an operator id (one installation, one Digistore24
+// account), so there is nothing here to resolve against the users table.
 
 /**
- * Schreibender API-Key für die Digistore24-REST-API.
- * Wirft, wenn nicht gesetzt — kein stiller Fallback (siehe CLAUDE.md).
+ * Read/write API key for the Digistore24 REST API.
+ * Throws when unset — no silent fallback (see CLAUDE.md).
  */
 export function ds24ApiKey(): string {
   const key = process.env.DIGISTORE_API_KEY;
   if (!key) {
     throw new Error(
-      "DIGISTORE_API_KEY fehlt. Verbindung herstellen mit: make ds24-connect",
+      "DIGISTORE_API_KEY fehlt. Verbindung herstellen mit: node run.mjs ds24-connect",
     );
   }
   return key;
 }
 
 /**
- * Passphrase für die SHA512-Prüfung eingehender IPN-Calls.
- * Gibt null zurück, wenn nicht gesetzt — der IPN-Endpoint lehnt dann ab
- * (fail-closed), statt ungeprüfte Events zu verarbeiten.
+ * Is an API key configured at all?
+ *
+ * Meant for the UI ("Digistore24 is not connected yet") — there, a missing key
+ * should produce a notice and not an error. Everywhere that actually talks to
+ * the API, `ds24ApiKey()` still applies, which deliberately throws.
+ */
+export function hasDigistoreApiKey(): boolean {
+  return Boolean(process.env.DIGISTORE_API_KEY);
+}
+
+/**
+ * Passphrase for the SHA512 check on incoming IPN calls.
+ * Returns null when unset — the IPN endpoint then refuses (fail closed)
+ * instead of processing unverified events.
  */
 export function ds24IpnPassphrase(): string | null {
   return process.env.DIGISTORE_IPN_PASSPHRASE || null;
 }
 
-/**
- * userId des Betreibers — Eigentümer aller Bestellungen, Abos und Token-Konten.
- *
- * Der Betreiber ist der Benutzer mit `role = "owner"`; angelegt wird er per
- * `make user-create ARGS="--email … --role owner --apply"`. Gibt es mehrere,
- * gewinnt der älteste, damit die Zuordnung stabil bleibt.
- */
-export async function getOwnerUserId(): Promise<string | null> {
-  const owner = await db.query.users.findFirst({
-    where: eq(users.role, "owner"),
-    orderBy: [asc(users.createdAt)],
-    columns: { id: true },
-  });
-  return owner?.id ?? null;
-}

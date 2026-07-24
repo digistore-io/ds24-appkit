@@ -1,0 +1,1 @@
+ALTER TABLE "subscriptions" ADD COLUMN "next_payment_at" date;

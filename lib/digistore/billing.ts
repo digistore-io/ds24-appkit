@@ -1,51 +1,54 @@
-// Verbrauchs- und Abo-Abrechnung über Digistore24 jenseits von createBuyUrl:
+// Usage-based and subscription billing through Digistore24, beyond
+// createBuyUrl:
 //
-//  - createBillingOnDemand: bucht gegen eine BESTEHENDE purchase_id eine weitere
-//    Zahlung ab (die Zahlungsmethode des Kunden ist bereits autorisiert). Damit
-//    werden Prepaid-Token-Pakete nachgekauft/auto-nachgeladen — OHNE neuen Checkout.
-//  - stopRebilling: kündigt ein Abo (stoppt die Wiederholungszahlungen).
-//  - getPurchase / listPurchases: Abo-Status & Verwaltungs-Links (Bezahldaten
-//    ändern, Rechnung ansehen) abrufen.
+//  - createBillingOnDemand: charges another payment against an EXISTING
+//    purchase_id (the customer's payment method is already authorized). This is
+//    how prepaid token packages are repurchased / auto-topped-up — WITHOUT a
+//    new checkout.
+//  - stopRebilling: cancels a subscription (stops the recurring payments).
+//  - getPurchase / listPurchases: fetch subscription status and management
+//    links (change payment details, view invoice).
 //
-// Voraussetzungen für createBillingOnDemand (siehe docs/digistore-billing-modes.md):
-//   1. Der Erstkauf muss mit settings[force_rebilling]=Y erzeugt worden sein
-//      (Offer.forceRebilling in buyUrl.ts) ODER ein aktives Abo sein.
-//   2. writable-API-Key + im DS24-Konto das Recht „billing on demand".
-//   3. DS24-Limits: 10 Buchungen/Tag und 1/Minute je purchase_id (Prod).
+// Prerequisites for createBillingOnDemand (see docs/digistore-billing-modes.md):
+//   1. The initial purchase must have been created with
+//      settings[force_rebilling]=Y (Offer.forceRebilling in buyUrl.ts) OR be an
+//      active subscription.
+//   2. A writable API key + the "billing on demand" right in the DS24 account.
+//   3. DS24 limits: 10 charges/day and 1/minute per purchase_id (production).
 //
-// Wie createBuyUrl: bei Fehlern wird geworfen — KEIN stiller Mock-Fallback
-// (eine fehlgeschlagene Abbuchung darf nie als Erfolg gelten).
+// Like createBuyUrl: errors throw — NO silent mock fallback (a failed charge
+// must never count as a success).
 import { ds24Post } from "./client";
 
 export interface BillOnDemandArgs {
-  /** DS24 purchase_id des Kunden, gegen die abgebucht wird. */
+  /** The customer's DS24 purchase_id being charged. */
   purchaseId: string;
-  /** DS24-Produkt-ID des abzurechnenden (Token-)Pakets. */
+  /** DS24 product ID of the (token) package being billed. */
   productId: string;
-  /** Preis in Cent. */
+  /** Price in cents. */
   priceCents: number;
-  /** Währung, Default "EUR". */
+  /** Currency, default "EUR". */
   currency?: string;
-  /** Stückzahl (z. B. mehrere Pakete auf einmal), Default 1. */
+  /** Quantity (e.g. several packages at once), default 1. */
   quantity?: number;
   /**
-   * Kontext, der im IPN unter `custom` ankommt — hier steht z. B.
-   * "tokens:<paketSchlüssel>", damit der IPN-Handler die Gutschrift zuordnen kann.
+   * Context that arrives in the IPN under `custom` — e.g.
+   * "tokens:<packageKey>", so the IPN handler can match up the credit.
    */
   custom?: string;
   affiliate?: string;
 }
 
 export interface BillOnDemandResult {
-  /** Neue Purchase-ID der erzeugten Buchung. */
+  /** New purchase ID of the created charge. */
   createdPurchaseId: string;
-  /** DS24-Zahlungsstatus (z. B. "paid"). */
+  /** DS24 payment status (e.g. "paid"). */
   paymentStatus: string;
-  /** DS24-Abrechnungsstatus (z. B. "completed"). */
+  /** DS24 billing status (e.g. "completed"). */
   billingStatus: string;
   paidAmount?: string;
   currency?: string;
-  /** Leer, wenn sofort bezahlt; sonst Zahllink für offene Beträge. */
+  /** Empty when paid immediately; otherwise a payment link for open amounts. */
   payUrl: string;
 }
 
@@ -54,8 +57,9 @@ function euros(cents: number): string {
 }
 
 /**
- * Baut den x-www-form-urlencoded Body für createBillingOnDemand (pure, testbar).
- * number_of_installments=1 → einmalige Zusatzbuchung (kein neues Abo).
+ * Builds the x-www-form-urlencoded body for createBillingOnDemand (pure,
+ * testable). number_of_installments=1 → a one-off extra charge (not a new
+ * subscription).
  */
 export function buildBillOnDemandBody(args: BillOnDemandArgs): URLSearchParams {
   const body = new URLSearchParams();
@@ -64,7 +68,7 @@ export function buildBillOnDemandBody(args: BillOnDemandArgs): URLSearchParams {
 
   const price = euros(args.priceCents);
   body.set("payment_plan[first_amount]", price);
-  // Einmalige Zusatzbuchung: keine Folgebeträge.
+  // One-off extra charge: no follow-up amounts.
   body.set("payment_plan[other_amounts]", "0.00");
   body.set("payment_plan[currency]", args.currency ?? "EUR");
   body.set("payment_plan[number_of_installments]", "1");
@@ -78,9 +82,9 @@ export function buildBillOnDemandBody(args: BillOnDemandArgs): URLSearchParams {
 }
 
 /**
- * Bucht per createBillingOnDemand eine Zahlung gegen eine bestehende purchase_id.
- * Wirft bei Fehler. Die Token-Gutschrift erfolgt NICHT hier, sondern erst, wenn
- * DS24 den Kauf per IPN (on_payment) bestätigt — so wie ein normaler Kauf.
+ * Charges a payment against an existing purchase_id via createBillingOnDemand.
+ * Throws on error. The token credit does NOT happen here but only once DS24
+ * confirms the purchase via IPN (on_payment) — just like a normal purchase.
  */
 export async function createBillingOnDemand(
   apiKey: string,
@@ -91,7 +95,7 @@ export async function createBillingOnDemand(
   const d = (res.data ?? {}) as Record<string, unknown>;
   const createdPurchaseId = String(d.created_purchase_id ?? "");
   if (!createdPurchaseId) {
-    throw new Error("Digistore24 lieferte keine created_purchase_id zurück.");
+    throw new Error("Digistore24 returned no created_purchase_id.");
   }
   return {
     createdPurchaseId,
@@ -104,9 +108,9 @@ export async function createBillingOnDemand(
 }
 
 /**
- * Kündigt ein Abo: stoppt die wiederkehrenden Zahlungen (Rebilling) für eine
- * purchase_id. Der Zugang bleibt i. d. R. bis zum Ende der bezahlten Periode
- * bestehen (DS24 sendet dann `last_paid_day`). Wirft bei Fehler.
+ * Cancels a subscription: stops the recurring payments (rebilling) for a
+ * purchase_id. Access usually remains until the end of the paid period (DS24
+ * then sends `last_paid_day`). Throws on error.
  */
 export async function stopRebilling(
   apiKey: string,
@@ -115,18 +119,18 @@ export async function stopRebilling(
   await ds24Post("stopRebilling", apiKey, { purchase_id: purchaseId });
 }
 
-/** Rohdaten eines DS24-Kaufs (Teilmenge). */
+/** Raw data of a DS24 purchase (subset). */
 export interface PurchaseInfo {
   purchaseId: string;
   productId?: string;
   buyerEmail?: string;
-  /** "Y" wenn das Abo gekündigt ist. */
+  /** "Y" when the subscription is cancelled. */
   isCanceledNow: boolean;
-  /** z. B. "1_month" | "12_month". */
+  /** e.g. "1_month" | "12_month". */
   billingInterval?: string;
   amount?: string;
   currency?: string;
-  // Verwaltungs-Links (an den Kunden verlinken).
+  // Management links (to link to the customer).
   renewUrl?: string;
   rebillingStopUrl?: string;
   invoiceUrl?: string;
@@ -154,9 +158,9 @@ function toPurchaseInfo(d: Record<string, unknown>): PurchaseInfo {
 }
 
 /**
- * Liest einen einzelnen Kauf (Abo-Status + Verwaltungs-Links). Nützlich, um
- * fehlende renew_url/rebilling_stop_url/invoice_url nachzuladen, die im IPN nicht
- * immer mitkommen.
+ * Reads a single purchase (subscription status + management links). Useful for
+ * fetching missing renew_url/rebilling_stop_url/invoice_url, which do not
+ * always come along in the IPN.
  */
 export async function getPurchase(
   apiKey: string,
@@ -167,8 +171,9 @@ export async function getPurchase(
 }
 
 /**
- * Listet Käufe/Abos (paginiert). Für „Rechnungen ansehen" und Abo-Übersichten.
- * `filter` erlaubt DS24-Filter wie { email, billing_type: "subscription" }.
+ * Lists purchases/subscriptions (paginated). For "view invoices" and
+ * subscription overviews. `filter` accepts DS24 filters such as
+ * { email, billing_type: "subscription" }.
  */
 export async function listPurchases(
   apiKey: string,

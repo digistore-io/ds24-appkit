@@ -1,0 +1,1 @@
+ALTER TABLE "ipn_events" ADD COLUMN "payload" text;

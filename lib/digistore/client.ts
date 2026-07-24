@@ -1,21 +1,21 @@
-// Digistore24 REST-API-Client.
+// Digistore24 REST API client.
 //
-// Authentifizierung: HTTP-Header `X-DS-API-KEY` (NICHT als Form-Parameter).
-// Basis-URL: https://www.digistore24.com/api/call/FUNCTION/format/json
+// Authentication: HTTP header `X-DS-API-KEY` (NOT as a form parameter).
+// Base URL: https://www.digistore24.com/api/call/FUNCTION/format/json
 //
-// Wichtig: Bei Fehlern wird eine Exception geworfen — KEIN stiller Mock-Fallback.
-// (Geld-relevant: ein fehlgeschlagener Checkout-Call darf nicht als Erfolg gelten.)
+// Important: errors throw an exception — NO silent mock fallback.
+// (Money-relevant: a failed checkout call must not count as a success.)
 import crypto from "crypto";
 
-// API-Basis über DIGISTORE_URL steuerbar (Standard: https://www.digistore24.com).
+// API base configurable via DIGISTORE_URL (default: https://www.digistore24.com).
 export function ds24BaseUrl(): string {
   return process.env.DIGISTORE_URL || "https://www.digistore24.com";
 }
 
 /**
- * Low-Level-POST an eine DS24-API-Funktion. Wirft bei HTTP- oder Logik-Fehler
- * (result != success). Gibt die geparste JSON-Antwort zurück.
- * Params dürfen Bracket-Notation nutzen (z. B. "payment_plan[first_amount]").
+ * Low-level POST to a DS24 API function. Throws on HTTP or logic errors
+ * (result != success). Returns the parsed JSON response.
+ * Params may use bracket notation (e.g. "payment_plan[first_amount]").
  */
 export async function ds24Post(
   fn: string,
@@ -40,7 +40,7 @@ export async function ds24Post(
   try {
     data = JSON.parse(text);
   } catch {
-    throw new Error(`Digistore24 API ungültiges JSON (${fn}): ${text}`);
+    throw new Error(`Digistore24 API returned invalid JSON (${fn}): ${text}`);
   }
   if (data?.result !== "success") {
     throw new Error(data?.message || `Digistore24 API-Fehler (${fn})`);
@@ -49,24 +49,24 @@ export async function ds24Post(
 }
 
 /**
- * Prüft einen API-Key durch einen leichten Read-Call (getProductList).
- * Gibt true zurück, wenn der Key gültig ist.
+ * Validates an API key with a lightweight read call (listProducts).
+ * Returns true if the key is valid.
  */
 export async function verifyApiKey(apiKey: string): Promise<boolean> {
   try {
-    await ds24Post("getProductList", apiKey);
+    await ds24Post("listProducts", apiKey);
     return true;
   } catch {
     return false;
   }
 }
 
-// Die Checkout-URL-Erzeugung (createBuyUrl) inkl. Custom Payment Plan und
-// Caching liegt in ./buyUrl.ts.
+// Building the checkout URL (createBuyUrl), including the custom payment plan
+// and caching, lives in ./buyUrl.ts.
 
 /**
- * Erzeugt eine neue, zufällige IPN-Passphrase (für die SHA512-Signatur).
- * Der Vendor trägt sie identisch in Digistore24 ein.
+ * Generates a new random IPN passphrase (for the SHA512 signature).
+ * The vendor enters the identical value in Digistore24.
  */
 export function generateIpnPassphrase(): string {
   return crypto.randomBytes(24).toString("hex");

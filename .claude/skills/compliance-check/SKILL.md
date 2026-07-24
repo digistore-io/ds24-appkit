@@ -1,62 +1,62 @@
 ---
 name: compliance-check
-description: Prüft vor dem Verkauf die rechtliche Grundausstattung (v. a. DE/EU) und legt fehlende Rechtsseiten an — Impressum, Datenschutzerklärung sowie, je nach Verkäuferrolle, AGB und Widerrufsbelehrung. Prüft DSGVO-Grundlagen (Datenminimierung, Einwilligung, Auftragsverarbeitung) und verlinkt die Seiten im Footer. Nutze dies vor go-live/go-to-market. KEINE Rechtsberatung — Vorlagen mit Platzhaltern.
+description: Checks the legal basics (above all DE/EU) before selling and creates the missing legal pages — Impressum (legal notice), Datenschutzerklärung (privacy policy) and, depending on the seller role, AGB (terms and conditions) and Widerrufsbelehrung (right-of-withdrawal notice). Checks the GDPR basics (data minimization, consent, data processing agreements) and links the pages in the footer. Use this before go-live/go-to-market. NOT legal advice — templates with placeholders.
 ---
 
-# Compliance-Check — rechtlich startklar (DE/EU)
+# Compliance check — legally ready to start (DE/EU)
 
-Ziel: die App vor dem Verkauf **rechtlich grundausgestattet** machen. Dies ersetzt
-**keine Rechtsberatung** — es erstellt Vorlagen mit Platzhaltern und weist auf
-Pflichten hin. Für verbindliche Texte einen Anwalt oder einen offiziellen
-Generator (z. B. von IHK/eRecht24/Anwaltskanzleien) nutzen.
+Goal: give the app its **legal basics** before selling. This does **not replace
+legal advice** — it creates templates with placeholders and points out
+obligations. For binding texts, use a lawyer or an official generator (e.g. from
+the IHK/eRecht24/law firms).
 
-## Wichtig: Wer ist der Verkäufer?
+## Important: who is the seller?
 
-Digistore24 tritt bei vielen Setups als **Reseller** (Vertragspartner des Käufers)
-auf und übernimmt dann Teile der Verkaufs-Rechtspflichten (Rechnung, Widerruf im
-Checkout, Umsatzsteuer). **Trotzdem** braucht deine eigene App/Landingpage eigene
-Rechtstexte (mindestens Impressum + Datenschutz). Kläre die Rolle im
-Digistore-Vertrag und richte AGB/Widerruf danach aus.
+In many setups Digistore24 acts as the **reseller** (the buyer's contractual
+partner) and then takes over parts of the seller's legal obligations (invoice,
+right of withdrawal in the checkout, VAT). **Even so**, your own app/landing page
+needs its own legal texts (at least Impressum + privacy). Clarify the role in the
+Digistore contract and align the AGB/right of withdrawal accordingly.
 
-## Checkliste — Seiten anlegen (falls fehlend)
+## Checklist — creating the pages (if missing)
 
-Lege fehlende Seiten als eigene Routen an und verlinke sie im Footer (jeder Seite):
-- **Impressum** (`/impressum`) — Anbieterkennzeichnung (§5 TMG/§18 MStV):
-  Name/Firma, Anschrift, Kontakt, ggf. USt-IdNr., Vertretungsberechtigte.
-- **Datenschutzerklärung** (`/datenschutz`) — DSGVO: welche Daten, Zweck,
-  Rechtsgrundlage, Empfänger (Hoster, Digistore, E-Mail-Dienst), Speicherdauer,
-  Betroffenenrechte, Kontakt.
-- **AGB** (`/agb`) — nur wenn du (nicht Digistore) Verkäufer bist bzw. für die
-  Nutzung der App-Leistung.
-- **Widerrufsbelehrung** (`/widerruf`) — bei Verbrauchern; für digitale Inhalte
-  gilt ein Erlöschen des Widerrufsrechts nur mit ausdrücklicher Zustimmung +
-  Kenntnisnahme (sonst Widerrufsrecht). Nur nötig, wenn du der Verkäufer bist.
+Create the missing pages as their own routes and link them in the footer (of every page):
+- **Impressum** (`/impressum`) — legal notice / provider identification (§5 TMG/§18 MStV):
+  name/company, address, contact, VAT ID if applicable, authorized representatives.
+- **Datenschutzerklärung** (`/datenschutz`) — privacy policy, GDPR: which data, purpose,
+  legal basis, recipients (host, Digistore, e-mail service), retention period,
+  data subject rights, contact.
+- **AGB** (`/agb`) — terms and conditions, only if you (not Digistore) are the
+  seller, or for the use of the app's service.
+- **Widerrufsbelehrung** (`/widerruf`) — right-of-withdrawal notice, for
+  consumers; for digital content the right of withdrawal only expires with
+  explicit agreement + acknowledgement (otherwise the right of withdrawal
+  applies). Only needed if you are the seller.
 
-Setze in die Vorlagen klar erkennbare Platzhalter, z. B. `[FIRMENNAME]`,
-`[ANSCHRIFT]`, `[E-MAIL]`, und weise den Nutzer an, sie zu ersetzen.
+Put clearly recognizable placeholders into the templates, e.g. `[FIRMENNAME]`,
+`[ANSCHRIFT]`, `[E-MAIL]`, and instruct the user to replace them.
 
-## DSGVO-Grundlagen (prüfen)
+## GDPR basics (check)
 
-- **Datenminimierung:** nur erheben, was gebraucht wird.
-- **Einwilligung:** die Opt-in-Seite hält die Zustimmung fest (`orders.gdprConsentAt`);
-  `is_gdpr_country` beachten.
-- **Auftragsverarbeitung (AVV):** mit Hoster, Digistore und E-Mail-Dienst abschließen
-  (die Anbieter stellen Musterverträge bereit).
-- **Cookies/Tracking:** nur mit Einwilligung (Consent-Banner) — aber **nur**, wenn
-  wirklich getrackt wird. Ohne Tracking kein Banner nötig.
-- **Datenauskunft/-löschung:** einen Weg vorsehen, Kundendaten auf Anfrage zu
-  exportieren/löschen.
+- **Data minimization:** only collect what is needed.
+- **Consent:** the opt-in page records the consent (`orders.gdprConsentAt`);
+  mind `is_gdpr_country`.
+- **Data processing agreement (AVV):** conclude one with the host, Digistore and the
+  e-mail service (the providers supply model contracts).
+- **Cookies/tracking:** only with consent (consent banner) — but **only** if
+  there really is tracking. No tracking, no banner needed.
+- **Data access/deletion:** provide a way to export/delete customer data on request.
 
-## Ablauf
+## Procedure
 
-1. **Prüfen:** Welche Rechtsseiten existieren? Welche Rolle hat Digistore (Reseller)?
-2. **Anlegen:** fehlende Seiten als Vorlagen mit Platzhaltern erstellen, im Footer
-   verlinken.
-3. **DSGVO abhaken:** Punkte oben durchgehen, offene To-dos benennen.
-4. **Hinweisen:** klar sagen, was der Nutzer selbst ausfüllen/prüfen (lassen) muss.
+1. **Check:** which legal pages exist? Which role does Digistore have (reseller)?
+2. **Create:** create the missing pages as templates with placeholders, link them
+   in the footer.
+3. **Tick off GDPR:** go through the points above, name the open to-dos.
+4. **Point out:** say clearly what the user has to fill in/check (or have checked) themselves.
 
-## STOPP / Grenze
-Dies ist **keine Rechtsberatung**. Bei Unsicherheit (v. a. AGB/Widerruf, Steuern,
-besondere Datenkategorien) einen Anwalt/Steuerberater einbeziehen — siehe `guardrails`.
+## STOP / limit
+This is **not legal advice**. When in doubt (above all AGB/right of withdrawal, taxes,
+special categories of data) involve a lawyer/tax advisor — see `guardrails`.
 
-Nächster Schritt: **`go-live`** (online stellen), danach **`go-to-market`**.
+Next step: **`go-live`** (putting it online), then **`go-to-market`**.

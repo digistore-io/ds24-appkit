@@ -1,92 +1,121 @@
-# Login einrichten
+# Setting up sign-in
 
-Die App nutzt standardmäßig **E-Mail-Token-Login (Magic-Link)** — kein Passwort.
-Der Nutzer gibt seine E-Mail ein, bekommt einen Anmelde-Link zugeschickt und ist
-nach dem Klick angemeldet. Dafür braucht die App einen **E-Mail-Versand**: entweder
-**Postmark** oder **SMTP**. **Google-Login ist optional** zusätzlich möglich.
+By default the app uses **email token sign-in (magic link)** — no password.
+The user enters their email, gets a sign-in link sent to them and is signed in
+after clicking it. For that the app needs **mail delivery**: either
+**Postmark** or **SMTP**. **Google sign-in is optional** on top of that.
 
-Alle Werte kommen in die `.env` (Vorlage: `.env.example`). Basis immer setzen:
+All values go into the `.env` (template: `.env.example`). Always set the basics:
 
 ```bash
-AUTH_SECRET=        # openssl rand -hex 32
+AUTH_SECRET=        # filled in locally by `node run.mjs start`
 AUTH_TRUST_HOST=true
-APP_URL=https://deine-domain.de
-# APP_NAME=Meine App   # optional, erscheint in der Login-Mail
+APP_URL=https://your-domain.de
+# APP_NAME=My App      # optional, appears in the sign-in mail
 ```
 
-## E-Mail-Versand — Variante A: Postmark (empfohlen, einfach)
+## Mail delivery — option A: Postmark (recommended, simple)
 
-1. Konto bei [postmarkapp.com](https://postmarkapp.com) anlegen, einen **Server**
-   erstellen und dessen **Server-API-Token** kopieren.
-2. Unter *Sender Signatures* (oder eine ganze Domain) deine **Absenderadresse
-   verifizieren** (DKIM/Return-Path setzen). Diese Adresse ist die „Sender-Id".
-3. In die `.env`:
+1. Create an account at [postmarkapp.com](https://postmarkapp.com), create a
+   **server** and copy its **server API token**.
+2. Under *Sender Signatures* (or a whole domain) **verify your sender
+   address** (set DKIM/Return-Path). This address is the "sender ID".
+3. Into the `.env`:
 
 ```bash
 POSTMARK_SERVER_TOKEN=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-POSTMARK_SENDER=login@deine-domain.de   # verifizierter Absender
-# POSTMARK_MESSAGE_STREAM=outbound       # Standard
+POSTMARK_SENDER=login@your-domain.de    # verified sender
+# POSTMARK_MESSAGE_STREAM=outbound       # default
 ```
 
-## E-Mail-Versand — Variante B: SMTP (beliebige Mailbox)
+## Mail delivery — option B: SMTP (any mailbox)
 
-Funktioniert mit jedem Mailserver/Postfach (z. B. der eigene Hoster). In die `.env`:
+Works with any mail server/mailbox (e.g. your own host). Into the `.env`:
 
 ```bash
-SMTP_HOST=smtp.deinprovider.de
+SMTP_HOST=smtp.yourprovider.de
 SMTP_PORT=587            # 587 = STARTTLS, 465 = SSL
-SMTP_SECURE=false        # true nur bei Port 465
-SMTP_USER=postfach@deine-domain.de
+SMTP_SECURE=false        # true only on port 465
+SMTP_USER=mailbox@your-domain.de
 SMTP_PASSWORD=…
-SMTP_FROM=login@deine-domain.de
+SMTP_FROM=login@your-domain.de
 ```
 
-Ist **weder Postmark noch SMTP** gesetzt, wird der E-Mail-Login nicht angeboten.
+If **neither Postmark nor SMTP** is set, email sign-in is not offered.
 
-## Google-Login (optional)
+## Google sign-in (optional)
 
-Bequem für Nutzer, aber **Einrichtung + Freigabe brauchen Zeit**: Google prüft
-Apps mit OAuth-Zustimmungsbildschirm; bis zur Freigabe für externe Nutzer können
-**mehrere Tage bis Wochen** vergehen. Bis dahin funktioniert der Login nur für
-manuell eingetragene Test-Nutzer. Der E-Mail-Login ist sofort einsatzbereit —
-Google kann jederzeit später ergänzt werden.
+Convenient for users, but **setup + approval take time**: Google reviews apps
+with an OAuth consent screen; approval for external users can take **several
+days to weeks**. Until then sign-in only works for manually entered test
+users. Email sign-in is ready to go right away — Google can be added later at
+any time.
 
-Schritte in der [Google Cloud Console](https://console.cloud.google.com/):
+Steps in the [Google Cloud Console](https://console.cloud.google.com/):
 
-1. Projekt anlegen (oder vorhandenes wählen).
-2. **APIs & Dienste → OAuth-Zustimmungsbildschirm**: Nutzertyp „Extern", App-Name,
-   Support-E-Mail, Domain(s) und Entwickler-Kontakt eintragen. Scopes `email`,
-   `profile`, `openid` genügen. Zunächst im **Testmodus** (Test-Nutzer eintragen),
-   später „Veröffentlichen" → Google-**Verifizierung** durchlaufen (dauert).
-3. **APIs & Dienste → Anmeldedaten → OAuth-Client-ID erstellen** → Typ
-   „Webanwendung".
-   - **Autorisierte Weiterleitungs-URIs**:
-     `https://deine-domain.de/api/auth/callback/google`
-     (lokal zusätzlich `http://localhost:3000/api/auth/callback/google`).
-4. Client-ID + Secret in die `.env`:
+1. Create a project (or pick an existing one).
+2. **APIs & Services → OAuth consent screen**: enter user type "External", app
+   name, support email, domain(s) and developer contact. The scopes `email`,
+   `profile`, `openid` are enough. Start in **test mode** (enter test users),
+   later "Publish" → go through Google **verification** (takes a while).
+3. **APIs & Services → Credentials → Create OAuth client ID** → type
+   "Web application".
+   - **Authorized redirect URIs**:
+     `https://your-domain.de/api/auth/callback/google`
+     (locally also `http://localhost:3000/api/auth/callback/google`).
+4. Client ID + secret into the `.env`:
 
 ```bash
 GOOGLE_CLIENT_ID=…apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=…
 ```
 
-## Verifizieren
+## Verifying
 
-Nach dem Setzen der Variablen: App starten, `/login` öffnen — es erscheint das
-E-Mail-Formular (und, falls konfiguriert, „Weiter mit Google"). E-Mail eingeben →
-Link kommt an → Klick meldet an. Verifikations-Tokens liegen in der DB-Tabelle
-`verificationTokens` (Drizzle-Adapter).
+After setting the variables: start the app, open `/login` — the email form
+appears (and, if configured, "Continue with Google"). Enter the email → the
+link arrives → clicking it signs you in. Verification tokens live in the DB
+table `verificationTokens` (Drizzle adapter).
 
-## Betreiber-/Admin-Account anlegen
+## Creating the operator/admin account
 
-Der Login ist passwortlos — Accounts entstehen beim ersten Magic-Link-Login mit
-Rolle `member`. Damit sich der **Betreiber** als Admin (`owner`) einloggen kann,
-den Account **vorab** per CLI anlegen (die Zeile wird beim Login wiederverwendet):
+**Locally you do not have to do anything.** The very first account in a fresh
+app becomes `owner` by itself — sign in at `/login` with any address you like,
+and the admin area plus the "Users" entry in the navigation are there right
+away. The rule and its boundary live in `lib/users/bootstrap.ts`.
+
+**That bootstrap applies in DEV only, deliberately.** In STAGING and PROD the
+first person to sign in is not necessarily you — a freshly deployed instance
+has an empty user table too, and the first visitor may be a customer. Handing
+them user management would be an account takeover. There you create your
+account up front instead.
+
+Sign-in is passwordless — accounts otherwise come into being on the first
+magic-link sign-in with role `member`. So that the **operator** can sign in as
+admin (`owner`), create the account **up front** via CLI (the row is reused at
+sign-in):
 
 ```bash
-node scripts/users/create-user.mjs --email chef@example.de --role owner --apply
-# oder: make user-create ARGS="--email chef@example.de --role owner --apply"
+node scripts/users/create-user.mjs --email owner@example.com --role owner --apply
+# or: node run.mjs user-create --email owner@example.com --role owner --apply
 ```
 
-Rollen: `owner` = Betreiber/Admin, `member` = Kunde. Admin-Bereiche mit
-`requireOwner()` (`lib/authz.ts`) absichern. Details: `scripts/users/README.md`.
+Roles: `owner` = operator/admin, `member` = customer. Protect admin areas with
+`requireOwner()` (`lib/authz.ts`). Details: `scripts/users/README.md`.
+
+## "JWTSessionError: no matching decryption secret"
+
+If this appears in the log (or in the Next.js dev overlay) on a page that only
+reads the session, no one has attacked anything: the browser is holding a
+session cookie from **another** installation. Cookies know nothing about ports,
+so every app on `localhost` shares one cookie store — and a cookie encrypted
+with a different `AUTH_SECRET` cannot be decrypted with this one.
+
+Locally the app avoids this by itself: the session cookie carries a short
+fingerprint of `AUTH_SECRET` in its name (`lib/auth/cookie-names.ts`), so two
+installations never reach for the same cookie. In STAGING/PROD each app has its
+own domain and the Auth.js defaults apply.
+
+So if you do see the message, the app is running with `APP_ENV` other than
+`development`, with a non-local `APP_URL`, or with no `AUTH_SECRET` — check
+`.env`. Deleting the `authjs.*` cookies in the browser clears the leftover.

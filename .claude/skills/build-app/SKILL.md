@@ -1,167 +1,192 @@
 ---
 name: build-app
-description: DER EINSTIEGSPUNKT für dieses Template — nutze diesen Skill, sobald der Nutzer mit dem Bauen anfangen will, sich orientieren will oder unklar formuliert loslegt ("wie fange ich an?", "Baue meine App", "was kann ich hier machen?"). Klärt zuerst, ob eine Produktidee da ist (sonst Übergabe an market-research), ordnet das Vorhaben einem Archetyp zu, legt Datenmodell und Seiten an und reicht danach an setup-digistore für die Bezahlung weiter. Begleitend gelten die Regeln aus guardrails.
+description: THE ENTRY POINT for this template — use this skill as soon as the user wants to start building, wants to get oriented, or opens with something vague ("how do I start?", "Build my app", "what can I do here?"). First clarifies whether a product idea already exists (otherwise hands over to market-research), assigns the project an archetype, creates the data model and pages, and then hands over to setup-digistore for payment. The rules from guardrails apply alongside.
 ---
 
-# Eine SAAS-App auf diesem Template bauen
+# Building a SAAS app on this template
 
-Du baust eine **SAAS-Anwendung, die über Digistore24 abrechnet**. Dieses Template
-liefert Login, Datenbank, Design-System und die komplette Digistore-Anbindung
-bereits mit. Du beschreibst nur noch, was deine App tun soll.
+You are building a **SAAS application that bills through Digistore24**. This
+template already ships with sign-in, database, design system and the complete
+Digistore integration. All you have to do is describe what your app should do.
 
-**Ausnahmslos eine SAAS-App — niemals eine einzelne Webseite.** Landingpage,
-Onepager, Firmen- oder Portfolioseite sind hier kein gültiges Ergebnis: ohne
-Nutzerkonten, geschützten Bereich und kaufabhängigen Zugang gibt es nichts, was
-Digistore24 abrechnen könnte. Fragt der Nutzer danach, frag zurück, was die
-Leute *kaufen* und danach *benutzen* sollen — die gewünschte Seite ist fast
-immer die Verkaufsseite der App und gehört als `app/page.tsx` plus
-`app/tarife/page.tsx` hinein, nicht als eigenes Projekt daneben. Details in
-`CLAUDE.md` („Was hier entsteht — ausnahmslos").
+**Always a SAAS app — never a single web page.** A landing page, a one-pager, a
+company or portfolio site is not a valid result here: without user accounts, a
+protected area and purchase-dependent access there is nothing Digistore24 could
+bill for. If the user asks for that, ask back what people are supposed to *buy*
+and then *use* — the page they want is almost always the sales page of the app
+and belongs in it as `app/page.tsx` plus `app/plans/page.tsx`, not as a
+separate project alongside. Details in `CLAUDE.md` ("What gets built here —
+without exception").
 
-**Ausnahme: Test-Apps.** Will jemand nur ausprobieren („zeig mir ‚Hello
-World'", eine kleine Seite zum Gefühl-Bekommen), dann bau das direkt als Seite
-unter `app/` — ohne Schritt 0, ohne `market-research`, ohne Nachfrage nach dem
-Produkt. Erst wenn es läuft, in einem Satz anbieten, ob daraus etwas Verkaufbares
-werden soll. Anbieten, nicht drängen.
+**Exception: test apps.** If someone only wants to try things out ("show me
+'Hello World'", a small page to get a feel for it), then build that directly as
+a page under `app/` — without step 0, without `market-research`, without asking
+about the product. Only once it runs, offer in one sentence whether it should
+turn into something sellable. Offer it, don't push.
 
-## Schritt 0 — Die Weiche: Steht die Idee schon?
+## Step 0 — The switch: is the idea already there?
 
-Dies ist die **einzige Eingangstür** des Templates. Der Nutzer muss keinen
-zweiten Skill kennen — du stellst zuerst genau eine Frage:
+This is the **single entrance** of the template. The user doesn't have to know a
+second skill — you ask exactly one question first:
 
-> „Hast du schon eine konkrete Idee, was deine App tun soll — oder sollen wir
-> gemeinsam eine finden, die zu deiner Erfahrung und deiner Reichweite passt?"
+> "Do you already have a concrete idea of what your app should do — or shall we
+> find one together that fits your experience and your reach?"
 
-- **Idee steht** (der Nutzer kann in 1–2 Sätzen sagen, was die App tut und für
-  wen) → weiter bei Schritt 1.
-- **Keine oder vage Idee** („weiß nicht", „irgendwas mit…", nur eine Branche) →
-  starte den Skill **`market-research`**. Er interviewt den Nutzer zu Expertise
-  und Reichweite, recherchiert eine Zielgruppe samt Herausforderungen und liefert
-  einen konkreten Produktvorschlag + Product-Brief (`docs/product-brief.md`).
-  Danach kommt der Nutzer hierher zurück, und du machst bei Schritt 1 weiter.
+- **Idea is there** (the user can say in 1–2 sentences what the app does and for
+  whom) → continue with step 1.
+- **No idea, or a vague one** ("don't know", "something with…", an industry) →
+  start the skill **`market-research`**. It interviews the user about expertise
+  and reach, researches a target audience along with their challenges and
+  delivers a concrete product proposal + product brief (`docs/product-brief.md`).
+  After that the user comes back here, and you continue with step 1.
 
-Rate nicht. Eine vage Antwort ist ein Nein — lieber einmal zu oft in die
-Recherche abbiegen als eine App bauen, die niemand kauft.
+Don't guess. A vague answer is a no — better to turn off into research once too
+often than to build an app nobody buys.
 
-- **Nur ausprobieren** („Hello World", eine kleine Testseite) → die Frage
-  entfällt. Direkt bauen, siehe „Ausnahme: Test-Apps" oben. Eine Weiche vor
-  einen Zweizeiler zu stellen, vertreibt genau die Nutzer, die das System
-  gerade erst kennenlernen.
+- **Only trying things out** ("Hello World", a small test page) → the question
+  is dropped. Build right away, see "Exception: test apps" above. Putting a
+  switch in front of a two-liner drives away exactly those users who are only
+  just getting to know the system.
 
-Wenn der Nutzer sich nur **orientieren** will („was kann ich hier machen?",
-„wie fange ich an?"), gib ihm kurz den Weg (Idee → Bauen → Bezahlung →
-Sicherheit → Recht → Live → Vermarktung, siehe `README.md`) und stell dann
-dieselbe Frage.
+If the user only wants to **get oriented** ("what can I do here?", "how do I
+start?"), briefly give them the path (idea → build → payment → security → legal
+→ live → marketing, see `README.md`) and then ask the same question.
 
-## Schritt 1 — Archetyp wählen
+## Step 1 — Choose an archetype
 
-Frag den Nutzer (oder überlege), was die App im Kern ist:
+Ask the user (or work out) what the app is at its core:
 
-| Die App soll…                                   | Archetyp            | Was zu tun ist |
+| The app should…                                 | Archetype           | What to do |
 |-------------------------------------------------|---------------------|----------------|
-| Digitale Inhalte/Kurse nach Kauf freischalten   | **Content-Access**  | Tabelle je „Produkt", Zugriff an `orders.status = 'paid'` koppeln |
-| Nach Kauf wiederkehrende Nachrichten senden     | **Drip/Automation** | Zeitplan-Tabelle + Cron/Route, Start bei `on_payment` |
-| Ein Tool/Feature nur für Käufer bereitstellen   | **Gated-Tool**      | Feature-Seiten hinter Kauf-Check |
-| Mitgliedschaft/Abo verwalten                    | **Membership**      | `orders`-Status (paused/cancelled) → Zugriff steuern; Abo-Verwaltung via `billing-modes` |
-| Nach Verbrauch abrechnen (z. B. KI-Nutzung)     | **Verbrauch/Token** | Prepaid-Token mit Auto-Aufladen — Skill `billing-modes` |
+| Unlock digital content/courses after purchase   | **Content-Access**  | One table per "product"; gate it with `hasPlan(memberId, productKey)` |
+| Send recurring messages after purchase          | **Drip/Automation** | Schedule table + cron/route, start at `on_payment` |
+| Provide a tool/feature for buyers only          | **Gated-Tool**      | Feature pages behind `hasPlan(...)` |
+| Manage membership/subscription                  | **Membership**      | `hasPlan(...)` decides access — a cancellation keeps it to the end of the paid period; self-service via `billing-modes` |
+| Bill by usage (e.g. AI usage)                   | **Usage/Tokens**    | Prepaid tokens with auto top-up — skill `billing-modes` |
 
-Alle Archetypen nutzen dieselbe Basis: **Auth (`auth.ts`)** + **`orders`-Tabelle**,
-die durch Digistore-IPN-Events gefüllt wird.
+All archetypes use the same base: **auth (`auth.ts`)** for who is signed in, and
+the **entitlement API** (`lib/entitlements/manage.ts`) for what they may use.
+The Digistore IPN feeds both — it records the payment and maintains the grant
+behind it. Reference: `docs/entitlements.md`.
 
-## Schritt 2 — Datenmodell erweitern
+## Step 2 — Extend the data model
 
-- Neue Tabellen in `db/schema.ts` (bzw. eine eigene Datei, die dort re-exportiert
-  wird — Vorbild: `db/schema-digistore.ts`).
-- Verknüpfe kaufabhängige Inhalte mit `orders` (Feld `ds24ProductId` / `userId`).
-- Danach eine **Migration** erzeugen und einspielen: `make db-generate` →
-  erzeugte Datei in `drizzle/` prüfen → `make db-migrate`. Die Migration gehört
-  mit in den Commit (siehe `docs/database.md`). Kein `db:push`.
+- New tables in `db/schema.ts` (or a separate file that is re-exported there —
+  model to follow: `db/schema-digistore.ts`).
+- Link purchase-dependent content to the **Member** (`users.id`, the same id
+  `orders.memberId` carries) — never to a column that is not the buyer: content
+  keyed on anything else is content every customer can see. What the Member may
+  *do* with it is a separate question, and the entitlement API answers it.
+- Then create a **migration** and apply it: `node run.mjs db-generate` → check the
+  generated file in `drizzle/` → `node run.mjs db-migrate`. The migration belongs in the
+  commit (see `docs/database.md`). No `db:push`.
 
-## Schritt 3 — Seiten & Logik
+## Step 3 — Pages & logic
 
-- Geschützte Seiten unter `app/dashboard/…` (bereits per `middleware.ts` abgesichert).
-- Öffentliche Käufer-Seiten (z. B. Zugang nach Kauf) prüfen den `orders.status`.
-- UI mit shadcn/ui: `npx shadcn@latest add <component>`. Farben nur über Tokens
-  aus `app/globals.css`, nichts hart kodieren.
-- Meldungen (Hinweis/Erfolg/Warnung/Fehler) immer über `Callout`
-  (`components/ui/callout.tsx`, Varianten `info` | `success` | `warning` |
-  `danger`) — keine eigenen Farbklassen. Details in `CLAUDE.md`.
-- Jede Seite muss in Hell **und** Dunkel lesbar sein; die App hat einen
-  Umschalter (Standard: System). Mit Tokens ergibt sich das von allein.
+- Protected pages under `app/dashboard/…` (already secured via `proxy.ts`).
+- **Purchase-dependent content asks the entitlement API**, and it needs a
+  signed-in Member:
 
-## Schritt 3b — Betreiber-/Admin-Account anlegen
+  ```ts
+  import { redirect } from "next/navigation";
+  import { auth } from "@/auth";
+  import { hasPlan } from "@/lib/entitlements/manage";
 
-Damit sich der Nutzer selbst als **Betreiber (Admin)** einloggen kann, lege einen
-`owner`-Account an. **Frag den Nutzer nach seiner E-Mail-Adresse** (die, mit der er
-sich später einloggt) und lege den Account per CLI an — sobald die DB läuft
-(`make start`):
+  const session = await auth();
+  if (!session?.user?.id) redirect("/login");
+  // A plan key from config/digistore-products.json. A token package is a
+  // balance, not an entitlement, and always answers false here.
+  if (!(await hasPlan(session.user.id, "basis_monatlich"))) redirect("/plans");
+  ```
 
-```bash
-node scripts/users/create-user.mjs --email <seine-mail> --role owner --apply
-# oder: make user-create ARGS="--email <seine-mail> --role owner --apply"
-```
+  A purchase made without an account is attached at the first sign-in, so the
+  buyer never has to do anything but sign in. Never answer this from a billing
+  table: a cancelled subscription still has access to the end of the paid
+  period, so reading the status as "blocked" takes away time somebody paid for.
+  Details and failure modes: `docs/entitlements.md`.
+- UI with shadcn/ui: `npx shadcn@latest add <component>`. Colors only via tokens
+  from `app/globals.css`, nothing hard-coded.
+- Messages (notice/success/warning/error) always via `Callout`
+  (`components/ui/callout.tsx`, variants `info` | `success` | `warning` |
+  `danger`) — no hand-picked color classes. Details in `CLAUDE.md`.
+- Every page has to be readable in light **and** dark; the app has a toggle
+  (default: system). With tokens this follows by itself.
 
-Der Login ist passwortlos (E-Mail-Magic-Link) — der vorab angelegte `owner`-Account
-wird beim ersten Login wiederverwendet. Admin-only-Seiten mit `requireOwner()`
-(`lib/authz.ts`) schützen; Vorbild: `app/dashboard/admin/page.tsx`. Normale Kunden
-bleiben `member` (Default). Details: `scripts/users/README.md`.
+## Step 3b — Create the operator/admin account
 
-## Schritt 4 — Tests schreiben UND ausführen (Pflicht)
-
-Für **jedes** Feature Tests schreiben und laufen lassen — nicht optional:
-- **Datenlogik/Regeln** mit `vitest` testen (Vorbilder: `lib/digistore/ipn.test.ts`,
-  `lib/digistore/buyUrl.test.ts`). Reine Logik ohne DB testen; DB-abhängige Fälle
-  gegen die lokale Postgres.
-- Typische Fälle: Zugriffsregeln (bezahlt → Zugang, nicht bezahlt → kein Zugang),
-  Statuswechsel, Eingabe-Validierung, Rand-/Fehlerfälle.
-- **Ausführen:** `npm run test` muss **grün** sein, bevor es weitergeht. Zusätzlich
-  `npm run typecheck`. Die mitgelieferte CI (`.github/workflows/ci.yml`) führt beides
-  bei jedem Push automatisch aus.
-
-### Und dann: die App selbst aufrufen
-
-**Melde niemals „fertig", ohne die Seiten geöffnet zu haben.** Grüne Tests und
-ein erfolgreicher Build schließen einen „Internal Server Error" nicht aus —
-`vitest` rendert nicht, `npm run build` läuft ohne Datenbank und ohne echte
-`.env`. Genau dort entsteht der Fehler, den der Nutzer dann als Erstes sieht.
+So that the user can sign in as the **operator (admin)** themselves, create an
+`owner` account. **Ask the user for their email address** (the one they will
+sign in with later) and create the account via CLI — as soon as the DB is
+running (`node run.mjs start`):
 
 ```bash
-make start                # DB + Migrationen + App
-make smoke                # ruft jede Seite auf, meldet Serverfehler
+node scripts/users/create-user.mjs --email <their-email> --role owner --apply
+# or: node run.mjs user-create --email <their-email> --role owner --apply
 ```
 
-5xx heißt: beheben, bevor du weitermachst — Ursache mit `make logs`. Ein 307 auf
-`/login` ist bei geschützten Seiten korrekt. Dynamische Seiten (`[id]`)
-überspringt `make smoke`; die einmal von Hand mit einem echten Datensatz
-aufrufen.
+Sign-in is passwordless (email magic link) — the `owner` account created in
+advance is reused at the first sign-in. Protect admin-only pages with
+`requireOwner()` (`lib/authz.ts`); model to follow:
+`app/dashboard/admin/page.tsx`. Normal customers stay `member` (default).
+Details: `scripts/users/README.md`.
 
-Sag dem Nutzer erst dann, dass er schauen kann — und schreib dazu, was er
-sehen wird und unter welcher Adresse.
+## Step 4 — Write tests AND run them (mandatory)
 
-## Schritt 5 — Bezahlung anschließen
+Write tests for **every** feature and run them — not optional:
+- Test **data logic/rules** with `vitest` (models: `lib/digistore/ipn.test.ts`,
+  `lib/digistore/buyUrl.test.ts`). Test pure logic without a DB; DB-dependent
+  cases against the local Postgres.
+- Typical cases: access rules (entitled → feature, not entitled → no feature,
+  refunded → gone, cancelled → still there until the paid period ends), input
+  validation, edge and error cases.
+- **Running them:** `npm run test` must be **green** before anything continues.
+  On top of that `npm run typecheck`. The bundled CI
+  (`.github/workflows/ci.yml`) runs both automatically on every push.
 
-Führe den Skill **`setup-digistore`** aus. Er verbindet Produkt-ID, API-Key,
-IPN-Webhook und Checkout-Link. Der IPN-Handler (`app/api/ipn/route.ts`)
-schreibt Käufe automatisch in `orders` — den Code dafür nicht neu erfinden.
+### And then: open the app yourself
 
-Rechnet die App **wiederkehrend (Abo) oder nach Verbrauch (Prepaid-Token)** ab,
-danach den Skill **`billing-modes`** ausführen.
+**Never report "done" without having opened the pages.** Green tests and a
+successful build do not rule out an "Internal Server Error" — `vitest` doesn't
+render, `npm run build` runs without a database and without a real `.env`. That
+is exactly where the error appears that the user then sees first.
 
-## Schritt 6 — Vor dem Launch: absichern, skalieren, rechtlich & live
+```bash
+node run.mjs start                # DB + migrations + app
+node run.mjs smoke                # opens every page, reports server errors
+```
 
-Nacheinander:
-1. **`security-gateway`** — App auf Sicherheitslücken scannen und beheben.
-2. **`performance-gateway`** — sicherstellen, dass ~100 parallele Nutzer flüssig laufen.
-3. **`compliance-check`** — Rechtsseiten (Impressum/Datenschutz/AGB/Widerruf) & DSGVO.
-4. **`go-live`** — App online stellen und live verifizieren.
-5. **`go-to-market`** — Positionierung, Kanäle, Launch-Plan und fertiger Content
-   (Landingpage, E-Mails, Video-Skripte).
+5xx means: fix it before you go on — find the cause with `node run.mjs logs`. A 307 to
+`/login` is correct for protected pages. `node run.mjs smoke` skips dynamic pages
+(`[id]`); open those once by hand with a real record.
 
-## Die goldenen Regeln (nicht dagegen arbeiten)
+Only then tell the user that they can take a look — and write down what they
+will see and at which address.
 
-- **Login bleibt Pflicht** für alle App-Seiten (außer Start, Login, Opt-in, IPN).
-- **Die IPN-Signaturprüfung niemals abschalten** (`lib/digistore/ipn.ts`).
-- **Keine Secrets/API-Keys im Code.** Immer `.env` (Digistore24-Key per
-  `make ds24-connect`); keine Eingabefelder für Schlüssel in der App.
-- **Bei Geld, Kundendaten, neuen externen Systemen:** erst den Skill `guardrails`
-  lesen und im Zweifel stoppen.
+## Step 5 — Connect payment
+
+Run the skill **`setup-digistore`**. It connects product ID, API key, IPN
+webhook and checkout link. The IPN handler (`app/api/ipn/route.ts`) writes
+purchases into `orders` automatically — don't reinvent that code.
+
+Does the app bill **recurring (subscription) or by usage (prepaid tokens)**?
+Then run the skill **`billing-modes`** afterwards.
+
+## Step 6 — Before the launch: secure it, scale it, legal & live
+
+One after another:
+1. **`security-gateway`** — scan the app for security holes and fix them.
+2. **`performance-gateway`** — make sure ~100 parallel users run smoothly.
+3. **`compliance-check`** — legal pages (imprint/privacy/terms/withdrawal), GDPR.
+4. **`go-live`** — put the app online and verify it live.
+5. **`go-to-market`** — positioning, channels, launch plan and finished content
+   (landing page, emails, video scripts).
+
+## The golden rules (don't work against them)
+
+- **Sign-in stays mandatory** for all app pages (except home, sign-in, opt-in,
+  IPN).
+- **Never switch off the IPN signature verification** (`lib/digistore/ipn.ts`).
+- **No secrets/API keys in the code.** Always `.env` (Digistore24 key via
+  `node run.mjs ds24-connect`); no input fields for keys in the app.
+- **For money, customer data, new external systems:** read the skill
+  `guardrails` first and stop when in doubt.

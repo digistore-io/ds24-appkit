@@ -1,4 +1,4 @@
-# Automatische Prüfung bei jedem Push/PR: Typecheck, Tests und Build.
+# Automatic checks on every push/PR: typecheck, tests and build.
 # So laufen die Tests garantiert – auch wenn man es lokal mal vergisst.
 name: CI
 
@@ -7,23 +7,42 @@ on:
   pull_request:
 
 jobs:
+  # Linux, macOS and Windows — this app has to run on all three, because Claude
+  # Code does (see CLAUDE.md → Three systems). The commands go through
+  # `node run.mjs`, which is exactly the interface the developer uses.
+  # On Windows that means bash (Git Bash), the same shell we write for.
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
       - run: npm ci
-      - run: npm run typecheck
-      - run: npm run test
-      - run: npm run build
+      # Informativ: die gehosteten Runner haben kein brauchbares Docker
+      # (macOS gar keins, Windows nur für Windows-Container), und Docker ist
+      # nur zum Starten der App nötig, nicht zum Bauen. Der Schritt läuft
+      # trotzdem auf allen drei Systemen — er prüft, dass die
+      # Plattformerkennung selbst überall durchläuft.
+      - name: Alle Werkzeuge da?
+        run: node run.mjs doctor
+        continue-on-error: true
+      - run: node run.mjs typecheck
+      - run: node run.mjs test
+      - run: node run.mjs build
         env:
           AUTH_SECRET: ci_dummy_secret
 
-  # Prüft, dass die Migrationen in drizzle/ auf einer leeren Datenbank sauber
-  # durchlaufen — und dass niemand eine Schemaänderung ohne Migration eincheckt.
+  # Checks that the migrations in drizzle/ run cleanly against an empty
+  # database — and that nobody commits a schema change without a migration.
   migrations:
     runs-on: ubuntu-latest
     services:
@@ -43,7 +62,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
       - run: npm ci
       - name: Migrationen einspielen
@@ -53,8 +72,8 @@ jobs:
         run: |
           npm run db:generate
           if [ -n "$(git status --porcelain drizzle/)" ]; then
-            echo "::error::db/schema.ts wurde geändert, ohne eine Migration zu erzeugen."
-            echo "Lokal ausführen: make db-generate && make db-migrate — und drizzle/ mit committen."
+            echo "::error::db/schema.ts was changed without generating a migration."
+            echo "Run locally: node run.mjs db-generate && node run.mjs db-migrate — and commit drizzle/ along with it."
             git status --porcelain drizzle/
             exit 1
           fi

@@ -7,7 +7,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash .claude/hooks/session-start.sh"
+            "command": "node .claude/hooks/session-start.mjs"
           }
         ]
       }

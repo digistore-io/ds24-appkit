@@ -1,6 +1,6 @@
-// Gemeinsame Helfer für die Produkt-Registry (config/digistore-products.json).
-// Lesen/Schreiben der Config, damit sync-products & request-approval dieselbe
-// Quelle nutzen wie die App (lib/digistore/products.ts).
+// Shared helpers for the product registry (config/digistore-products.json).
+// Reading/writing the config, so that sync-products & request-approval use the
+// same source as the app (lib/digistore/products.ts).
 import { readFileSync, writeFileSync } from "fs";
 import { fileURLToPath } from "url";
 
@@ -13,17 +13,17 @@ export const CONFIG_PATH = fileURLToPath(CONFIG_URL);
 export function readProducts() {
   const json = JSON.parse(readFileSync(CONFIG_PATH, "utf8"));
   if (!json || typeof json.products !== "object") {
-    throw new Error("Ungültige config/digistore-products.json (kein products-Objekt).");
+    throw new Error("Invalid config/digistore-products.json (no products object).");
   }
   return json;
 }
 
-/** Schreibt die Config formatiert zurück (2 Spaces, abschließender Newline). */
+/** Writes the config back, formatted (2 spaces, trailing newline). */
 export function writeProducts(json) {
   writeFileSync(CONFIG_PATH, JSON.stringify(json, null, 2) + "\n");
 }
 
-/** getProductList (readonly) → normalisierte Liste. */
+/** listProducts (readonly) → normalized list. */
 export function extractProducts(data) {
   if (Array.isArray(data)) return data;
   if (data && Array.isArray(data.products)) return data.products;

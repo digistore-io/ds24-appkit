@@ -1,0 +1,45 @@
+#!/usr/bin/env node
+// Delete IPN-log rows older than the retention window (default 60 days).
+//
+// The IPN log (ipn_events) keeps the full raw payload for diagnostics, which is
+// buyer PII — so it is not kept forever. This is the offline twin of the cron
+// endpoint (/api/cron/prune-ipn-log): same deletion, but straight against the
+// database, so it works from a system crontab or a one-off `node run.mjs db-prune-ipn`
+// without the app running.
+//
+// Usage:
+//   node scripts/db/prune-ipn-log.mjs            # delete rows older than 60 days
+//   node scripts/db/prune-ipn-log.mjs --days 30  # a different window
+//   Via the runner:  node run.mjs db-prune-ipn   (or: … db-prune-ipn --days 30)
+import "../lib/env.mjs";
+import postgres from "postgres";
+
+const argv = process.argv.slice(2);
+const daysArg = argv.indexOf("--days");
+const retentionDays =
+  daysArg >= 0 ? Number(argv[daysArg + 1]) : 60;
+if (!Number.isFinite(retentionDays) || retentionDays < 0) {
+  console.error("ERROR: --days must be a non-negative number.");
+  process.exit(2);
+}
+
+const url = process.env.DATABASE_URL;
+if (!url) {
+  console.error("ERROR: DATABASE_URL is not set (see .env).");
+  process.exit(2);
+}
+
+const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
+
+const sql = postgres(url, { max: 1 });
+try {
+  const deleted = await sql`
+    delete from ipn_events
+    where received_at < ${cutoff}
+    returning id`;
+  console.log(
+    `✓ Pruned ${deleted.length} IPN-log entr${deleted.length === 1 ? "y" : "ies"} older than ${retentionDays} days (before ${cutoff.toISOString()}).`,
+  );
+} finally {
+  await sql.end({ timeout: 5 });
+}

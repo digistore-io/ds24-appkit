@@ -3,11 +3,11 @@
 import { ThemeProvider as NextThemesProvider } from "next-themes";
 import type { ComponentProps } from "react";
 
-// Hell/Dunkel-Umschaltung. Steckt in app/layout.tsx um die ganze App.
+// Light/dark switching. Wrapped around the whole app in app/layout.tsx.
 //
-// next-themes setzt die Klasse `.dark` am <html> und schreibt die Wahl in den
-// localStorage. Ein kleines Inline-Skript im <head> tut das noch vor dem ersten
-// Frame — ohne das blitzt beim Laden kurz das helle Layout auf.
+// next-themes sets the `.dark` class on <html> and stores the choice in
+// localStorage. A small inline script in <head> does that before the first
+// frame — without it the light layout would flash briefly on load.
 export function ThemeProvider({
   children,
   ...props

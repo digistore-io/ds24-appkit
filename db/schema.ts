@@ -1,10 +1,10 @@
-// Datenbank-Schema (Drizzle ORM / Postgres).
+// Database schema (Drizzle ORM / Postgres).
 //
-// Enthält:
-//  - Auth.js-Tabellen (users, accounts, sessions, verificationTokens) für den
+// Contains:
+//  - the Auth.js tables (users, accounts, sessions, verificationTokens) for the
 //    @auth/drizzle-adapter.
-//  - Digistore-Tabellen (orders, subscriptions, …) — siehe schema-digistore.ts,
-//    das hier re-exportiert wird, damit `drizzle-kit` alles in einer Schema-Datei sieht.
+//  - the Digistore tables (orders, subscriptions, …) — see schema-digistore.ts,
+//    which is re-exported here so `drizzle-kit` sees everything in one schema file.
 import {
   pgTable,
   text,
@@ -13,7 +13,7 @@ import {
   integer,
 } from "drizzle-orm/pg-core";
 
-// --- Auth.js Kern-Tabellen ---------------------------------------------------
+// --- Auth.js core tables -----------------------------------------------------
 
 export const users = pgTable("users", {
   id: text("id")
@@ -23,11 +23,23 @@ export const users = pgTable("users", {
   email: text("email").unique(),
   emailVerified: timestamp("emailVerified", { mode: "date" }),
   image: text("image"),
-  // Rolle für einfache Autorisierung (z. B. "owner" = SAAS-Betreiber).
-  // Kanonische Werte: "owner" (Admin) | "member" (Kunde) — siehe lib/authz.ts.
+  // Role for simple authorization (e.g. "owner" = SAAS operator).
+  // Canonical values: "owner" (admin) | "member" (customer) — see lib/authz.ts.
   role: text("role").notNull().default("member"),
-  // Anlagedatum — wird in der Benutzerverwaltung angezeigt.
+  // Creation date — shown in the user management screen.
   createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+  // Corroborates this member's id inside the Digistore24 `tracking[custom]`
+  // value (see lib/digistore/custom.ts). 10 random alphanumerics, handed out on
+  // the first checkout rather than at sign-up — five different code paths
+  // create users, and a backfill would miss whichever is added next.
+  //
+  // NOT a credential: it never authenticates a session. It only makes a member
+  // id insufficient on its own inside a value the server alone writes.
+  checkoutToken: text("checkoutToken").unique(),
+  // Blocked since — NULL means "not blocked". Deliberately a timestamp rather
+  // than a yes/no: this way the database also records SINCE WHEN someone has
+  // had no access. How the block is enforced: see lib/users/blocked.ts.
+  blockedAt: timestamp("blockedAt", { mode: "date" }),
 });
 
 export const accounts = pgTable(
@@ -70,11 +82,16 @@ export const verificationTokens = pgTable(
   (vt) => [primaryKey({ columns: [vt.identifier, vt.token] })],
 );
 
-// --- Digistore-Tabellen ------------------------------------------------------
-// In eigener Datei gehalten (Domänen-Trennung), hier re-exportiert.
+// --- Digistore tables --------------------------------------------------------
+// Kept in a file of their own (domain separation), re-exported here.
 export * from "./schema-digistore";
 
-// --- Abrechnungs-Modelle (Abos + Prepaid-Token) ------------------------------
-// Subscriptions (Abo-Verwaltung) + Token-Guthaben/-Journal für
-// verbrauchsbasierte Abrechnung. Siehe schema-tokens.ts.
+// --- Billing models (subscriptions + prepaid tokens) -------------------------
+// Subscriptions plus token balance/ledger for usage-based billing.
+// See schema-tokens.ts.
 export * from "./schema-tokens";
+
+// --- Entitlements ------------------------------------------------------------
+// `grants` — the app's own answer to "may this person use this". The one table
+// an access question touches. See schema-entitlements.ts.
+export * from "./schema-entitlements";

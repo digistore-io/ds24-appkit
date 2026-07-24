@@ -1,70 +1,72 @@
 ---
 name: go-to-market
-description: Berät den Nutzer, sein fertiges SAAS-Produkt in den Markt einzuführen. Erarbeitet Positionierung und Preis, wählt zur Reichweite passende Kanäle (inkl. Digistore-Affiliates), erstellt einen einfachen Launch-Plan und liefert fertigen Content — Landingpage-Texte, E-Mail-Sequenz, Social-Posts und Video-Skripte (Hook → Problem → Lösung → CTA). Nutze dies, wenn die App steht und verkauft werden soll.
+description: Advises the user on bringing their finished SAAS product to market. Works out positioning and price, picks channels that fit the reach they already have (including Digistore affiliates), creates a simple launch plan and delivers ready-made content — landing page copy, an e-mail sequence, social posts and video scripts (hook → problem → solution → CTA). Use this when the app is done and is meant to be sold.
 ---
 
-# Vom Produkt zum Markt (Go-to-Market)
+# From product to market (go-to-market)
 
-Ziel: den ersten zahlenden Kunden gewinnen — mit einem **einfachen, konkreten**
-Plan und **fertigem Content**, den der Nutzer sofort einsetzen kann. Baue auf dem
-`docs/product-brief.md` (aus `market-research`) auf, falls vorhanden.
+Goal: win the first paying customer — with a **simple, concrete** plan and
+**ready-made content** the user can put to work right away. Build on the
+`docs/product-brief.md` (from `market-research`) if it exists.
 
-Führe schrittweise. Frag nach (AskUserQuestion), schlag vor, liefere Fertiges.
+Work through this step by step. Ask (AskUserQuestion), propose, deliver
+something finished.
 
-## Phase 1 — Positionierung & Preis
+## Phase 1 — positioning & price
 
-- **Kernbotschaft** in einem Satz: „[Zielgruppe] erreicht [Ergebnis] ohne [Schmerz]."
-- **Angebot & Preis:** Was genau wird verkauft (Kurs, Mitgliedschaft, Tool-Zugang)?
-  Einmalkauf oder Abo? Preisanker nennen (an der Zielgruppe orientiert). Bei Abo
-  ggf. Jahres-Rabatt. Die Abrechnung läuft über Digistore (`setup-digistore`).
-- **Angebots-Verstärker:** Bonus, Garantie, Verknappung (ehrlich einsetzen).
+- **Core message** in one sentence: "[target audience] achieves [outcome] without [pain]."
+- **Offer & price:** what exactly is being sold (course, membership, tool access)?
+  One-off purchase or subscription? Name a price anchor (oriented on the target
+  audience). For a subscription, possibly a yearly discount. The billing runs
+  through Digistore (`setup-digistore`).
+- **Offer amplifiers:** bonus, guarantee, scarcity (use them honestly).
 
-## Phase 2 — Kanäle (zur Reichweite passend)
+## Phase 2 — channels (matched to the reach)
 
-Frag nach vorhandener Reichweite und wähle **1–2 Kanäle** (nicht alle auf einmal):
-- **Eigene Liste / Community** — schnellster Weg, wenn vorhanden.
-- **Social (organisch)** — kurzform-Video/Posts; gut für Reichweitenaufbau.
-- **Digistore-Affiliates** — Partner verkaufen gegen Provision. `createBuyUrl`
-  unterstützt Affiliate-Provisionen; ein Marktplatz-Eintrag bringt Reichweite ohne
-  eigenes Publikum. Für viele Digistore-Vendoren der wichtigste Hebel.
-- **Content/SEO** — mittelfristig, wenn Suchintention existiert.
-- **Paid Ads** — nur mit Budget und sauberem Funnel; nicht für den allerersten Start.
+Ask about the existing reach and pick **1–2 channels** (not all of them at once):
+- **Own list / community** — the fastest way, if it exists.
+- **Social (organic)** — short-form video/posts; good for building reach.
+- **Digistore affiliates** — partners sell for a commission. `createBuyUrl`
+  supports affiliate commissions; a marketplace listing brings reach without an
+  audience of your own. For many Digistore vendors the most important lever.
+- **Content/SEO** — medium-term, if search intent exists.
+- **Paid ads** — only with a budget and a clean funnel; not for the very first start.
 
-## Phase 3 — Launch-Plan (einfach)
+## Phase 3 — launch plan (simple)
 
-Ein schlanker Ablauf statt großem Launch:
-1. **Vorbereitung:** Landingpage + Checkout-Link (`setup-digistore`) live, Opt-in-Seite geprüft.
-2. **Ankündigung:** 2–3 Berührungspunkte vor dem Verkaufsstart (Liste/Social).
-3. **Verkauf öffnen:** klare Frist/CTA.
-4. **Nachfassen:** Erinnerung, Einwände auflösen, Sozialbeweis.
-5. **Nach dem Launch:** Feedback einsammeln, Affiliate-Programm ausrollen.
+A lean sequence instead of a big launch:
+1. **Preparation:** landing page + checkout link (`setup-digistore`) live, opt-in page checked.
+2. **Announcement:** 2–3 touchpoints before sales open (list/social).
+3. **Open sales:** clear deadline/CTA.
+4. **Follow up:** reminder, resolve objections, social proof.
+5. **After the launch:** collect feedback, roll out the affiliate program.
 
-## Phase 4 — Content erstellen (fertig zum Einsatz)
+## Phase 4 — create content (ready to use)
 
-Erzeuge konkreten Content und lege ihn unter `docs/marketing/` ab:
-- **Landingpage-Text:** Headline, Subheadline, Problem, Nutzen/Features, Sozialbeweis,
-  Preis, FAQ, klarer CTA (verlinkt den Digistore-Checkout).
-- **E-Mail-Sequenz:** 3–5 Mails (Ankündigung → Nutzen/Story → Sozialbeweis →
-  letzte Chance). Betreffzeilen inklusive.
-- **Social-Posts:** 5–10 kurze Posts/Hooks für den gewählten Kanal.
-- **Video-Skripte:** mindestens
-  - ein **Kurzvideo-Skript** (30–60 s) nach dem Muster **Hook → Problem → Lösung →
-    Beweis → CTA**, mit Szenen-/Sprechtext;
-  - optional ein **VSL/Explainer-Skript** (2–3 min) für die Landingpage.
-  Schreibe Sprechtext, den der Nutzer 1:1 aufnehmen kann; halte ihn konkret und
-  in der Sprache der Zielgruppe.
+Produce concrete content and put it under `docs/marketing/`:
+- **Landing page copy:** headline, subheadline, problem, benefits/features, social proof,
+  price, FAQ, clear CTA (linking the Digistore checkout).
+- **E-mail sequence:** 3–5 mails (announcement → benefit/story → social proof →
+  last chance). Subject lines included.
+- **Social posts:** 5–10 short posts/hooks for the chosen channel.
+- **Video scripts:** at least
+  - one **short-video script** (30–60 s) following the pattern **hook → problem →
+    solution → proof → CTA**, with scene/spoken text;
+  - optionally a **VSL/explainer script** (2–3 min) for the landing page.
+  Write spoken text the user can record word for word; keep it concrete and in
+  the language of the target audience.
 
-Passe Tonalität an die Zielgruppe an. Erfinde keine falschen Behauptungen/
-Testimonials — kennzeichne Platzhalter (z. B. „[echtes Kundenzitat einsetzen]").
+Adapt the tone to the target audience. Do not invent false claims/
+testimonials — mark placeholders (e.g. "[insert real customer quote]").
 
-## Phase 5 — Messen & iterieren
+## Phase 5 — measure & iterate
 
-Nenne 2–3 einfache Kennzahlen (Besucher → Checkout-Klicks → Käufe) und wie man sie
-sieht (Digistore-Statistik). Empfiehl eine kleine Verbesserung pro Woche.
+Name 2–3 simple metrics (visitors → checkout clicks → purchases) and how to see
+them (Digistore statistics). Recommend one small improvement per week.
 
-## Prinzipien
+## Principles
 
-- **Ein Kanal, ein Angebot, ein klarer CTA** — Fokus schlägt Breite beim Start.
-- **Reichweite nutzen, die schon da ist**, bevor neue aufgebaut wird.
-- **Ehrliches Marketing** — keine erfundenen Ergebnisse/Bewertungen (auch rechtlich).
-- Nächster Schritt nach dem Launch: Kennzahlen ansehen, Angebot/Content nachschärfen.
+- **One channel, one offer, one clear CTA** — focus beats breadth at the start.
+- **Use the reach that is already there**, before building new reach.
+- **Honest marketing** — no made-up results/reviews (a legal matter, too).
+- Next step after the launch: look at the metrics, sharpen the offer/content.

@@ -43,7 +43,7 @@ describe("hasSufficientBalance", () => {
     expect(hasSufficientBalance(100, 100)).toBe(true);
     expect(hasSufficientBalance(100, 99)).toBe(true);
   });
-  it("lehnt Verbrauch über dem Guthaben ab", () => {
+  it("refuses consumption above the balance", () => {
     expect(hasSufficientBalance(100, 101)).toBe(false);
     expect(hasSufficientBalance(0, 1)).toBe(false);
   });
@@ -53,7 +53,7 @@ describe("hasSufficientBalance", () => {
 });
 
 describe("shouldAutoReload", () => {
-  it("löst aus, wenn aktiviert und Guthaben <= Schwelle", () => {
+  it("triggers when enabled and balance <= threshold", () => {
     expect(
       shouldAutoReload({
         balance: 10,
@@ -69,7 +69,7 @@ describe("shouldAutoReload", () => {
       }),
     ).toBe(true);
   });
-  it("löst nicht aus über der Schwelle oder wenn deaktiviert", () => {
+  it("does not trigger above the threshold or when disabled", () => {
     expect(
       shouldAutoReload({
         balance: 11,
@@ -96,7 +96,7 @@ describe("isReloadLockStale", () => {
     const recent = new Date(now.getTime() - 60_000); // 1 min alt
     expect(isReloadLockStale(recent, now)).toBe(false);
   });
-  it("Lock über dem Timeout ist stale", () => {
+  it("a lock older than the timeout is stale", () => {
     const old = new Date(now.getTime() - 7 * 3_600_000); // 7h alt (Timeout 6h)
     expect(isReloadLockStale(old, now)).toBe(true);
   });

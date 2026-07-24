@@ -1,135 +1,170 @@
 # Digistore SAAS App Template
 
-Ein Starter-Template für **SAAS-Anwendungen, die über Digistore24 abrechnen** —
-gebaut, damit du es **gemeinsam mit Claude Code** ausbauen kannst, auch ohne
-Programmiererfahrung.
+A starter template for **SAAS applications that bill through Digistore24** —
+built so that you can extend it **together with Claude Code**, even without
+programming experience.
 
-**Stack:** Next.js 15 (App Router) · TypeScript · Drizzle ORM + Postgres ·
-Auth.js v5 (E-Mail-Token, optional Google) · Tailwind v4 + shadcn/ui.
+**Stack:** Next.js 16 (App Router) · TypeScript · Drizzle ORM + Postgres ·
+Auth.js v5 (email token, Google optional) · Tailwind v4 + shadcn/ui.
 
-Enthält fertig verdrahtet:
-- 🔐 **Anmeldung** (E-Mail-Token/Magic-Link via Postmark oder SMTP; optional Google)
-  — lokal kommst du auch **ohne Mail-Konto** sofort rein (Entwicklungs-Login)
-- 👥 **Benutzerverwaltung** mit zwei Rollen (Admin/Nutzer) — Admins verwalten
-  Konten unter `/dashboard/admin/users`
-- 🏷️ **Tarif-Seite** (`/tarife`) mit Monats-/Jahresabo und Token-Paketen —
-  hart kodiert in `config/digistore-products.json`, zum Umgestalten oder Löschen
-- 💳 **Digistore24-Abrechnung**: IPN-Webhook mit **SHA512-Signaturprüfung**,
-  Checkout-Link-Erzeugung (`createBuyUrl`), API-Key-Anbindung per
-  `make ds24-connect`, DSGVO-Opt-in
-- 🗄️ **Datenbank** mit Bestell-Statusmaschine (bezahlt/erstattet/Chargeback/…)
-- 🩺 Health-Checks (`/api/healthz`, `/api/readyz`) für einfaches Deployment
+Wired up and ready to use:
+- 🔐 **Sign-in** (email token/magic link via Postmark or SMTP; Google optional)
+  — locally you get straight in **without a mail account** (development login)
+- 👥 **User management** with two roles (admin/user) — admins manage accounts
+  under `/dashboard/admin/users`
+- 🏷️ **Plan page** (`/plans`) with monthly/yearly subscription and token
+  packages — hard-coded in `config/digistore-products.json`, to reshape or delete
+- 💳 **Digistore24 billing**: IPN webhook with **SHA512 signature check**,
+  checkout link generation (`createBuyUrl`), API key hookup via
+  `node run.mjs ds24-connect`, GDPR opt-in
+- 🗄️ **Database** with an order state machine (paid/refunded/chargeback/…)
+- 🩺 Health checks (`/api/healthz`, `/api/readyz`) for easy deployment
 
-## Dein Weg zur fertigen SaaS (mit Claude Code)
+## Your path to a finished SaaS (with Claude Code)
 
-Starte Claude Code im Projekt und sag einfach, was du willst — die passenden
-**Skills** (im Ordner `.claude/skills/`) führen dich Schritt für Schritt. Jeder
-Schritt übergibt an den nächsten:
+Start Claude Code in the project and simply say what you want — the matching
+**skills** (in the `.claude/skills/` folder) guide you step by step. Every step
+hands over to the next:
 
-| # | Schritt | Skill | Was passiert |
+| # | Step | Skill | What happens |
 |---|---------|-------|--------------|
-| 0 | **Idee finden** | `market-research` | Interview zu deiner Expertise/Reichweite → Zielgruppe recherchieren → konkreter Produktvorschlag |
-| 1 | **App bauen** | `build-app` | Archetyp wählen, Datenmodell + Seiten anlegen |
-| 2 | **Bezahlung** | `setup-digistore` | Digistore24 verbinden: `make ds24-connect`, IPN, Checkout-Links |
-| 2b | **Abos & Token** *(optional)* | `billing-modes` | Feste Abos (monatl./jährl.) und/oder Prepaid-Token mit Auto-Aufladen + Abo-Selbstverwaltung |
-| 3 | **Sicherheit** | `security-gateway` | App auf Sicherheitslücken scannen und beheben |
-| 4 | **Skalierung** | `performance-gateway` | sicherstellen, dass ~100 parallele Nutzer flüssig laufen |
-| 5 | **Recht** | `compliance-check` | Impressum/Datenschutz/AGB/Widerruf + DSGVO |
-| 6 | **Live** | `go-live` | App online stellen und live verifizieren |
-| 7 | **Vermarktung** | `go-to-market` | Positionierung, Kanäle, Launch-Plan + fertiger Content (Landingpage, E-Mails, **Video-Skripte**) |
+| 0 | **Find an idea** | `market-research` | interview about your expertise/reach → research the target audience → concrete product proposal |
+| 1 | **Build the app** | `build-app` | pick an archetype, create the data model + pages |
+| 2 | **Payment** | `setup-digistore` | connect Digistore24: `node run.mjs ds24-connect`, IPN, checkout links |
+| 2b | **Subscriptions & tokens** *(optional)* | `billing-modes` | fixed subscriptions (monthly/yearly) and/or prepaid tokens with auto top-up + subscription self-service |
+| 3 | **Security** | `security-gateway` | scan the app for security holes and fix them |
+| 4 | **Scaling** | `performance-gateway` | make sure ~100 concurrent users run smoothly |
+| 5 | **Legal** | `compliance-check` | imprint/privacy policy/terms/right of withdrawal + GDPR |
+| 6 | **Live** | `go-live` | put the app online and verify it live |
+| 7 | **Marketing** | `go-to-market` | positioning, channels, launch plan + ready-made content (landing page, emails, **video scripts**) |
 
-Beim Bauen (Schritt 1) werden **automatisch Tests** geschrieben und ausgeführt
-(`npm run test`); die mitgelieferte CI prüft jeden Push. Durchgehend wacht
-**`guardrails`** über Geld, Secrets und Kundendaten.
+While building (step 1), **tests are written and run automatically**
+(`npm run test`); the bundled CI checks every push. Throughout, **`guardrails`**
+watches over money, secrets and customer data.
 
-**Du musst dir davon nichts merken.** Starte Claude Code im Projektordner und sag:
+**You don't have to remember any of this.** Start Claude Code in the project
+folder and say:
 
-> **„Baue meine App"**
+> **"Build my app"**
 
-Das ist die einzige Tür. Claude fragt dich dann, ob du schon eine Idee hast — und
-wenn nicht, findet ihr gemeinsam eine (Schritt 0). Alles Weitere ergibt sich
-Schritt für Schritt.
+That is the only door. Claude then asks you whether you already have an idea —
+and if not, the two of you find one together (step 0). Everything else follows
+step by step.
 
-## Schnellstart
+## What you need installed
+
+The template runs on **Linux, macOS and Windows** — Claude Code does, so this
+does too. The list is deliberately short:
+
+| | Linux | macOS | Windows |
+|---|---|---|---|
+| **Node.js ≥ 20** (with npm) | package manager / [nodejs.org](https://nodejs.org) | `brew install node` | `winget install OpenJS.NodeJS` |
+| **git** | usually present | `xcode-select --install` | [Git for Windows](https://git-scm.com/download/win) |
+| **Docker** (for Postgres) | [Docker Engine](https://docs.docker.com/engine/install/) | [Docker Desktop](https://www.docker.com/products/docker-desktop/) | [Docker Desktop](https://www.docker.com/products/docker-desktop/) (uses WSL2) |
+| **cloudflared** *(optional)* | [pkg.cloudflare.com](https://pkg.cloudflare.com/) | `brew install cloudflared` | `winget install --id Cloudflare.cloudflared` |
+
+`cloudflared` is only needed if you want to receive real Digistore24 purchases
+on your own machine while developing.
+
+**No `make` is needed** — the commands run through `node run.mjs`, which works
+in every shell. On **Windows** use **Git Bash** or **WSL2** (not PowerShell);
+Git for Windows brings Git Bash with it, and Claude Code needs it there anyway.
+
+Not sure whether everything is in place?
 
 ```bash
-claude             # Claude Code im Projektordner starten
+node run.mjs doctor
 ```
 
-Claude begrüßt dich und sagt dir, wie es weitergeht. Um Einrichtung, Datenbank
-und Start der App kümmert es sich mit dir zusammen — du musst keinen der unteren
-Befehle auswendig können.
+It says what is missing and how to install it on your system.
 
-### Für Entwickler: die Befehle direkt
+## Quick start
 
-Wer lieber selbst tippt: `make start` erledigt alles auf einmal —
-Abhängigkeiten installieren, `.env` aus `.env.example` anlegen, Postgres per
-Docker starten, Migrationen einspielen, App hochfahren (→ http://localhost:3000).
+```bash
+claude             # start Claude Code in the project folder
+```
 
-Zwei Dinge trägst du danach einmalig in `.env` ein:
+Claude greets you and tells you how things continue. It takes care of setup,
+database and starting the app together with you — you don't need to know any of
+the commands below by heart.
 
-- `AUTH_SECRET` — erzeugen mit `openssl rand -hex 32`
-- E-Mail-Versand für den Login (Postmark **oder** SMTP; siehe [`docs/auth-setup.md`](docs/auth-setup.md))
+### For developers: the commands directly
 
-Dann `make restart`.
+If you prefer to type yourself: `node run.mjs start` does everything in one go —
+install dependencies, create `.env` from `.env.example`, start Postgres via
+Docker, apply migrations, bring the app up (→ http://localhost:3000).
 
-Die wichtigsten Befehle im Überblick (`make` allein zeigt alle):
+`AUTH_SECRET` is generated for you on the first start. One thing you enter into
+`.env` yourself afterwards: mail delivery for sign-in (Postmark **or** SMTP —
+`node run.mjs mail-setup` walks you through it, details in
+[`docs/auth-setup.md`](docs/auth-setup.md)).
 
-| Befehl | Was passiert |
+Then `node run.mjs restart`.
+
+The most important commands at a glance (`node run.mjs` alone shows them all):
+
+| Command | What happens |
 |---|---|
-| `make start` | Datenbank + App starten (inkl. Migrationen) |
-| `make stop` | App + Datenbank stoppen |
-| `make test` | Tests (vitest) + TypeScript-Prüfung |
-| `make smoke` | jede Seite einmal aufrufen — findet „Internal Server Error" |
-| `make db-migrate` | ausstehende Datenbank-Migrationen einspielen |
-| `make db-reset` | lokale Datenbank leeren, neu migrieren, Seed einspielen |
-| `make mail-setup` | E-Mail-Versand einrichten (Postmark oder SMTP) + Testmail |
-| `make ds24-connect` | Digistore24-API-Key holen (Browser) und in `.env` speichern |
-| `make logs` | Log der laufenden App verfolgen |
-| `make` | alle Befehle anzeigen |
+| `node run.mjs start` | start database + app (including migrations) |
+| `node run.mjs stop` | stop app + database |
+| `node run.mjs test` | tests (vitest) + TypeScript check |
+| `node run.mjs smoke` | call every page once — finds "Internal Server Error" |
+| `node run.mjs db-migrate` | apply pending database migrations |
+| `node run.mjs db-reset` | wipe the local database, migrate anew, load the seed |
+| `node run.mjs mail-setup` | set up mail delivery (Postmark or SMTP) + test mail |
+| `node run.mjs ds24-connect` | fetch the Digistore24 API key (browser) and store it in `.env` |
+| `node run.mjs logs` | follow the log of the running app |
+| `node run.mjs doctor` | check that everything needed is installed |
+| `node run.mjs` | show all commands |
 
-Läuft auf deinem Rechner schon etwas auf Port 5432 oder 3000? Dann `DB_PORT` in
-`.env` ändern (und den Port in `DATABASE_URL` mitziehen) bzw. `make start PORT=3001`.
+Is something already running on port 3000 or 15432 (the database port) on your
+machine? Then you don't have to do a thing: `node run.mjs start` takes the next free
+port, writes it down and tells you which one it became. It remembers the app
+port along the way, so that `node run.mjs stop`, `node run.mjs status` and
+`node run.mjs smoke` hit the right one without being told. To force a particular
+port: `node run.mjs start --port 3005`.
 
 ## Deployment
 
-Ein Deploy-Artefakt (`output: "standalone"`), ideal für **Railway, Render oder
-Fly.io** + managed Postgres. Schritt-für-Schritt: siehe [`docs/DEPLOY.md`](docs/DEPLOY.md).
+One deploy artifact (`output: "standalone"`), ideal for **Railway, Render or
+Fly.io** + managed Postgres. Step by step: see [`docs/DEPLOY.md`](docs/DEPLOY.md).
 
-Danach in Digistore24 als IPN-URL hinterlegen:
-`https://DEINE-DOMAIN/api/ipn` (ohne weitere Pfadsegmente).
+Afterwards register it in Digistore24 as the IPN URL:
+`https://YOUR-DOMAIN/api/ipn` (without further path segments).
 
-## Projektstruktur
+## Project structure
 
 ```
-app/                Next.js App Router (Seiten + API-Routen)
-  api/ipn/          Digistore24 IPN-Webhook (Signaturprüfung + Statusmaschine)
-  optin/            öffentliche DSGVO-Opt-in-Seite
-  tarife/           öffentliche Tarif-Seite (rendert die Produkt-Registry)
-  dashboard/admin/  Admin-Bereich inkl. Benutzerverwaltung (users/)
-config/             Produkt-Registry (digistore-products.json — Tarife, Source of Truth)
-db/                 Drizzle-Schema + Verbindung (inkl. Abos + Token-Guthaben)
-lib/digistore/      DS24-Client, IPN-Verifikation, Produkt-Links, Billing-on-Demand,
-                    Zugangsdaten aus der Umgebung (settings.ts)
-lib/tokens/         Prepaid-Token: Pakete, Guthaben/Verbrauch, Auto-Aufladen
-lib/users/          Benutzerverwaltung: Regeln (rules.ts) + Datenbank (manage.ts)
-lib/roles.ts        Rollen ohne Server-Abhängigkeiten (auch im Browser nutzbar)
-drizzle/            Datenbank-Migrationen (eingecheckt, laufen überall gleich)
-scripts/db/         reset.mjs (lokale DB neu aufbauen) + seed.mjs (Ausgangsdaten)
-scripts/ds24/       Setup: Produkte synchronisieren, Freigabe, IPN einrichten
-scripts/users/      Accounts/Rollen per CLI anlegen
-scripts/dev/        tunnel.sh (Cloudflare Quick Tunnel für lokale IPNs)
-.claude/skills/     geführte Skills für den Ausbau mit Claude Code
-Makefile            alle Befehle für den Alltag (make = Übersicht)
+app/                Next.js App Router (pages + API routes)
+  api/ipn/          Digistore24 IPN webhook (signature check + state machine)
+  optin/            public GDPR opt-in page
+  plans/            public plan page (renders the product registry)
+  dashboard/admin/  admin area including user management (users/)
+config/             product registry (digistore-products.json — plans, source of truth)
+db/                 Drizzle schema + connection (incl. subscriptions + token balance)
+lib/digistore/      DS24 client, IPN verification, product links, billing on demand,
+                    credentials from the environment (settings.ts)
+lib/tokens/         prepaid tokens: packages, balance/consumption, auto top-up
+lib/users/          user management: rules (rules.ts) + database (manage.ts)
+lib/roles.ts        roles without server dependencies (usable in the browser too)
+drizzle/            database migrations (checked in, run the same everywhere)
+scripts/db/         reset.mjs (rebuild the local DB) + seed.mjs (initial data)
+scripts/ds24/       setup: sync products, approval, set up IPN
+scripts/users/      create accounts/roles via CLI
+scripts/ds24/       tunnel.mjs (Cloudflare Quick Tunnel for local IPNs)
+.claude/skills/     guided skills for extending with Claude Code
+run.mjs             all commands for everyday work (node run.mjs = overview)
 ```
 
-Datenbank & Migrationen: siehe [`docs/database.md`](docs/database.md).
-Umgebungen (DEV/STAGING/PROD) & lokale Webhooks: siehe [`docs/environments.md`](docs/environments.md).
+Database & migrations: see [`docs/database.md`](docs/database.md).
+Environments (DEV/STAGING/PROD) & local webhooks: see [`docs/environments.md`](docs/environments.md).
 
-## Sicherheit
+## Security
 
-- IPN-Signaturprüfung (SHA512) ist **Pflicht** — niemals deaktivieren.
-- API-Keys/Secrets gehören in `.env` bzw. die Secret-Verwaltung deines Hosters,
-  **nie in den Code**.
-- Alles außer öffentlichen Seiten (Start, Login, Opt-in) und dem IPN-Endpoint ist
-  auth-geschützt.
+- The IPN signature check (SHA512) is **mandatory** — never switch it off.
+- API keys/secrets belong in `.env` or in your host's secret management,
+  **never in the code**.
+- Auth protection is **opt-in**: `proxy.ts` guards only the paths in its
+  `matcher` (today `/dashboard/*`). A new page holding customer data is public
+  until you add it there. Public by design: home, login, `/plans`, opt-in and
+  the IPN endpoint.

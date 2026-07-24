@@ -1,75 +1,87 @@
 {
-  "_comment": "Zentrale Produkt-Registry (Source of Truth) — hier stehen deine Tarife. Jedes Angebot = EIN Digistore24-Produkt. Diese Liste ist bewusst hart kodiert: gestalte sie um oder loesche, was du nicht brauchst. Sie speist BEIDES: die Tarif-Seite (/tarife) und das Sync-Skript (scripts/ds24/sync-products.mjs), das die Produkte bei Digistore24 anlegt und die 'productId' hier zurueckschreibt. Der PREIS wird NICHT am DS24-Produkt gepflegt (die API verwirft data[amount]), sondern beim Checkout aus 'priceCents'/'billingInterval' als payment_plan mitgegeben — siehe lib/digistore/buyUrl.ts und docs/digistore-billing-modes.md.",
+  "_comment": "Central product registry (source of truth) — your plans live here. Every offering = ONE Digistore24 product. This list is deliberately hard-coded: reshape it or delete what you do not need. It feeds BOTH the plans page (/plans) and the sync script (scripts/ds24/sync-products.mjs), which creates the products at Digistore24 and writes the 'productId' back here. The PRICE stays HERE: it is not set on the DS24 product (the API discards data[amount]) but travels with every checkout call as a payment_plan built from 'priceCents'/'currency'/'billingInterval' — see lib/digistore/checkout.ts and docs/digistore-billing-modes.md. Do not create payment plans in the Digistore24 interface; the price would then live in two places and drift. The keys below ('basis_monatlich', 'pro', …) are identifiers, not display text: a token key travels to Digistore24 as 'tokens:<key>' in the custom field and is matched there by the IPN handler. Rename them only before your first live sale.",
   "products": {
     "basis_monatlich": {
-      "name": "Basis (monatlich)",
-      "tagline": "Der unkomplizierte Einstieg",
-      "description": "Voller Zugang zu allen Basis-Funktionen. Monatlich kuendbar.",
+      "name": "Basic (monthly)",
+      "tagline": "The uncomplicated way in",
+      "description": "Full access to all basic features. Cancel monthly.",
       "kind": "subscription",
       "billingInterval": "1_month",
       "priceCents": 1900,
       "currency": "EUR",
       "features": [
-        "Alle Basis-Funktionen",
-        "Unbegrenzte Nutzung",
-        "E-Mail-Support",
-        "Monatlich kuendbar"
+        "All basic features",
+        "Unlimited use",
+        "Email support",
+        "Cancel monthly"
       ],
       "imageUrl": null,
       "productId": null
     },
     "basis_jaehrlich": {
-      "name": "Basis (jaehrlich)",
-      "tagline": "Zwei Monate geschenkt",
-      "description": "Derselbe Funktionsumfang wie das Monatsabo, jaehrlich abgerechnet.",
+      "name": "Basic (yearly)",
+      "tagline": "Two months free",
+      "description": "The same feature set as the monthly plan, billed yearly.",
       "kind": "subscription",
       "billingInterval": "12_month",
       "priceCents": 19000,
       "currency": "EUR",
       "highlight": true,
       "features": [
-        "Alle Basis-Funktionen",
-        "Unbegrenzte Nutzung",
-        "E-Mail-Support",
-        "Guenstiger als 12 Monatsabos"
+        "All basic features",
+        "Unlimited use",
+        "Email support",
+        "Cheaper than 12 monthly plans"
       ],
       "imageUrl": null,
       "productId": null
     },
     "starter": {
-      "name": "Starter Token",
-      "tagline": "Zum Ausprobieren",
-      "description": "1.000 Token als einmaliges Guthaben. Kein Abo.",
+      "name": "Starter Tokens",
+      "tagline": "To try it out",
+      "description": "1,000 tokens as a one-off balance. No subscription.",
       "kind": "token",
       "credits": 1000,
       "priceCents": 900,
       "currency": "EUR",
-      "features": ["1.000 Token", "Kein Abo", "Guthaben verfaellt nicht"],
+      "features": [
+        "1,000 tokens",
+        "No subscription",
+        "Balance does not expire"
+      ],
       "imageUrl": null,
       "productId": null
     },
     "pro": {
-      "name": "Pro Token",
-      "tagline": "Fuer regelmaessige Nutzung",
-      "description": "5.000 Token als einmaliges Guthaben. Kein Abo.",
+      "name": "Pro Tokens",
+      "tagline": "For regular use",
+      "description": "5,000 tokens as a one-off balance. No subscription.",
       "kind": "token",
       "credits": 5000,
       "priceCents": 3900,
       "currency": "EUR",
       "highlight": true,
-      "features": ["5.000 Token", "Kein Abo", "Guthaben verfaellt nicht"],
+      "features": [
+        "5,000 tokens",
+        "No subscription",
+        "Balance does not expire"
+      ],
       "imageUrl": null,
       "productId": null
     },
     "business": {
-      "name": "Business Token",
-      "tagline": "Bester Preis je Token",
-      "description": "15.000 Token als einmaliges Guthaben. Kein Abo.",
+      "name": "Business Tokens",
+      "tagline": "Best price per token",
+      "description": "15,000 tokens as a one-off balance. No subscription.",
       "kind": "token",
       "credits": 15000,
       "priceCents": 9900,
       "currency": "EUR",
-      "features": ["15.000 Token", "Kein Abo", "Guthaben verfaellt nicht"],
+      "features": [
+        "15,000 tokens",
+        "No subscription",
+        "Balance does not expire"
+      ],
       "imageUrl": null,
       "productId": null
     }

@@ -1,72 +1,176 @@
 "use client";
 
-// Client-Komponenten der Benutzerverwaltung.
+// Client components of the user management screen.
 //
-// Die eigentliche Logik liegt in den Server Actions (actions.ts) — hier steht
-// nur die Darstellung plus useActionState für Fehlermeldungen und den
-// Lade-Zustand. Formulare funktionieren dadurch auch ohne JavaScript.
-import { useActionState } from "react";
-// Bewusst aus lib/roles (nicht lib/authz): authz hängt an auth.ts und damit am
-// Mailversand — das gehört nicht ins Browser-Bundle.
-import { roleLabel, type Role } from "@/lib/roles";
+// The actual logic lives in the server actions (actions.ts) — all that is here
+// is the presentation plus useActionState for the pending state. Feedback goes
+// through `useActionToast`, deleting through a confirmation (AlertDialog): a
+// click that removes an account for good must not be the last one.
+//
+// This page doubles as the blueprint for your own management screens — table,
+// row menu, dialog and short message in the combination that applies
+// throughout the template.
+
+import * as React from "react";
+import { useActionState, useEffect, useState, useTransition } from "react";
+import Link from "next/link";
+import { useTranslations, useFormatter } from "next-intl";
+import {
+  MoreHorizontal,
+  Trash2,
+  ShieldCheck,
+  UserIcon,
+  Plus,
+  Users,
+  Mail,
+  AtSign,
+  Ban,
+  CircleCheck,
+} from "lucide-react";
+
+// Deliberately from lib/roles (not lib/authz): authz depends on auth.ts and
+// therefore on mail sending — that does not belong in the browser bundle.
+import { type Role } from "@/lib/roles";
+import { cn } from "@/lib/utils";
+import { useActionToast } from "@/hooks/use-action-toast";
+import { RoleBadge } from "@/components/role-badge";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   createUserAction,
   setRoleAction,
+  setBlockedAction,
+  setEmailAction,
+  sendLoginLinkAction,
   deleteUserAction,
   type ActionState,
 } from "./actions";
 
 const EMPTY: ActionState = { error: null, ok: null };
 
-function Meldung({ state }: { state: ActionState }) {
-  if (state.error)
-    return (
-      <p role="alert" className="text-sm text-destructive">
-        {state.error}
-      </p>
-    );
-  if (state.ok)
-    return <p className="text-sm text-muted-foreground">{state.ok}</p>;
-  return null;
-}
-
-export function CreateUserForm() {
+export function CreateUserDialog() {
+  const t = useTranslations("users");
+  const tRoles = useTranslations("roles");
+  const tCommon = useTranslations("common");
+  const [open, setOpen] = useState(false);
   const [state, action, pending] = useActionState(createUserAction, EMPTY);
 
+  useActionToast(state);
+  // Close after creating; leave open on error so the input is not lost.
+  useEffect(() => {
+    if (state.ok) setOpen(false);
+  }, [state]);
+
   return (
-    <form action={action} className="flex flex-col gap-3 rounded-lg border p-4">
-      <h2 className="font-medium">Benutzer anlegen</h2>
-      <div className="flex flex-wrap items-end gap-3">
-        <label className="flex flex-col gap-1 text-sm">
-          E-Mail
-          <input
-            name="email"
-            type="email"
-            required
-            placeholder="kunde@example.de"
-            className="rounded-lg border px-3 py-2"
-          />
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          Name (optional)
-          <input name="name" className="rounded-lg border px-3 py-2" />
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          Rolle
-          <select name="role" defaultValue="member" className="rounded-lg border px-3 py-2">
-            <option value="member">Nutzer</option>
-            <option value="owner">Admin</option>
-          </select>
-        </label>
-        <button
-          disabled={pending}
-          className="rounded-lg bg-primary px-4 py-2 text-primary-foreground disabled:opacity-50"
-        >
-          {pending ? "…" : "Anlegen"}
-        </button>
-      </div>
-      <Meldung state={state} />
-    </form>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button>
+          <Plus aria-hidden />
+          {t("createTrigger")}
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <form action={action}>
+          <DialogHeader>
+            <DialogTitle>{t("createTitle")}</DialogTitle>
+            <DialogDescription>{t("createDescription")}</DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="new-email">{t("email")}</Label>
+              <Input
+                id="new-email"
+                name="email"
+                type="email"
+                required
+                placeholder={t("emailPlaceholder")}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="new-name">
+                {t("name")}{" "}
+                <span className="text-muted-foreground font-normal">
+                  ({t("nameOptional")})
+                </span>
+              </Label>
+              <Input id="new-name" name="name" autoComplete="name" />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="new-role">{t("role")}</Label>
+              {/* `name` makes Radix submit a hidden field — the selection thus
+                  lands in FormData like any other input. */}
+              <Select name="role" defaultValue="member">
+                <SelectTrigger id="new-role" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="member">{tRoles("member")}</SelectItem>
+                  <SelectItem value="owner">{tRoles("owner")}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" variant="outline">
+                {tCommon("cancel")}
+              </Button>
+            </DialogClose>
+            <Button type="submit" disabled={pending}>
+              {pending ? tCommon("loading") : t("createSubmit")}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -76,6 +180,8 @@ interface Row {
   name: string | null;
   role: string;
   createdAt: Date;
+  /** Blocked since — null means "not blocked". */
+  blockedAt: Date | null;
 }
 
 export function UserTable({
@@ -85,73 +191,359 @@ export function UserTable({
   users: Row[];
   currentUserId: string;
 }) {
+  const t = useTranslations("users");
+  const tCommon = useTranslations("common");
+  const format = useFormatter();
+
   const [roleState, roleAction] = useActionState(setRoleAction, EMPTY);
-  const [delState, delAction] = useActionState(deleteUserAction, EMPTY);
+  const [blockState, blockAction] = useActionState(setBlockedAction, EMPTY);
+  const [linkState, linkAction] = useActionState(sendLoginLinkAction, EMPTY);
+  const [deleteState, deleteAction] = useActionState(deleteUserAction, EMPTY);
+  const [isPending, startAction] = useTransition();
+  // The user whose delete confirmation is open (null = none).
+  const [toDelete, setToDelete] = useState<Row | null>(null);
+  // …the same for the block confirmation and the email dialog.
+  const [toBlock, setToBlock] = useState<Row | null>(null);
+  const [toEdit, setToEdit] = useState<Row | null>(null);
+
+  useActionToast(roleState);
+  useActionToast(blockState);
+  useActionToast(linkState);
+  useActionToast(deleteState);
+
+  // The confirmation only closes once the delete succeeded. If it fails (e.g.
+  // last admin) it stays up — the message explains why.
+  useEffect(() => {
+    if (deleteState.ok) setToDelete(null);
+  }, [deleteState]);
+
+  useEffect(() => {
+    if (blockState.ok) setToBlock(null);
+  }, [blockState]);
+
+  /** Call a server action outside a form (menu entry / button). */
+  function run(
+    action: (formData: FormData) => void,
+    fields: Record<string, string>,
+  ) {
+    const formData = new FormData();
+    for (const [key, value] of Object.entries(fields)) formData.set(key, value);
+    startAction(() => action(formData));
+  }
+
+  if (users.length === 0) {
+    return (
+      <EmptyState
+        icon={Users}
+        title={t("emptyTitle")}
+        description={t("emptyBody")}
+      />
+    );
+  }
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="overflow-x-auto rounded-lg border">
-        <table className="w-full text-sm">
-          <thead className="border-b bg-muted/50 text-left">
-            <tr>
-              <th className="p-3 font-medium">E-Mail</th>
-              <th className="p-3 font-medium">Rolle</th>
-              <th className="p-3 font-medium">Angelegt</th>
-              <th className="p-3 font-medium">Aktionen</th>
-            </tr>
-          </thead>
-          <tbody>
-            {users.map((u) => {
-              const isSelf = u.id === currentUserId;
-              const nextRole: Role = u.role === "owner" ? "member" : "owner";
+    <>
+      <div className="overflow-hidden rounded-xl border">
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-muted/50">
+              <TableHead>{t("columnUser")}</TableHead>
+              <TableHead>{t("columnRole")}</TableHead>
+              <TableHead className="hidden sm:table-cell">
+                {t("columnCreated")}
+              </TableHead>
+              <TableHead className="w-12 text-right">
+                <span className="sr-only">{tCommon("actions")}</span>
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {users.map((user) => {
+              const isSelf = user.id === currentUserId;
+              const nextRole: Role = user.role === "owner" ? "member" : "owner";
+              const isBlocked = user.blockedAt !== null;
               return (
-                <tr key={u.id} className="border-b last:border-0">
-                  <td className="p-3">
-                    {u.email ?? "—"}
-                    {u.name ? (
-                      <span className="text-muted-foreground"> ({u.name})</span>
-                    ) : null}
-                    {isSelf ? (
-                      <span className="text-muted-foreground"> — du</span>
-                    ) : null}
-                  </td>
-                  <td className="p-3">{roleLabel(u.role)}</td>
-                  <td className="p-3 text-muted-foreground">
-                    {u.createdAt.toLocaleDateString("de-DE")}
-                  </td>
-                  <td className="p-3">
-                    <div className="flex flex-wrap gap-2">
-                      {/* Selbst-Degradierung und Selbst-Löschung sind serverseitig
-                          verboten — hier blenden wir die Knöpfe zusätzlich aus. */}
-                      {isSelf ? (
-                        <span className="text-muted-foreground">—</span>
-                      ) : (
-                        <>
-                          <form action={roleAction}>
-                            <input type="hidden" name="id" value={u.id} />
-                            <input type="hidden" name="role" value={nextRole} />
-                            <button className="rounded-lg border px-3 py-1">
-                              zu {roleLabel(nextRole)} machen
-                            </button>
-                          </form>
-                          <form action={delAction}>
-                            <input type="hidden" name="id" value={u.id} />
-                            <button className="rounded-lg border border-destructive px-3 py-1 text-destructive">
-                              Löschen
-                            </button>
-                          </form>
-                        </>
+                <TableRow key={user.id}>
+                  <TableCell>
+                    <div className="flex flex-col">
+                      {/* The address is the way into the Member's billing
+                          state (Epic 3) — deliberately the CELL and not an
+                          entry in the row menu: the signed-in Operator's own
+                          row has no menu at all (see below), and an Operator
+                          correcting their own balance has to get there too.
+                          Blocked rows are dimmed: the state has to register
+                          while scrolling past, not only once you read the
+                          badge. */}
+                      <Link
+                        href={`/dashboard/admin/users/${encodeURIComponent(user.id)}`}
+                        className={cn(
+                          "font-medium hover:underline",
+                          isBlocked && "text-muted-foreground line-through",
+                        )}
+                      >
+                        {user.email ?? tCommon("none")}
+                        {isSelf && (
+                          <span className="text-muted-foreground font-normal no-underline">
+                            {" "}
+                            · {t("you")}
+                          </span>
+                        )}
+                      </Link>
+                      {user.name && (
+                        <span className="text-muted-foreground text-sm">
+                          {user.name}
+                        </span>
                       )}
                     </div>
-                  </td>
-                </tr>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <RoleBadge role={user.role} />
+                      {isBlocked && (
+                        <Badge variant="destructive">
+                          <Ban aria-hidden />
+                          {t("statusBlocked")}
+                        </Badge>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground hidden sm:table-cell">
+                    {format.dateTime(user.createdAt, { dateStyle: "medium" })}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {/* Self-demotion and self-deletion are forbidden server
+                        side — here we additionally hide the buttons. */}
+                    {isSelf ? (
+                      <span className="text-muted-foreground">
+                        {tCommon("none")}
+                      </span>
+                    ) : (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            disabled={isPending}
+                            aria-label={tCommon("actions")}
+                          >
+                            <MoreHorizontal aria-hidden />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-52">
+                          <DropdownMenuLabel>
+                            {user.email ?? tCommon("none")}
+                          </DropdownMenuLabel>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onSelect={() =>
+                              run(roleAction, {
+                                id: user.id,
+                                role: nextRole,
+                              })
+                            }
+                          >
+                            {nextRole === "owner" ? (
+                              <ShieldCheck aria-hidden />
+                            ) : (
+                              <UserIcon aria-hidden />
+                            )}
+                            {nextRole === "owner" ? t("promote") : t("demote")}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onSelect={() => setToEdit(user)}>
+                            <AtSign aria-hidden />
+                            {t("changeEmail")}
+                          </DropdownMenuItem>
+                          {/* No password reset: this app has no passwords. The
+                              counterpart is the sign-in link. Blocked users get
+                              none — it would lead nowhere. */}
+                          <DropdownMenuItem
+                            disabled={isBlocked || !user.email}
+                            onSelect={() => run(linkAction, { id: user.id })}
+                          >
+                            <Mail aria-hidden />
+                            {t("sendLoginLink")}
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          {isBlocked ? (
+                            // Unblocking takes nothing away from anyone — that
+                            // may go without a confirmation. Blocking may not
+                            // (see below).
+                            <DropdownMenuItem
+                              onSelect={() =>
+                                run(blockAction, {
+                                  id: user.id,
+                                  blocked: "false",
+                                })
+                              }
+                            >
+                              <CircleCheck aria-hidden />
+                              {t("unblock")}
+                            </DropdownMenuItem>
+                          ) : (
+                            <DropdownMenuItem
+                              variant="destructive"
+                              onSelect={() => setToBlock(user)}
+                            >
+                              <Ban aria-hidden />
+                              {t("block")}
+                            </DropdownMenuItem>
+                          )}
+                          <DropdownMenuItem
+                            variant="destructive"
+                            onSelect={() => setToDelete(user)}
+                          >
+                            <Trash2 aria-hidden />
+                            {t("delete")}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                  </TableCell>
+                </TableRow>
               );
             })}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
-      <Meldung state={roleState} />
-      <Meldung state={delState} />
-    </div>
+
+      {/* Blocking asks first: it throws someone out of their running session
+          immediately. Being reversible does not make it casual. */}
+      <AlertDialog
+        open={toBlock !== null}
+        onOpenChange={(open) => !open && setToBlock(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t("blockTitle", { email: toBlock?.email ?? tCommon("none") })}
+            </AlertDialogTitle>
+            <AlertDialogDescription>{t("blockBody")}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{tCommon("cancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={isPending}
+              onClick={(event) => {
+                event.preventDefault();
+                if (toBlock) {
+                  run(blockAction, { id: toBlock.id, blocked: "true" });
+                }
+              }}
+            >
+              {isPending ? tCommon("loading") : t("blockConfirm")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <EditEmailDialog user={toEdit} onClose={() => setToEdit(null)} />
+
+      <AlertDialog
+        open={toDelete !== null}
+        onOpenChange={(open) => !open && setToDelete(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t("deleteTitle", {
+                email: toDelete?.email ?? tCommon("none"),
+              })}
+            </AlertDialogTitle>
+            <AlertDialogDescription>{t("deleteBody")}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{tCommon("cancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              // Red, not the accent color: the button that removes something
+              // for good has to look different from the one that creates.
+              variant="destructive"
+              disabled={isPending}
+              // Do not close automatically: the confirmation disappears only
+              // once the server has confirmed (see useEffect above).
+              onClick={(event) => {
+                event.preventDefault();
+                if (toDelete) run(deleteAction, { id: toDelete.id });
+              }}
+            >
+              {isPending ? tCommon("loading") : t("deleteConfirm")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+}
+
+/**
+ * Change a user's email address.
+ *
+ * This is more than a profile field: here the address IS the identity — it is
+ * where the sign-in link goes. After the change, whoever held the old address
+ * can no longer get in, and whoever holds the new one can. That is why the
+ * warning sits in the dialog and not only in the documentation.
+ *
+ * Controlled from outside (`user` = open for this user, `null` = closed), so
+ * the table has one dialog rather than one per row.
+ */
+function EditEmailDialog({
+  user,
+  onClose,
+}: {
+  user: { id: string; email: string | null } | null;
+  onClose: () => void;
+}) {
+  const t = useTranslations("users");
+  const tCommon = useTranslations("common");
+  const [state, action, pending] = useActionState(setEmailAction, EMPTY);
+
+  useActionToast(state);
+  // Close on success only — otherwise the rejected address (e.g. already
+  // taken) would be gone and would have to be typed again.
+  useEffect(() => {
+    if (state.ok) onClose();
+    // onClose deliberately left out of the dependencies: it is recreated on
+    // every render of the table and would otherwise fire the effect even when
+    // the result has not changed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state]);
+
+  return (
+    <Dialog open={user !== null} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent>
+        {/* `key` forces a fresh form per user — without it, opening the
+            dialog a second time would still show the first one's address. */}
+        <form action={action} key={user?.id}>
+          <input type="hidden" name="id" value={user?.id ?? ""} />
+          <DialogHeader>
+            <DialogTitle>{t("changeEmailTitle")}</DialogTitle>
+            <DialogDescription>{t("changeEmailDescription")}</DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-2 py-4">
+            <Label htmlFor="edit-email">{t("email")}</Label>
+            <Input
+              id="edit-email"
+              name="email"
+              type="email"
+              required
+              defaultValue={user?.email ?? ""}
+              placeholder={t("emailPlaceholder")}
+            />
+          </div>
+
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" variant="outline">
+                {tCommon("cancel")}
+              </Button>
+            </DialogClose>
+            <Button type="submit" disabled={pending}>
+              {pending ? tCommon("loading") : t("changeEmailSubmit")}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -1,40 +1,41 @@
-// Checkout-URL-Erzeugung über Digistore24 `createBuyUrl` mit Custom Payment Plan
-// und Caching. Referenz: docs/digistore-createbuyurl.md.
+// Building checkout URLs through Digistore24 `createBuyUrl` with a custom
+// payment plan and caching. Reference: docs/digistore-createbuyurl.md.
 //
-// Kernidee: Preis/Währung/Intervall werden zur Laufzeit als kompletter
-// payment_plan[...] mitgeschickt — nicht in Digistore gepflegt. Ergebnis ist eine
-// kurzlebige (24h) signierte Checkout-URL. Diese wird pro Angebot gecacht; ändert
-// sich das Angebot, entsteht eine neue URL.
+// Core idea: price, currency and interval are sent at runtime as a complete
+// payment_plan[...] — not maintained inside Digistore. The result is a
+// short-lived (24h) signed checkout URL. It is cached per offering; if the
+// offering changes, a new URL is created.
 import crypto from "crypto";
 import { ds24Post } from "./client";
+import { identifiesMember } from "./custom";
 import { db } from "@/db";
 import { buyUrlCache } from "@/db/schema";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 export interface Offer {
-  /** Stabiler Schlüssel des Angebots (z. B. "gold"). Cache-Schlüssel pro Vendor. */
+  /** Stable key of the offering (e.g. "gold"). The cache key. */
   key: string;
-  /** Digistore-Produkt-ID des zugehörigen Basisprodukts. */
+  /** Digistore product ID of the underlying base product. */
   productId: string;
-  /** Preis in Cent. */
+  /** Price in cents. */
   priceCents: number;
-  /** Währung, Default "EUR". */
+  /** Currency, default "EUR". */
   currency?: string;
-  /** z. B. "1_month" | "12_month". Weglassen = Einmalzahlung. */
+  /** e.g. "1_month" | "12_month". Omit for a one-off payment. */
   billingInterval?: string;
-  /** 0 = Abo (unbegrenzt), 1 = Einmalzahlung. Default: 0 wenn Intervall gesetzt, sonst 1. */
+  /** 0 = subscription (open-ended), 1 = one-off. Default: 0 when an interval is set, else 1. */
   numberOfInstallments?: number;
-  /** Anzeigetitel auf der Checkout-Seite (Platzhalter {TARIF}). */
+  /** Display title on the checkout page (sent as `placeholders[TITLE]`). */
   title?: string;
-  /** Anzeigebeschreibung (Platzhalter {DESCRIPTION}). */
+  /** Display description (placeholder {DESCRIPTION}). */
   description?: string;
-  /** Gültigkeit der Buy-URL, Default "24h". */
+  /** Lifetime of the buy URL, default "24h". */
   validUntil?: string;
   /**
-   * settings[force_rebilling]=Y — erzwingt hinterlegte Zahlungsdaten, auch bei
-   * Einmalkäufen. Voraussetzung, um später per createBillingOnDemand (Token-
-   * Nachkauf/Auto-Aufladen) gegen diesen Kauf abzubuchen. Bei echten Abos
-   * (billingInterval) ist es nicht nötig, schadet aber nicht.
+   * settings[force_rebilling]=Y — forces stored payment details, even for
+   * one-off purchases. A prerequisite for later charging against this purchase
+   * via createBillingOnDemand (token repurchase / auto top-up). For real
+   * subscriptions (billingInterval) it is not needed, but does no harm.
    */
   forceRebilling?: boolean;
 }
@@ -46,7 +47,7 @@ export interface BuyerContext {
   trackingKey?: string;
   upgradeOrderId?: string;
   upgradeType?: "upgrade" | "downgrade";
-  /** Freier Kontext, der im IPN unter tracking[custom] ankommt. */
+  /** Free-form context that arrives in the IPN under tracking[custom]. */
   customTracking?: string;
 }
 
@@ -54,7 +55,7 @@ function euros(cents: number): string {
   return (cents / 100).toFixed(2);
 }
 
-/** Baut den x-www-form-urlencoded Body für createBuyUrl (pure, testbar). */
+/** Builds the x-www-form-urlencoded body for createBuyUrl (pure, testable). */
 export function buildBuyUrlBody(
   offer: Offer,
   ctx: BuyerContext = {},
@@ -110,9 +111,30 @@ export function buildBuyUrlBody(
 }
 
 /**
- * Ruft createBuyUrl auf und gibt die Buy-URL zurück. Wirft bei Fehler
- * (kein Mock-Fallback). Bei ungültigem Affiliate wird einmal ohne Affiliate
- * wiederholt, damit ein Tippfehler den Kauf nicht komplett verhindert.
+ * Does this error look like "the affiliate does not exist"?
+ *
+ * Digistore24 rejects an unknown affiliate with DS_ERR_NOT_FOUND and puts the
+ * name we sent into the message (createBuyUrl.php → `_validate_affiliate`).
+ * There is no machine-readable marker beyond that, so this is deliberately a
+ * heuristic: the name we sent has to appear in the message.
+ *
+ * Narrow on purpose. Retrying on *any* error would swallow a network failure,
+ * an invalid key or an unknown product and report the second attempt's error
+ * instead of the real cause.
+ */
+export function isUnknownAffiliateError(err: unknown, affiliate: string): boolean {
+  if (!affiliate) return false;
+  const message = err instanceof Error ? err.message : String(err);
+  return message.toLowerCase().includes(affiliate.toLowerCase());
+}
+
+/**
+ * Calls createBuyUrl and returns the buy URL. Throws on error (no mock
+ * fallback). If — and only if — the affiliate is unknown, it retries once
+ * without the affiliate so a typo in a partner link does not block the purchase
+ * entirely. If that retry fails too, the ORIGINAL error is thrown: it names the
+ * actual cause, the retry only says that a link without an affiliate failed as
+ * well.
  */
 export async function createBuyUrl(
   apiKey: string,
@@ -126,18 +148,40 @@ export async function createBuyUrl(
   try {
     const data = await ds24Post("createBuyUrl", apiKey, params);
     const url = (data.data as { url?: string } | undefined)?.url;
-    if (!url) throw new Error("Digistore24 lieferte keine Buy-URL zurück.");
+    if (!url) throw new Error("Digistore24 returned no buy URL.");
     return url;
   } catch (err) {
-    if (ctx.affiliate) {
-      return createBuyUrl(apiKey, offer, { ...ctx, affiliate: undefined }, thankyouUrl);
+    if (!ctx.affiliate || !isUnknownAffiliateError(err, ctx.affiliate)) throw err;
+    try {
+      return await createBuyUrl(
+        apiKey,
+        offer,
+        { ...ctx, affiliate: undefined },
+        thankyouUrl,
+      );
+    } catch {
+      throw err;
     }
-    throw err;
   }
 }
 
-/** sha256 über die DS24-relevanten Angebotsfelder (erkennt Angebotsänderungen). */
-export function offerHash(offer: Offer, thankyouUrl?: string): string {
+/**
+ * sha256 over the DS24-relevant offer fields (detects offer changes).
+ *
+ * `customTracking` belongs in here even though it lives on the context. A URL
+ * only reaches this function when the value is one of the CACHEABLE forms —
+ * an intent reference makes the URL user-specific and bypasses the cache
+ * entirely (see isUserSpecific). What is left are the token markers, and they
+ * must still be told apart: were `customTracking` left out of the hash, two
+ * offerings sharing an offerKey but differing in their marker
+ * ("tokens:<key>") would serve each other's cached URL and credit the wrong
+ * package.
+ */
+export function offerHash(
+  offer: Offer,
+  thankyouUrl?: string,
+  customTracking?: string,
+): string {
   const stable = JSON.stringify({
     productId: offer.productId,
     priceCents: offer.priceCents,
@@ -149,46 +193,62 @@ export function offerHash(offer: Offer, thankyouUrl?: string): string {
     validUntil: offer.validUntil ?? "24h",
     forceRebilling: offer.forceRebilling ?? false,
     thankyouUrl: thankyouUrl ?? null,
+    customTracking: customTracking ?? null,
   });
   return crypto.createHash("sha256").update(stable).digest("hex");
 }
 
-function isUserSpecific(ctx: BuyerContext): boolean {
+/**
+ * Is this URL for one particular person, and therefore unshareable?
+ *
+ * `customTracking` is tested by CONTENT, not by presence — that distinction is
+ * load-bearing. Token packages set `customTracking` on every offering
+ * ("tokens:<key>", see checkout.ts), so asking merely whether the field is set
+ * would make every token card a live Digistore24 call on every page render,
+ * which is exactly what the cache exists to prevent. Only a buyer identity
+ * ("m:<memberId>;t:<token>") names a Member.
+ *
+ * Exported so the distinction can be tested directly: getting it wrong is
+ * invisible until either the cache stops working or one buyer's checkout link
+ * is served to another.
+ */
+export function isUserSpecific(ctx: BuyerContext): boolean {
   return Boolean(
     ctx.buyer ||
       ctx.affiliate ||
       ctx.campaignKey ||
       ctx.trackingKey ||
-      ctx.upgradeOrderId,
+      ctx.upgradeOrderId ||
+      identifiesMember(ctx.customTracking),
   );
 }
 
 export interface GetOrCreateArgs {
   apiKey: string;
-  /** Vendor (Betreiber), Cache-Namespace. */
-  userId: string;
   offer: Offer;
   ctx?: BuyerContext;
   thankyouUrl?: string;
-  /** Cache-TTL in Stunden. Default 20 (Sicherheitspuffer unter DS24s 24h). */
+  /** Cache TTL in hours. Default 20 (safety margin below DS24's 24h). */
   ttlHours?: number;
-  /** Injizierbar für Tests; Default: echtes createBuyUrl. */
+  /** Injectable for tests; default: the real createBuyUrl. */
   creator?: (
     apiKey: string,
     offer: Offer,
     ctx: BuyerContext,
     thankyouUrl?: string,
   ) => Promise<string>;
-  /** Injizierbar für Tests. */
+  /** Injectable for tests. */
   now?: Date;
 }
 
 /**
- * Liefert eine gecachte Buy-URL oder erzeugt eine neue.
- * - Nutzerspezifische URLs (buyer/affiliate/campaign/tracking/upgrade) werden
- *   nie gecacht.
- * - Ändert sich das Angebot (offerHash) oder ist die TTL abgelaufen, wird neu
- *   erzeugt und der Cache aktualisiert.
+ * Returns a cached buy URL or creates a new one.
+ * - User-specific URLs are never cached: buyer/affiliate/campaign/tracking/
+ *   upgrade, and any URL carrying a buyer identity. The cache row
+ *   is keyed per offering with no member dimension, so a personal URL written
+ *   there would be handed to every later visitor.
+ * - If the offering changes (offerHash) or the TTL has expired, a new one is
+ *   created and the cache updated.
  */
 export async function getOrCreateBuyUrl(args: GetOrCreateArgs): Promise<string> {
   const ctx = args.ctx ?? {};
@@ -199,13 +259,10 @@ export async function getOrCreateBuyUrl(args: GetOrCreateArgs): Promise<string> 
   }
 
   const now = args.now ?? new Date();
-  const hash = offerHash(args.offer, args.thankyouUrl);
+  const hash = offerHash(args.offer, args.thankyouUrl, ctx.customTracking);
 
   const existing = await db.query.buyUrlCache.findFirst({
-    where: and(
-      eq(buyUrlCache.userId, args.userId),
-      eq(buyUrlCache.offerKey, args.offer.key),
-    ),
+    where: eq(buyUrlCache.offerKey, args.offer.key),
   });
   if (existing && existing.offerHash === hash && existing.expiresAt > now) {
     return existing.url;
@@ -216,14 +273,13 @@ export async function getOrCreateBuyUrl(args: GetOrCreateArgs): Promise<string> 
   await db
     .insert(buyUrlCache)
     .values({
-      userId: args.userId,
       offerKey: args.offer.key,
       offerHash: hash,
       url,
       expiresAt,
     })
     .onConflictDoUpdate({
-      target: [buyUrlCache.userId, buyUrlCache.offerKey],
+      target: buyUrlCache.offerKey,
       set: { offerHash: hash, url, expiresAt, updatedAt: now },
     });
   return url;

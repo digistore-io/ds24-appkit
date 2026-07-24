@@ -1,82 +1,89 @@
 ---
 name: market-research
-description: Start hier, wenn du noch KEINE klare SAAS-Idee hast (oder sie schärfen willst). Interviewt dich zu Expertise, Interessen und vorhandener Reichweite, schlägt Zielgruppen vor, recherchiert deren Situation und Herausforderungen und leitet daraus einen konkreten, über Digistore24 verkaufbaren SAAS-Produktvorschlag ab. Mündet in einen Product-Brief und übergibt an build-app.
+description: Start here if you do NOT yet have a clear SAAS idea (or want to sharpen it). Interviews you about expertise, interests and existing reach, suggests target audiences, researches their situation and challenges and derives from that a concrete SAAS product idea that can be sold through Digistore24. Leads into a product brief and hands over to build-app.
 ---
 
-# Von der Idee zum Produktvorschlag (Marktrecherche)
+# From the idea to a product proposal (market research)
 
-Ziel: aus dem, was **du** gut kannst oder erreichst, ein **konkretes SAAS-Produkt**
-ableiten, das eine echte Zielgruppe braucht — und das sich über Digistore24
-verkaufen lässt (digitale Produkte, Kurse, Mitgliedschaften, Tools).
+Goal: derive a **concrete SAAS product** from what **you** are good at or can
+reach, one that a real target audience needs — and that can be sold through
+Digistore24 (digital products, courses, memberships, tools).
 
-Führe den Nutzer **schrittweise** durch die folgenden Phasen. Stelle Fragen mit dem
-Fragen-Tool (AskUserQuestion), fasse nach jeder Phase kurz zusammen und lass
-bestätigen, bevor du weitergehst. Erfinde keine Fakten — recherchiere.
+Guide the user **step by step** through the following phases. Ask questions with
+the question tool (AskUserQuestion), summarize briefly after every phase and
+have it confirmed before you move on. Don't invent facts — research them.
 
-## Phase 1 — Interview: Ausgangslage
+## Phase 1 — Interview: the starting point
 
-Stelle (in 1–2 Runden) Fragen, um Expertise, Motivation und Assets zu verstehen:
-- **Expertise/Hintergrund:** Worin kennst du dich wirklich aus (beruflich, Hobby,
-  gelöste eigene Probleme)?
-- **Vorhandene Idee:** Hast du schon eine Produktidee oder Zielgruppe im Kopf?
-- **Reichweite/Assets:** Erreichst du bereits Leute (E-Mail-Liste, Social Media,
-  Community, Kundschaft)? Das entscheidet oft über Erfolg.
-- **Ziel & Rahmen:** Nebeneinkommen oder Hauptgeschäft? Wie viel Zeit? Einmalkauf
-  oder Abo bevorzugt?
+Ask questions (in 1–2 rounds) to understand expertise, motivation and assets:
+- **Expertise/background:** What do you really know your way around in
+  (professionally, hobby, problems of your own you have solved)?
+- **Existing idea:** Do you already have a product idea or target audience in
+  mind?
+- **Reach/assets:** Do you already reach people (email list, social media,
+  community, customers)? That often decides success.
+- **Goal & scope:** Side income or main business? How much time? One-off
+  purchase or subscription preferred?
 
-Fasse die Antworten als kurzes Profil zusammen und lass es bestätigen.
+Summarize the answers as a short profile and have it confirmed.
 
-## Phase 2 — Zielgruppen-Kandidaten
+## Phase 2 — Target audience candidates
 
-Leite **2–4 konkrete Zielgruppen/Nischen** aus dem Profil ab (spezifisch, nicht
-„alle Selbstständigen", sondern z. B. „Heilpraktiker:innen, die online Kurse
-verkaufen"). Nenne je Kandidat kurz: wer, warum du sie glaubwürdig bedienen kannst,
-und ob sie erfahrungsgemäß für digitale Produkte zahlen.
+Derive **2–4 concrete target audiences/niches** from the profile (specific, not
+"all self-employed people", but e.g. "alternative practitioners who sell courses
+online"). For each candidate name briefly: who, why you can credibly serve them,
+and whether experience shows they pay for digital products.
 
-Lass den Nutzer **eine Zielgruppe wählen** (oder eine eigene ergänzen).
+Have the user **choose one target audience** (or add one of their own).
 
-## Phase 3 — Recherche: Situation & Herausforderungen
+## Phase 3 — Research: situation & challenges
 
-Recherchiere die gewählte Zielgruppe **mit echten Quellen**. Nutze Websuche
-(WebSearch/WebFetch); wenn der `deep-research`-Skill verfügbar ist, nutze ihn für
-eine tiefere, quellenbelegte Analyse. Kläre:
-- **Situation & Workflows:** Wie arbeiten diese Menschen heute? Womit verdienen sie?
-- **Schmerzpunkte:** Welche wiederkehrenden Probleme, Zeitfresser, Frustrationen?
-- **Bestehende Lösungen & Lücken:** Was nutzen sie schon, was fehlt?
-- **Zahlungsbereitschaft:** Wofür geben sie bereits Geld aus (Kurse, Tools, Vorlagen)?
+Research the chosen target audience **with real sources**. Use web search
+(WebSearch/WebFetch); if the `deep-research` skill is available, use it for a
+deeper, source-backed analysis. Clarify:
+- **Situation & workflows:** How do these people work today? What do they earn
+  with?
+- **Pain points:** Which recurring problems, time sinks, frustrations?
+- **Existing solutions & gaps:** What do they already use, what is missing?
+- **Willingness to pay:** What do they already spend money on (courses, tools,
+  templates)?
 
-Fasse die Erkenntnisse **mit Quellenangaben** zusammen (3–6 Kernpunkte). Priorisiere
-ein bis zwei Probleme, die häufig, schmerzhaft und lösbar sind.
+Summarize the findings **with source references** (3–6 key points). Prioritize
+one or two problems that are frequent, painful and solvable.
 
-## Phase 4 — Produktvorschlag
+## Phase 4 — Product proposal
 
-Leite daraus **einen konkreten SAAS-Vorschlag** ab (bei Bedarf 2 Varianten zur Wahl):
-- **Problem** (eine klare Aussage) und **Zielnutzer** (aus Phase 2).
-- **Nutzenversprechen** in einem Satz.
-- **MVP-Funktionsumfang:** 3–5 Kernfunktionen — **bewusst klein** und auf diesem
-  Template baubar (Auth + Datenmodell + wenige Seiten, Zugang an Kauf gekoppelt).
-- **Digistore-Abrechnung:** Was ist das „Produkt"? Einmalkauf, Abo oder Mitgliedschaft?
-  Wie schaltet der Kauf den Nutzen frei (vgl. `orders.status`, IPN)?
-- **Namensvorschlag** (optional).
+Derive **one concrete SAAS proposal** from that (2 variants to choose from if
+needed):
+- **Problem** (one clear statement) and **target user** (from phase 2).
+- **Value proposition** in one sentence.
+- **MVP feature scope:** 3–5 core features — **deliberately small** and
+  buildable on this template (auth + data model + a few pages, access tied to
+  the purchase).
+- **Digistore billing:** What is the "product"? One-off purchase, subscription
+  or membership? How does the purchase unlock the value (the IPN records it, the
+  app asks the entitlement API — see `docs/entitlements.md`)?
+- **Name suggestion** (optional).
 
-Prüfe den Vorschlag gegen `guardrails` (Geld, Kundendaten, Secrets) und weise auf
-offene Punkte hin (z. B. rechtlich sensible Daten).
+Check the proposal against `guardrails` (money, customer data, secrets) and
+point out open issues (e.g. legally sensitive data).
 
-Präsentiere den Vorschlag und **iteriere**, bis der Nutzer zufrieden ist.
+Present the proposal and **iterate** until the user is satisfied.
 
-## Phase 5 — Übergabe an den Bau
+## Phase 5 — Handover to the build
 
-Schreibe das Ergebnis in einen kurzen **Product-Brief** nach `docs/product-brief.md`
-(Problem, Zielnutzer, Nutzenversprechen, MVP-Funktionen, Abrechnungsmodell, Quellen).
-Danach weiter mit dem Skill **`build-app`** (Archetyp, Datenmodell, Seiten) und
-**`setup-digistore`** (Abrechnung anschließen).
+Write the result into a short **product brief** at `docs/product-brief.md`
+(problem, target user, value proposition, MVP features, billing model, sources).
+Then continue with the skill **`build-app`** (archetype, data model, pages) and
+**`setup-digistore`** (connecting the billing).
 
-## Prinzipien
+## Principles
 
-- **Recherche statt Raten:** Aussagen über die Zielgruppe mit Quellen belegen.
-- **Klein starten:** Ein MVP, das auf diesem Template in überschaubarer Zeit steht,
-  schlägt das große Luftschloss.
-- **Reichweite ernst nehmen:** Eine erreichbare Zielgruppe ist mehr wert als die
-  „größere" Marktchance ohne Zugang.
-- **Zum Verkaufsmodell passen:** Digistore24 ist stark bei digitalen Produkten,
-  Kursen, Mitgliedschaften und Tools — richte den Vorschlag darauf aus.
+- **Research instead of guessing:** back up statements about the target audience
+  with sources.
+- **Start small:** an MVP that stands on this template within a manageable time
+  beats the grand castle in the air.
+- **Take reach seriously:** a target audience you can reach is worth more than
+  the "bigger" market opportunity without access.
+- **Fit the sales model:** Digistore24 is strong with digital products, courses,
+  memberships and tools — aim the proposal at that.

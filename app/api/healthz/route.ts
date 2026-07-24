@@ -1,4 +1,4 @@
-// Liveness — keine Abhängigkeiten, muss immer schnell 200 liefern.
+// Liveness — no dependencies, must always return 200 quickly.
 export const dynamic = "force-dynamic";
 
 export function GET() {

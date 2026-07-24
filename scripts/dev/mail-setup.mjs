@@ -1,16 +1,16 @@
 #!/usr/bin/env node
-// E-Mail-Versand für den Login einrichten — interaktiv.
+// Set up mail delivery for the sign-in — interactive.
 //
-// Fragt die Zugangsdaten ab, schreibt sie in die .env (die ist gitignored) und
-// verschickt auf Wunsch eine Testmail. Danach verschwindet der
-// Entwicklungs-Login automatisch, und der Magic-Link-Login ist aktiv.
+// Asks for the credentials, writes them into .env (which is gitignored) and
+// sends a test mail on request. Afterwards the development sign-in disappears
+// automatically and the magic-link sign-in is active.
 //
-// Zwei Wege — genau EINER wird konfiguriert:
-//   Postmark  Dienst mit kostenlosem Kontingent; braucht einen Server-Token
-//             und eine verifizierte Absenderadresse (Sender Signature).
-//   SMTP      Jeder Mailserver/jedes Postfach (auch der eigene Provider).
+// Two ways — exactly ONE of them gets configured:
+//   Postmark  service with a free allowance; needs a server token
+//             and a verified sender address (sender signature).
+//   SMTP      any mail server/mailbox (your own provider's too).
 //
-// Nutzung:  node scripts/dev/mail-setup.mjs   (oder: make mail-setup)
+// Usage:  node scripts/dev/mail-setup.mjs   (or: node run.mjs mail-setup)
 import { createInterface } from "node:readline/promises";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import "../lib/env.mjs";
@@ -18,60 +18,60 @@ import "../lib/env.mjs";
 const ENV_FILE = ".env";
 const rl = createInterface({ input: process.stdin, output: process.stdout });
 
-/** Frage mit optionalem Vorgabewert. */
-async function frage(text, vorgabe = "") {
-  const zusatz = vorgabe ? ` [${vorgabe}]` : "";
-  const antwort = (await rl.question(`${text}${zusatz}: `)).trim();
-  return antwort || vorgabe;
+/** Question with an optional default value. */
+async function ask(text, fallback = "") {
+  const suffix = fallback ? ` [${fallback}]` : "";
+  const answer = (await rl.question(`${text}${suffix}: `)).trim();
+  return answer || fallback;
 }
 
-/** Pflichtfeld — fragt so lange, bis etwas da ist. */
-async function pflicht(text, vorgabe = "") {
+/** Required field — keeps asking until something is there. */
+async function askRequired(text, fallback = "") {
   for (;;) {
-    const wert = await frage(text, vorgabe);
-    if (wert) return wert;
-    console.log("  (Pflichtangabe)");
+    const value = await ask(text, fallback);
+    if (value) return value;
+    console.log("  (required)");
   }
 }
 
 /**
- * Schreibt Werte in die .env: vorhandene (auch auskommentierte) Zeilen werden
- * ersetzt, fehlende angehängt. Der Rest der Datei bleibt unangetastet.
+ * Writes values into .env: existing lines (commented-out ones too) are
+ * replaced, missing ones are appended. The rest of the file stays untouched.
  */
-function schreibeEnv(werte) {
+function writeEnv(values) {
   if (!existsSync(ENV_FILE)) {
     writeFileSync(ENV_FILE, existsSync(".env.example") ? readFileSync(".env.example", "utf8") : "");
   }
-  let inhalt = readFileSync(ENV_FILE, "utf8");
-  for (const [key, value] of Object.entries(werte)) {
+  let content = readFileSync(ENV_FILE, "utf8");
+  for (const [key, value] of Object.entries(values)) {
     const re = new RegExp(`^#?\\s*${key}=.*$`, "m");
-    const zeile = `${key}=${value}`;
-    inhalt = re.test(inhalt)
-      ? inhalt.replace(re, zeile)
-      : inhalt.replace(/\n*$/, "\n") + zeile + "\n";
+    const line = `${key}=${value}`;
+    content = re.test(content)
+      ? content.replace(re, line)
+      : content.replace(/\n*$/, "\n") + line + "\n";
   }
-  writeFileSync(ENV_FILE, inhalt);
+  writeFileSync(ENV_FILE, content);
 }
 
-/** Kommentiert Zeilen aus, damit nicht zwei Transporte gleichzeitig gesetzt sind. */
-function deaktiviere(keys) {
+/** Comments out lines so that two transports are never set at the same time. */
+function disable(keys) {
   if (!existsSync(ENV_FILE)) return;
-  let inhalt = readFileSync(ENV_FILE, "utf8");
+  let content = readFileSync(ENV_FILE, "utf8");
   for (const key of keys) {
-    inhalt = inhalt.replace(new RegExp(`^(${key}=.*)$`, "m"), "# $1");
+    content = content.replace(new RegExp(`^(${key}=.*)$`, "m"), "# $1");
   }
-  writeFileSync(ENV_FILE, inhalt);
+  writeFileSync(ENV_FILE, content);
 }
 
-// Verschickt eine Testmail mit den gerade eingegebenen Werten (der Aufrufer
-// legt sie vorher per Object.assign in process.env).
-async function testmail(an) {
-  const istPostmark = Boolean(process.env.POSTMARK_SERVER_TOKEN && process.env.POSTMARK_SENDER);
-  const von = istPostmark ? process.env.POSTMARK_SENDER : process.env.SMTP_FROM || process.env.EMAIL_FROM;
-  const betreff = "Testmail aus deiner App";
-  const text = "Wenn du das liest, funktioniert der E-Mail-Versand.\nDer Login per Magic-Link ist jetzt einsatzbereit.";
+// Sends a test mail with the values just entered (the caller puts them into
+// process.env via Object.assign beforehand).
+async function sendTestMail(to) {
+  const isPostmark = Boolean(process.env.POSTMARK_SERVER_TOKEN && process.env.POSTMARK_SENDER);
+  const from = isPostmark ? process.env.POSTMARK_SENDER : process.env.SMTP_FROM || process.env.EMAIL_FROM;
+  const subject = "Test mail from your app";
+  const text = "If you are reading this, mail delivery works.\nThe magic-link sign-in is ready to use now.";
 
-  if (istPostmark) {
+  if (isPostmark) {
     const res = await fetch("https://api.postmarkapp.com/email", {
       method: "POST",
       headers: {
@@ -80,9 +80,9 @@ async function testmail(an) {
         "X-Postmark-Server-Token": process.env.POSTMARK_SERVER_TOKEN,
       },
       body: JSON.stringify({
-        From: von,
-        To: an,
-        Subject: betreff,
+        From: from,
+        To: to,
+        Subject: subject,
         TextBody: text,
         MessageStream: process.env.POSTMARK_MESSAGE_STREAM || "outbound",
       }),
@@ -98,31 +98,31 @@ async function testmail(an) {
     secure: String(process.env.SMTP_SECURE) === "true",
     auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD },
   });
-  await transport.sendMail({ from: von, to: an, subject: betreff, text });
+  await transport.sendMail({ from, to, subject, text });
 }
 
 // ---------------------------------------------------------------------------
 
-console.log("\nE-Mail-Versand für den Login einrichten");
-console.log("──────────────────────────────────────");
-console.log("Der Anmelde-Link (Magic-Link) wird per E-Mail verschickt. Dafür");
-console.log("braucht die App ein Mail-Konto. Solange keins eingerichtet ist,");
-console.log("gibt es lokal den Entwicklungs-Login — in Staging und Produktion");
-console.log("aber nicht: dort ist der Versand Pflicht.\n");
-console.log("  1) Postmark  — Dienst, kostenloses Kontingent, sehr zuverlässig");
-console.log("  2) SMTP      — eigener Mailserver oder Postfach deines Providers\n");
+console.log("\nSet up mail delivery for the sign-in");
+console.log("────────────────────────────────────");
+console.log("The sign-in link (magic link) is sent by email. For that the app");
+console.log("needs a mail account. As long as none is set up, there is the");
+console.log("development sign-in locally — but not in staging and production:");
+console.log("there, mail delivery is mandatory.\n");
+console.log("  1) Postmark  — a service, free allowance, very reliable");
+console.log("  2) SMTP      — your own mail server or your provider's mailbox\n");
 
-const wahl = await frage("Womit möchtest du versenden? (1/2)", "1");
+const choice = await ask("How would you like to send? (1/2)", "1");
 
-let werte;
-if (wahl === "2" || wahl.toLowerCase().startsWith("s")) {
-  console.log("\nSMTP-Zugangsdaten (findest du bei deinem Mail-Anbieter):");
-  const host = await pflicht("  Server (SMTP_HOST), z. B. smtp.strato.de", process.env.SMTP_HOST || "");
-  const port = await frage("  Port (587 = STARTTLS, 465 = SSL)", process.env.SMTP_PORT || "587");
-  const user = await pflicht("  Benutzername", process.env.SMTP_USER || "");
-  const pass = await pflicht("  Passwort", process.env.SMTP_PASSWORD || "");
-  const from = await pflicht("  Absenderadresse (From)", process.env.SMTP_FROM || user);
-  werte = {
+let values;
+if (choice === "2" || choice.toLowerCase().startsWith("s")) {
+  console.log("\nSMTP credentials (you get them from your mail provider):");
+  const host = await askRequired("  Server (SMTP_HOST), e.g. smtp.strato.de", process.env.SMTP_HOST || "");
+  const port = await ask("  Port (587 = STARTTLS, 465 = SSL)", process.env.SMTP_PORT || "587");
+  const user = await askRequired("  Username", process.env.SMTP_USER || "");
+  const pass = await askRequired("  Password", process.env.SMTP_PASSWORD || "");
+  const from = await askRequired("  Sender address (From)", process.env.SMTP_FROM || user);
+  values = {
     SMTP_HOST: host,
     SMTP_PORT: port,
     SMTP_SECURE: port === "465" ? "true" : "false",
@@ -131,39 +131,39 @@ if (wahl === "2" || wahl.toLowerCase().startsWith("s")) {
     SMTP_FROM: from,
     EMAIL_FROM: from,
   };
-  deaktiviere(["POSTMARK_SERVER_TOKEN", "POSTMARK_SENDER"]);
+  disable(["POSTMARK_SERVER_TOKEN", "POSTMARK_SENDER"]);
 } else {
-  console.log("\nPostmark-Zugangsdaten (Server → API Tokens):");
-  console.log("Die Absenderadresse muss dort als Sender Signature verifiziert sein.");
-  const token = await pflicht("  Server-Token", process.env.POSTMARK_SERVER_TOKEN || "");
-  const sender = await pflicht("  Absenderadresse", process.env.POSTMARK_SENDER || "");
-  const stream = await frage("  Message-Stream", process.env.POSTMARK_MESSAGE_STREAM || "outbound");
-  werte = {
+  console.log("\nPostmark credentials (Server → API Tokens):");
+  console.log("The sender address has to be verified there as a sender signature.");
+  const token = await askRequired("  Server token", process.env.POSTMARK_SERVER_TOKEN || "");
+  const sender = await askRequired("  Sender address", process.env.POSTMARK_SENDER || "");
+  const stream = await ask("  Message stream", process.env.POSTMARK_MESSAGE_STREAM || "outbound");
+  values = {
     POSTMARK_SERVER_TOKEN: token,
     POSTMARK_SENDER: sender,
     POSTMARK_MESSAGE_STREAM: stream,
     EMAIL_FROM: sender,
   };
-  deaktiviere(["SMTP_HOST", "SMTP_USER", "SMTP_PASSWORD", "SMTP_FROM"]);
+  disable(["SMTP_HOST", "SMTP_USER", "SMTP_PASSWORD", "SMTP_FROM"]);
 }
 
-schreibeEnv(werte);
-console.log(`\n✓ In ${ENV_FILE} gespeichert (die Datei ist gitignored).`);
+writeEnv(values);
+console.log(`\n✓ Saved in ${ENV_FILE} (that file is gitignored).`);
 
-const an = await frage("\nTestmail verschicken an (leer = überspringen)", "");
-if (an) {
+const to = await ask("\nSend a test mail to (empty = skip)", "");
+if (to) {
   try {
-    Object.assign(process.env, werte);
-    await testmail(an);
-    console.log(`✓ Testmail an ${an} verschickt. Schau in dein Postfach (auch Spam).`);
+    Object.assign(process.env, values);
+    await sendTestMail(to);
+    console.log(`✓ Test mail sent to ${to}. Have a look in your inbox (spam too).`);
   } catch (e) {
-    console.error(`\n✗ Versand fehlgeschlagen: ${e.message}`);
-    console.error("  Zugangsdaten prüfen und `make mail-setup` erneut ausführen.");
+    console.error(`\n✗ Delivery failed: ${e.message}`);
+    console.error("  Check the credentials and run `node run.mjs mail-setup` again.");
     rl.close();
     process.exit(1);
   }
 }
 
-console.log("\nNächster Schritt: make restart");
-console.log("Danach ist der Login per Magic-Link aktiv und der Entwicklungs-Login weg.");
+console.log("\nNext step: node run.mjs restart");
+console.log("After that the magic-link sign-in is active and the development sign-in is gone.");
 rl.close();

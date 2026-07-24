@@ -1,12 +1,12 @@
-// Gemeinsame Helfer für die Benutzer-Verwaltungs-Skripte (reines Node ESM).
+// Shared helpers for the user management scripts (plain Node ESM).
 //
-// Zugriff auf dieselbe Postgres wie die App — Verbindung über DATABASE_URL
-// (siehe db/index.ts). Kein Import der TypeScript-DB-Schicht nötig; die
-// users-Tabelle ist stabil (id, email, name, role).
+// Access to the same Postgres as the app — connection via DATABASE_URL
+// (see db/index.ts). No need to import the TypeScript DB layer; the
+// users table is stable (id, email, name, role).
 import postgres from "postgres";
 import "../lib/env.mjs";
 
-/** Minimaler Flag-Parser: --key value  und  --flag (boolean). */
+/** Minimal flag parser: --key value  and  --flag (boolean). */
 export function parseArgs(argv) {
   const out = {};
   for (let i = 0; i < argv.length; i++) {
@@ -24,18 +24,18 @@ export function parseArgs(argv) {
   return out;
 }
 
-// Kanonische Rollen (Konvention aus db/schema.ts):
-//   "owner"  = SAAS-Betreiber (Admin)
-//   "member" = normaler Kunde
+// Canonical roles (convention from db/schema.ts):
+//   "owner"  = SAAS operator (admin)
+//   "member" = regular customer
 export const CANONICAL_ROLES = ["owner", "member"];
 
-// Freundliche Aliase → kanonisch. So funktioniert sowohl --role owner als auch
-// --role admin (bzw. member/user), ohne zwei Vokabulare im Code zu vermischen.
+// Friendly aliases → canonical. That way both --role owner and --role admin
+// work (member/user likewise), without mixing two vocabularies in the code.
 const ROLE_ALIASES = { admin: "owner", user: "member" };
 
 /**
- * Normalisiert eine Rollen-Eingabe auf eine kanonische Rolle.
- * @returns "owner" | "member" oder null bei ungültiger Eingabe.
+ * Normalises a role input to a canonical role.
+ * @returns "owner" | "member", or null for invalid input.
  */
 export function resolveRole(input) {
   if (input == null || input === true) return null;
@@ -47,20 +47,20 @@ export function resolveRole(input) {
   return null;
 }
 
-/** Liest DATABASE_URL oder bricht mit klarer Meldung ab. */
+/** Reads DATABASE_URL or aborts with a clear message. */
 export function requireDatabaseUrl() {
   const url = process.env.DATABASE_URL;
   if (!url) {
     console.error(
-      "FEHLER: DATABASE_URL ist nicht gesetzt. Lokal: `docker compose up -d`\n" +
-        "und DATABASE_URL in .env setzen (siehe .env.example).",
+      "ERROR: DATABASE_URL is not set. Locally: `docker compose up -d`\n" +
+        "and set DATABASE_URL in .env (see .env.example).",
     );
     process.exit(2);
   }
   return url;
 }
 
-/** Öffnet eine kurzlebige Postgres-Verbindung (max 1) für ein Skript. */
+/** Opens a short-lived Postgres connection (max 1) for a script. */
 export function connect() {
   return postgres(requireDatabaseUrl(), { max: 1 });
 }

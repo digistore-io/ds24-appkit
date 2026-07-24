@@ -1,17 +1,17 @@
 #!/usr/bin/env node
-// Legt einen App-Benutzer an oder setzt dessen Rolle (idempotent per E-Mail).
+// Creates an app user or sets their role (idempotent, keyed by email).
 //
-// Zweck: Der Betreiber braucht einen Login mit erhöhter Rolle ("owner" = Admin),
-// bevor er sich per E-Mail-Magic-Link einloggt. Existiert die users-Zeile schon
-// (hier angelegt), verwendet der Login sie wieder — der Betreiber ist dann owner.
+// Purpose: the operator needs a sign-in with an elevated role ("owner" = admin)
+// before signing in via the email magic link. If the users row already exists
+// (created here), the sign-in reuses it — the operator is an owner right away.
 //
-// Nutzung:
-//   node scripts/users/create-user.mjs --email chef@example.de --role owner
-//   node scripts/users/create-user.mjs --email chef@example.de --role owner --apply
-//   node scripts/users/create-user.mjs --email kunde@example.de            # Default: member
+// Usage:
+//   node scripts/users/create-user.mjs --email owner@example.com --role owner
+//   node scripts/users/create-user.mjs --email owner@example.com --role owner --apply
+//   node scripts/users/create-user.mjs --email customer@example.com            # default: member
 //
-// Rollen: owner|member (Aliase: admin→owner, user→member). Default: member.
-// Dry-Run ist Standard. Zum Ausführen: --apply
+// Roles: owner|member (aliases: admin→owner, user→member). Default: member.
+// Dry run is the default. To execute: --apply
 import { randomUUID } from "node:crypto";
 import { parseArgs, resolveRole, connect, CANONICAL_ROLES } from "./_db.mjs";
 
@@ -21,16 +21,16 @@ const apply = Boolean(args.apply);
 const email =
   typeof args.email === "string" ? args.email.trim().toLowerCase() : null;
 if (!email || !email.includes("@")) {
-  console.error('FEHLER: gültige --email "<adresse>" erforderlich.');
+  console.error('ERROR: a valid --email "<address>" is required.');
   process.exit(2);
 }
 
-// Ohne --role: Default "member". Mit --role: validieren/normalisieren.
+// Without --role: default "member". With --role: validate/normalise.
 const role = args.role === undefined ? "member" : resolveRole(args.role);
 if (role === null) {
   console.error(
-    `FEHLER: ungültige Rolle. Erlaubt: ${CANONICAL_ROLES.join(", ")} ` +
-      "(Aliase: admin, user).",
+    `ERROR: invalid role. Allowed: ${CANONICAL_ROLES.join(", ")} ` +
+      "(aliases: admin, user).",
   );
   process.exit(2);
 }
@@ -38,15 +38,15 @@ if (role === null) {
 const name = typeof args.name === "string" ? args.name : null;
 
 if (!apply) {
-  console.log("DRY-RUN — es würde folgender Benutzer angelegt/aktualisiert:");
+  console.log("DRY RUN — the following user would be created/updated:");
   console.log(JSON.stringify({ email, role, name }, null, 2));
-  console.log("\nZum Ausführen erneut mit --apply aufrufen.");
+  console.log("\nTo execute, call it again with --apply.");
   process.exit(0);
 }
 
 const sql = connect();
 try {
-  // Upsert nach E-Mail: neu anlegen oder Rolle/Name aktualisieren.
+  // Upsert by email: create a new row or update role/name.
   const [row] = await sql`
     insert into users (id, email, name, role)
     values (${randomUUID()}, ${email}, ${name}, ${role})
@@ -56,17 +56,17 @@ try {
     returning email, role, name
   `;
   console.log(
-    `✓ Benutzer gesetzt: ${row.email} (Rolle: ${row.role}` +
-      (row.name ? `, Name: ${row.name}` : "") +
+    `✓ User set: ${row.email} (role: ${row.role}` +
+      (row.name ? `, name: ${row.name}` : "") +
       ")",
   );
   if (row.role === "owner") {
     console.log(
-      "  → owner = Admin/Betreiber. Login jetzt per E-Mail-Magic-Link unter /login.",
+      "  → owner = admin/operator. Sign in now via the email magic link at /login.",
     );
   }
 } catch (e) {
-  console.error("FEHLER beim Schreiben in die DB:", e.message);
+  console.error("ERROR while writing to the database:", e.message);
   process.exitCode = 1;
 } finally {
   await sql.end();

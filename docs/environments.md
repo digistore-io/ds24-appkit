@@ -1,79 +1,114 @@
-# Umgebungen: DEV · STAGING · PROD
+# Environments: DEV · STAGING · PROD
 
-Die App läuft in bis zu drei Umgebungen. **Alle nutzen dieselben Live-Produkte auf
-Digistore24** (`digistore24.com`) — es gibt genau **eine** Produkt-Menge und **eine**
-`productId` je Angebot (`config/digistore-products.json`). Umgebungen unterscheiden
-sich also **nicht** in den DS24-Produkten, sondern nur in:
+The app runs in up to three environments. **All of them use the same live products on
+Digistore24** (`digistore24.com`) — there is exactly **one** set of products and **one**
+`productId` per offer (`config/digistore-products.json`). So environments do
+**not** differ in the DS24 products, only in:
 
-| Was | DEV (lokal) | STAGING (optional) | PROD |
+| What | DEV (local) | STAGING (optional) | PROD |
 |-----|-------------|--------------------|------|
-| `APP_URL` | `http://localhost:3000` | Staging-Domain | Live-Domain |
-| `DATABASE_URL` | lokale Postgres (Docker) | Staging-DB | Prod-DB |
-| `DIGISTORE_URL` | `https://www.digistore24.com` (Live) | dito | dito |
-| Produkte / `productId` | **dieselben Live-Produkte** | dieselben | dieselben |
-| IPN-Ziel | Cloudflare Quick Tunnel → localhost | Staging-Domain | Live-Domain |
-| Zahlungen | **DS24-Testkäufe** | Testkäufe | echte Käufe |
-| E-Mail-Versand | optional | **Pflicht** | **Pflicht** |
-| Login ohne Mail-Konto | **ja** (Entwicklungs-Login) | nein | nein |
+| `APP_URL` | `http://localhost:3000` | staging domain | live domain |
+| `DATABASE_URL` | local Postgres (Docker) | staging DB | prod DB |
+| `DIGISTORE_URL` | `https://www.digistore24.com` (live) | ditto | ditto |
+| Products / `productId` | **the same live products** | the same | the same |
+| IPN target | Cloudflare Quick Tunnel → localhost | staging domain | live domain |
+| Payments | **DS24 test purchases** | test purchases | real purchases |
+| Mail delivery | optional | **mandatory** | **mandatory** |
+| Sign-in without a mail account | **yes** (development sign-in) | no | no |
 
-> Weil alle Umgebungen auf die Live-Produkte gehen, wird in DEV/STAGING mit
-> **Digistore24-Testkäufen** (Test-Zahlungsart) gearbeitet — kein echtes Geld,
-> aber echte Produkte/IPNs.
+> Because all environments go against the live products, DEV/STAGING work with
+> **Digistore24 test purchases** (test payment method) — no real money,
+> but real products/IPNs.
 
-`APP_ENV` (`development` | `staging` | `production`) benennt die Umgebung nicht
-nur — an ihr hängen **harte Regeln**:
+`APP_ENV` (`development` | `staging` | `production`) does not only name the
+environment — **hard rules** hang off it:
 
-- **STAGING und PROD verlangen einen E-Mail-Versand.** Fehlt er, bricht der
-  Serverstart mit einer Erklärung ab (`instrumentation.ts` → `lib/env-guard.ts`).
-  Lieber ein klarer Fehler beim Deploy als eine laufende App, bei der sich
-  niemand anmelden kann.
-- **Der Entwicklungs-Login gilt nur in DEV.** Ist kein Mailversand konfiguriert,
-  meldet die Login-Seite lokal ohne Magic-Link und ohne Passwort an, damit du
-  sofort loslegen kannst. Vier Bedingungen müssen dafür zugleich gelten:
-  `APP_ENV`=development, `NODE_ENV`≠production, `APP_URL` auf localhost, und
-  kein Mailversand. Sobald du `make mail-setup` ausführst, verschwindet er.
-- **Unbekannte `APP_ENV`-Werte gelten als `production`.** Ein Tippfehler führt
-  also zur strengsten Umgebung, nicht zur lockersten.
+- **STAGING and PROD require mail delivery.** If it is missing, the server
+  start aborts with an explanation (`instrumentation.ts` → `lib/env-guard.ts`).
+  Better a clear error at deploy time than a running app that nobody
+  can sign in to.
+- **The development sign-in only applies in DEV.** If no mail delivery is
+  configured, the sign-in page signs you in locally without a magic link and
+  without a password, so you can get going right away. Four conditions have to
+  hold at the same time for that: `APP_ENV`=development, `NODE_ENV`≠production,
+  `APP_URL` on localhost, and no mail delivery. As soon as you run
+  `node run.mjs mail-setup`, it disappears.
+- **Unknown `APP_ENV` values count as `production`.** So a typo leads to the
+  strictest environment, not to the loosest.
 
-Die konkreten Werte kommen aus der jeweiligen `.env` bzw. den Secrets des Hosters.
+The concrete values come from the respective `.env` or from the host's secrets.
 
-## Lokale IPNs empfangen (DEV) — Cloudflare Quick Tunnel
+## Receiving IPNs locally (DEV) — Cloudflare Quick Tunnel
 
-Digistore24 muss den IPN per HTTPS erreichen. Lokal geht das ohne Zusatzdienste
-über einen **kostenlosen Cloudflare Quick Tunnel** (kein Account, keine Domain):
+Digistore24 has to reach the IPN via HTTPS. Locally that works without extra
+services through a **free Cloudflare Quick Tunnel** (no account, no domain):
 
 ```bash
-npm run dev                         # App auf http://localhost:3000
-bash scripts/dev/tunnel.sh          # → https://<zufall>.trycloudflare.com
+node run.mjs start      # app on http://localhost:3000
+node run.mjs ds24-sync  # products + IPN — opens the tunnel by itself if it needs one
 ```
 
-Dann `APP_URL` auf die Tunnel-URL setzen und `make ds24-sync ARGS=--apply`
-laufen lassen — das richtet die IPN auf die Tunnel-URL ein (Pfad immer
-`/api/ipn`). Alternativ direkt:
+`node run.mjs ds24-sync` notices that `APP_URL` is local, opens the public address onto
+your running app and registers it at Digistore24 as the IPN endpoint (path
+always `/api/ipn`). It announces that plainly: while the tunnel runs, your
+machine is reachable from the internet. It runs in the **background** and
+returns — no terminal of its own, no Ctrl-C. `node run.mjs status` shows it, `node run.mjs stop`
+ends it along with the app and the database.
+
+`node run.mjs ds24-tunnel` does the same on its own, without touching the products. An
+already-running tunnel is reused by both, so the order never matters.
+
+**`node run.mjs stop` ends the tunnel, `node run.mjs start` brings it back.** You do not have to
+think about it: once an app has an IPN connection (`DIGISTORE_IPN_DOMAIN_ID` in
+the `.env`), every `node run.mjs start` re-opens the tunnel and re-points Digistore24 at
+it. An app that never received an IPN gets nothing — `node run.mjs start` does not put
+your machine on the internet on its own — and with a public `APP_URL`
+(STAGING/PROD) it never happens at all.
+
+The address is **new every time**, and it has to be: a free quick tunnel gets a
+random name on each start, and keeping one would need a Cloudflare account, a
+named tunnel and your own domain. That is why the connection hangs off a stable
+`domain_id` — every open updates the same connection instead of adding another.
+
+Two things deliberately do **not** open a tunnel:
+
+- `node run.mjs ds24-sync --dry-run` — a preview must not publish your machine.
+- `node run.mjs ds24-sync --no-tunnel` — for CI, or to get the old behaviour back.
+
+If you want to do the registration yourself:
 
 ```bash
 node scripts/ds24/ipn-setup.mjs \
-  --url "https://<zufall>.trycloudflare.com/api/ipn" --apply
+  --url "https://<random>.trycloudflare.com/api/ipn" --apply
 ```
 
-Hinweise:
-- Die Tunnel-URL **wechselt bei jedem Start** → IPN-Ziel dann erneut setzen.
-  Die `domain_id` bleibt dabei stabil (`local-<projektname>`, in der `.env`), die
-  Anbindung wird also aktualisiert statt vervielfacht.
-- DS24 sendet IPNs immer an **die zuletzt für den Vendor eingerichtete URL**. Für
-  eine Dev-Session das Ziel auf den Tunnel setzen, danach für PROD wieder auf die
-  Live-Domain (oder einen separaten Test-Vendor/Sub-Account nutzen).
-- Die IPN-Signaturprüfung (SHA512) gilt auch lokal — `DIGISTORE_IPN_PASSPHRASE`
-  in der `.env` muss zur DS24-Einstellung passen.
+Notes:
+- **`APP_URL` stays as it is** — deliberately. It is the address of your app,
+  not of a temporary tunnel, and a non-local value there switches the
+  development login off (`lib/auth/dev-login.ts`); you would suddenly be unable
+  to sign in locally. The tunnel address goes to `ipn-setup.mjs` directly.
+- The tunnel URL **changes on every start** — the next `node run.mjs ds24-tunnel` registers
+  the new one by itself. The `domain_id` stays stable through that
+  (`local-<projectname>`, in the `.env`), so the connection is updated instead
+  of multiplied.
+- A brand-new address takes half a minute or so to be reachable worldwide.
+  Until then Digistore24 answers "http error 0" — `node run.mjs ds24-tunnel` knows that and
+  simply tries again.
+- DS24 always sends IPNs to **the URL set up most recently for the vendor**. For
+  a dev session point the target at the tunnel, afterwards back to the
+  live domain for PROD (or use a separate test vendor/sub-account).
+- The IPN signature check (SHA512) applies locally too — `DIGISTORE_IPN_PASSPHRASE`
+  in the `.env` has to match the DS24 setting.
 
-## Produkte & Go-Live
+## Products & go-live
 
-Produkte werden **einmal** gegen die Live-Produkte gepflegt (nicht je Umgebung):
+Products are maintained **once** against the live products (not per environment):
 
 ```bash
-DIGISTORE_API_KEY=... node scripts/ds24/sync-products.mjs --apply     # anlegen/aktualisieren
-# je Produkt in DS24 einen Payment-Plan (Preis/Intervall) anlegen
-DIGISTORE_API_KEY=... node scripts/ds24/request-approval.mjs --siteowner <id> --apply
+node run.mjs ds24-sync     # create/update products AND register the IPN
+# No payment plans in the DS24 UI: price and interval travel with each checkout
+# call as a payment_plan. One price, one place — config/digistore-products.json.
+node run.mjs ds24-approval --apply   # approval (approval_status=pending); reseller from language (DE→1, otherwise US→2)
 ```
 
-Details zum Go-Live: Skill **`go-live`**.
+Details on go-live: skill **`go-live`**.

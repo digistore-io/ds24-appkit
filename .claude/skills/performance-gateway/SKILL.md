@@ -1,67 +1,67 @@
 ---
 name: performance-gateway
-description: Performance-Gateway vor dem Launch. Stellt sicher, dass die erste Version bis ~100 parallele Nutzer zuverlässig und schnell läuft. Prüft und behebt die typischen Engpässe (Datenbank-Pooling, fehlende Indizes, N+1-Abfragen, unnötige Renderarbeit), führt einen einfachen Lasttest durch und richtet die passende Hosting-/DB-Größe ein. Nutze dies nach dem Security-Gateway und vor dem Launch.
+description: Performance gateway before the launch. Makes sure the first version runs reliably and fast for up to ~100 parallel users. Checks and fixes the typical bottlenecks (database pooling, missing indexes, N+1 queries, unnecessary render work), runs a simple load test and sets up the right hosting/DB size. Use this after the security gateway and before the launch.
 ---
 
-# Performance-Gateway — bis 100 parallele Nutzer
+# Performance gateway — up to 100 parallel users
 
-Ziel der ersten Version: **~100 gleichzeitige Nutzer** laufen flüssig (niedrige
-Latenz, keine Fehler). Vorgehen: **messen → Engpässe finden → beheben → erneut
-messen.** Nicht raten — mit einem kleinen Lasttest belegen.
+Goal for the first version: **~100 concurrent users** run smoothly (low latency,
+no errors). The approach: **measure → find bottlenecks → fix → measure again.**
+Do not guess — prove it with a small load test.
 
-## Die typischen Engpässe (prüfen und beheben)
+## The typical bottlenecks (check and fix)
 
-### 1. Datenbank-Verbindungen (häufigste Ursache)
-- Der DB-Client (`db/index.ts`) nutzt einen **Pool** mit `DB_POOL_MAX` (Default 10).
-  Bei einem einzelnen, dauerhaft laufenden Server (Railway/Render/Fly) sollte der
-  Pool mehrere Verbindungen haben (10–20) — **nicht 1**, sonst werden alle Anfragen
-  serialisiert.
-- **Serverless/mehrere Instanzen:** Verbindungen summieren sich (Instanzen × Pool).
-  Dann einen **Connection-Pooler** vorschalten (z. B. PgBouncer / Neon-/Supabase-
-  Pooling) und `DB_POOL_MAX` klein halten. Postgres-`max_connections` beachten.
-- Prüfen, dass **eine** Client-Instanz pro Prozess existiert (kein neuer Client pro
-  Request).
+### 1. Database connections (the most common cause)
+- The DB client (`db/index.ts`) uses a **pool** with `DB_POOL_MAX` (default 10).
+  With a single, permanently running server (Railway/Render/Fly) the pool should
+  have several connections (10–20) — **not 1**, otherwise all requests get
+  serialized.
+- **Serverless/multiple instances:** connections add up (instances × pool).
+  Then put a **connection pooler** in front (e.g. PgBouncer / Neon/Supabase
+  pooling) and keep `DB_POOL_MAX` small. Mind the Postgres `max_connections`.
+- Check that **one** client instance exists per process (no new client per
+  request).
 
-### 2. Indizes für häufige Abfragen
-- Postgres indiziert Fremdschlüssel **nicht** automatisch. Für Spalten in häufigen
-  `WHERE`-Filtern Indizes anlegen, z. B. `orders.user_id`, `orders.ds24_product_id`,
-  und Domänen-FKs (z. B. `challenges.user_id`). Unique-Spalten (`ds24_order_id`,
-  `(user_id, offer_key)`) sind bereits indiziert.
-- Nach Schemaänderung: `npm run db:generate && npm run db:migrate`.
+### 2. Indexes for frequent queries
+- Postgres does **not** index foreign keys automatically. Create indexes for
+  columns used in frequent `WHERE` filters, e.g. `orders.member_id`,
+  `orders.ds24_product_id`, and domain FKs (e.g. `challenges.user_id`). Unique
+  columns (`ds24_order_id`, `offer_key`) are already indexed.
+- After a schema change: `npm run db:generate && npm run db:migrate`.
 
-### 3. Abfragen & Rendering
-- **N+1 vermeiden:** Listen mit einer Abfrage laden (Drizzle-`with`/Joins), nicht je
-  Element einzeln.
-- Nur benötigte Spalten/Zeilen selektieren; Paginierung bei großen Listen.
-- Statische/öffentliche Seiten möglichst cachen; teure Arbeit nicht bei jedem Render.
-- Checkout-URLs werden bereits gecacht (`buy_url_cache`) — nicht pro Request neu erzeugen.
+### 3. Queries & rendering
+- **Avoid N+1:** load lists with a single query (Drizzle `with`/joins), not one
+  per element.
+- Only select the columns/rows you need; paginate large lists.
+- Cache static/public pages where possible; do not do expensive work on every render.
+- Checkout URLs are already cached (`buy_url_cache`) — do not regenerate them per request.
 
-### 4. Hosting-Größe
-- Eine kleine, aber nicht kleinste Instanz wählen; Autoscaling/Min-Instanzen so
-  setzen, dass Kaltstarts den Launch nicht ausbremsen.
-- Managed Postgres mit ausreichend Verbindungen/RAM für den Start.
+### 4. Hosting size
+- Choose a small, but not the smallest instance; set autoscaling/min instances so
+  that cold starts do not slow the launch down.
+- Managed Postgres with enough connections/RAM for the start.
 
-## Lasttest (Nachweis ~100 parallel)
+## Load test (proof of ~100 parallel)
 
-Führe einen einfachen Lasttest gegen die wichtigsten Pfade durch (Startseite,
-Zugriffs-/Content-Seite, ggf. IPN-Endpoint) und prüfe Latenz und Fehlerrate bei
-~100 gleichzeitigen Verbindungen. Beispiel mit `autocannon` (ohne Installation):
+Run a simple load test against the most important paths (home page,
+access/content page, possibly the IPN endpoint) and check latency and error rate
+at ~100 concurrent connections. Example with `autocannon` (no installation):
 
 ```bash
-npx autocannon -c 100 -d 20 http://localhost:3000/            # 100 Verbindungen, 20s
+npx autocannon -c 100 -d 20 http://localhost:3000/            # 100 connections, 20s
 npx autocannon -c 100 -d 20 http://localhost:3000/api/healthz
 ```
 
-Richtwerte für die erste Version: **0 Fehler/Timeouts**, p95-Latenz im dreistelligen
-ms-Bereich für dynamische Seiten. Reißt es aus → obige Punkte (v. a. DB-Pool/Indizes)
-prüfen und erneut messen.
+Target values for the first version: **0 errors/timeouts**, p95 latency in the
+three-digit ms range for dynamic pages. If it breaks out → check the points above
+(above all DB pool/indexes) and measure again.
 
-## Ablauf
+## Procedure
 
-1. **Messen:** Lasttest gegen 2–3 zentrale Endpoints bei `-c 100`.
-2. **Beheben:** größten Engpass zuerst (meist DB-Pool oder fehlender Index).
-3. **Erneut messen:** bis die Richtwerte erreicht sind.
-4. **Berichten:** kurze Zusammenfassung (vorher/nachher, was geändert wurde).
+1. **Measure:** load test against 2–3 central endpoints at `-c 100`.
+2. **Fix:** biggest bottleneck first (usually the DB pool or a missing index).
+3. **Measure again:** until the target values are reached.
+4. **Report:** short summary (before/after, what was changed).
 
-Nächster Schritt nach grünem Performance-Gateway: **`compliance-check`** (Recht),
-dann **`go-live`** (online stellen), dann **`go-to-market`** (Vermarktung).
+Next step after a green performance gateway: **`compliance-check`** (legal),
+then **`go-live`** (putting it online), then **`go-to-market`** (marketing).

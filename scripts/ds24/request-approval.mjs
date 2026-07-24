@@ -1,39 +1,56 @@
 #!/usr/bin/env node
-// Digistore24-Produkt-Approval beantragen (Go-Live-Schritt).
+// Request the Digistore24 product approval (go-live step).
 //
-// Setzt je Produkt via updateProduct den Freigabe-Status:
-//   data[approval_status][<siteowner_id>] = <status>   (Default: "requested")
+// Sets the approval status per product via updateProduct:
+//   data[approval_status][<siteowner_id>] = <status>   (default: "pending")
 //
-// Hintergrund (updateProduct.expectedArgs): approval_status ist "by_siteowner" —
-// die Freigabe wird pro Siteowner beantragt und greift nur für Siteowner, für die
-// der Verkäufer akzeptiert ist. Für den Verkauf über den Digistore24-Marktplatz
-// ist die Siteowner-ID die des Marktplatzes; sie steht im DS24-Konto (bzw. beim
-// Support erfragbar) und wird über --siteowner / DIGISTORE_SITEOWNER_ID gesetzt.
+// Background (updateProduct.expectedArgs): approval_status is "by_siteowner" —
+// the approval is requested per siteowner and only takes effect for siteowners
+// the seller has been accepted for. The siteowner is the Digistore24 reseller
+// (marketplace). If none is given, the script derives it from the language:
+// German → Germany reseller (1), otherwise USA reseller (2). See _resellers.mjs.
 //
-// Nutzung:
-//   node scripts/ds24/request-approval.mjs --siteowner <id>            # Dry-Run
-//   node scripts/ds24/request-approval.mjs --siteowner <id> --apply
-//   node scripts/ds24/request-approval.mjs --siteowner <id> --key pro --apply
-//   [--status requested]
-// Env: DIGISTORE_API_KEY (writable), optional DIGISTORE_URL, DIGISTORE_SITEOWNER_ID.
+// Usage (with nothing given: reseller from the language, default German → id 1):
+//   node scripts/ds24/request-approval.mjs                     # dry run (DE)
+//   node scripts/ds24/request-approval.mjs --apply
+//   node scripts/ds24/request-approval.mjs --lang en --apply   # → USA reseller (2)
+//   node scripts/ds24/request-approval.mjs --reseller US --apply
+//   node scripts/ds24/request-approval.mjs --siteowner <id> --apply  # any marketplace
+//   [--key pro] [--status <value>]   default status: pending (e.g. --status requested)
+// Env: DIGISTORE_API_KEY (writable), optionally DIGISTORE_URL, APP_LANG,
+//      DIGISTORE_SITEOWNER_ID.
 import { ds24Call, requireApiKey, parseArgs } from "./_client.mjs";
 import { readProducts } from "./_products.mjs";
+import { resolveReseller } from "./_resellers.mjs";
 
 const args = parseArgs(process.argv.slice(2));
 const apply = Boolean(args.apply);
 const onlyKey = args.key ? String(args.key) : null;
-const status = args.status ? String(args.status) : "requested";
-const siteowner = args.siteowner
-  ? String(args.siteowner)
-  : process.env.DIGISTORE_SITEOWNER_ID || null;
+const status = args.status ? String(args.status) : "pending";
+const lang = args.lang ? String(args.lang) : process.env.APP_LANG || "de";
 
-if (!siteowner) {
-  console.error(
-    "FEHLER: --siteowner <id> (oder DIGISTORE_SITEOWNER_ID) erforderlich.\n" +
-      "Die Siteowner-ID des Digistore24-Marktplatzes findest du in deinem DS24-Konto.",
-  );
+let resolved;
+try {
+  resolved = resolveReseller({
+    siteowner: args.siteowner ?? process.env.DIGISTORE_SITEOWNER_ID,
+    reseller: args.reseller,
+    lang,
+  });
+} catch (err) {
+  console.error(`ERROR: ${err.message}`);
   process.exit(2);
 }
+
+const siteowner = resolved.id;
+const sourceNote = {
+  siteowner: "given explicitly",
+  reseller: "via --reseller",
+  lang: `from language "${lang}"`,
+}[resolved.source];
+const resellerLabel = resolved.reseller
+  ? `${resolved.reseller.name} [id=${siteowner}]`
+  : `siteowner ID ${siteowner}`;
+console.log(`Reseller/marketplace: ${resellerLabel} (${sourceNote})`);
 
 const apiKey = requireApiKey();
 const config = readProducts();
@@ -44,7 +61,7 @@ const entries = Object.entries(config.products).filter(
 let any = false;
 for (const [key, def] of entries) {
   if (!def.productId) {
-    console.log(`· übersprungen: "${key}" (noch keine productId — erst sync-products).`);
+    console.log(`· skipped: "${key}" (no productId yet — run sync-products first).`);
     continue;
   }
   any = true;
@@ -54,16 +71,16 @@ for (const [key, def] of entries) {
   };
   if (!apply) {
     console.log(
-      `DRY-RUN — würde Approval "${status}" beantragen: "${key}" (product_id=${def.productId}, siteowner=${siteowner})`,
+      `DRY-RUN — would request approval "${status}": "${key}" (product_id=${def.productId}, siteowner=${siteowner})`,
     );
     continue;
   }
   await ds24Call("updateProduct", apiKey, params);
-  console.log(`✓ Approval "${status}" beantragt: "${key}" (product_id=${def.productId})`);
+  console.log(`✓ Approval "${status}" requested: "${key}" (product_id=${def.productId})`);
 }
 
 if (!any) {
-  console.error("Keine synchronisierten Produkte gefunden. Erst 'sync-products.mjs --apply' ausführen.");
+  console.error("No synchronized products found. Run 'sync-products.mjs --apply' first.");
   process.exit(1);
 }
-if (!apply) console.log("\nZum Ausführen erneut mit --apply aufrufen.");
+if (!apply) console.log("\nTo execute, call again with --apply.");

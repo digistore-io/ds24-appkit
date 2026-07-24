@@ -1,9 +1,10 @@
-// Token-Pakete (Prepaid-Guthaben) — abgeleitet aus der zentralen Produkt-Registry
-// (`config/digistore-products.json`, kind = "token"). Ein Paket = ein DS24-Produkt;
-// die `productId` liefert die Registry (via lib/digistore/products.ts).
+// Token packages (prepaid credit) — derived from the central product registry
+// (`config/digistore-products.json`, kind = "token"). One package = one DS24
+// product; the `productId` comes from the registry (via
+// lib/digistore/products.ts).
 //
-// Der `key` ist stabil und taucht als "tokens:<key>" im DS24-`custom`-Feld auf,
-// damit der IPN-Handler eine Zahlung einer Gutschrift zuordnen kann.
+// The `key` is stable and appears as "tokens:<key>" in the DS24 `custom` field,
+// so the IPN handler can match a payment to a credit.
 import { getProduct, productsByKind, type ProductDef } from "@/lib/digistore/products";
 
 export interface TokenPackage {
@@ -16,7 +17,7 @@ export interface TokenPackage {
 
 function toTokenPackage(p: ProductDef): TokenPackage {
   if (p.kind !== "token" || typeof p.credits !== "number") {
-    throw new Error(`Produkt "${p.key}" ist kein Token-Paket.`);
+    throw new Error(`Product "${p.key}" is not a token package.`);
   }
   return {
     key: p.key,
@@ -27,24 +28,24 @@ function toTokenPackage(p: ProductDef): TokenPackage {
   };
 }
 
-/** Alle Token-Pakete. */
+/** All token packages. */
 export function listTokenPackages(): TokenPackage[] {
   return productsByKind("token").map(toTokenPackage);
 }
 
-/** Liefert ein Token-Paket oder wirft (unbekannt oder kein Token-Produkt). */
+/** Returns a token package, or throws (unknown, or not a token product). */
 export function getTokenPackage(key: string): TokenPackage {
   return toTokenPackage(getProduct(key));
 }
 
-/** Baut den DS24-custom-Marker, über den der IPN eine Gutschrift zuordnet. */
+/** Builds the DS24 custom marker the IPN uses to match up a credit. */
 export function tokenCustomMarker(key: string): string {
   return `tokens:${key}`;
 }
 
 /**
- * Parst den custom-Marker aus einem IPN-Payload zurück in einen Paketschlüssel.
- * Gibt null zurück, wenn es kein Token-Kauf ist.
+ * Parses the custom marker from an IPN payload back into a package key.
+ * Returns null when it is not a token purchase.
  */
 export function parseTokenCustomMarker(custom: string | undefined): string | null {
   if (!custom) return null;

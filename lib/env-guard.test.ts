@@ -1,77 +1,77 @@
 import { describe, it, expect } from "vitest";
-import { appEnv, istEchteUmgebung, pruefeUmgebung } from "./env-guard";
+import { appEnv, isRealEnvironment, checkEnvironment } from "./env-guard";
 
 describe("appEnv", () => {
-  it("erkennt Entwicklung (inkl. leer/unbekannt-lokal)", () => {
+  it("recognizes development (including empty/unknown-local)", () => {
     for (const v of ["development", "dev", "local", "", undefined, "  DEV  "]) {
       expect(appEnv(v)).toBe("development");
     }
   });
 
-  it("erkennt Staging", () => {
+  it("recognizes staging", () => {
     expect(appEnv("staging")).toBe("staging");
     expect(appEnv("test")).toBe("staging");
   });
 
-  it("stuft alles Unbekannte als Produktion ein (im Zweifel streng)", () => {
-    for (const v of ["production", "prod", "developmnt", "live", "irgendwas"]) {
+  it("classifies anything unknown as production (strict when in doubt)", () => {
+    for (const v of ["production", "prod", "developmnt", "live", "whatever"]) {
       expect(appEnv(v)).toBe("production");
     }
   });
 });
 
-describe("istEchteUmgebung", () => {
-  it("trennt DEV von STAGING/PROD", () => {
-    expect(istEchteUmgebung("development")).toBe(false);
-    expect(istEchteUmgebung("staging")).toBe(true);
-    expect(istEchteUmgebung("production")).toBe(true);
+describe("isRealEnvironment", () => {
+  it("separates DEV from STAGING/PROD", () => {
+    expect(isRealEnvironment("development")).toBe(false);
+    expect(isRealEnvironment("staging")).toBe(true);
+    expect(isRealEnvironment("production")).toBe(true);
   });
 });
 
-describe("pruefeUmgebung", () => {
-  const vollstaendig = {
+describe("checkEnvironment", () => {
+  const complete = {
     APP_ENV: "production",
-    AUTH_SECRET: "geheim",
-    emailKonfiguriert: true,
+    AUTH_SECRET: "secret",
+    emailConfigured: true,
   };
 
-  it("lässt DEV ohne Mailversand durch", () => {
+  it("lets DEV through without mail delivery", () => {
     expect(
-      pruefeUmgebung({ APP_ENV: "development", emailKonfiguriert: false }),
+      checkEnvironment({ APP_ENV: "development", emailConfigured: false }),
     ).toEqual([]);
   });
 
-  it("verlangt Mailversand in PROD", () => {
-    const p = pruefeUmgebung({ ...vollstaendig, emailKonfiguriert: false });
+  it("requires mail delivery in PROD", () => {
+    const p = checkEnvironment({ ...complete, emailConfigured: false });
     expect(p).toHaveLength(1);
-    expect(p[0]).toMatch(/E-Mail-Versand/);
+    expect(p[0]).toMatch(/email delivery/);
   });
 
-  it("verlangt Mailversand auch in STAGING", () => {
-    const p = pruefeUmgebung({
-      ...vollstaendig,
+  it("requires mail delivery in STAGING too", () => {
+    const p = checkEnvironment({
+      ...complete,
       APP_ENV: "staging",
-      emailKonfiguriert: false,
+      emailConfigured: false,
     });
-    expect(p[0]).toMatch(/E-Mail-Versand/);
+    expect(p[0]).toMatch(/email delivery/);
   });
 
-  it("verlangt AUTH_SECRET in echten Umgebungen", () => {
-    const p = pruefeUmgebung({ ...vollstaendig, AUTH_SECRET: undefined });
+  it("requires AUTH_SECRET in real environments", () => {
+    const p = checkEnvironment({ ...complete, AUTH_SECRET: undefined });
     expect(p.some((m) => /AUTH_SECRET/.test(m))).toBe(true);
   });
 
-  it("meldet mehrere Probleme zugleich", () => {
+  it("reports several problems at once", () => {
     expect(
-      pruefeUmgebung({
+      checkEnvironment({
         APP_ENV: "production",
         AUTH_SECRET: undefined,
-        emailKonfiguriert: false,
+        emailConfigured: false,
       }),
     ).toHaveLength(2);
   });
 
-  it("ist zufrieden, wenn alles gesetzt ist", () => {
-    expect(pruefeUmgebung(vollstaendig)).toEqual([]);
+  it("is satisfied when everything is set", () => {
+    expect(checkEnvironment(complete)).toEqual([]);
   });
 });

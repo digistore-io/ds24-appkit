@@ -1,53 +1,54 @@
-# Checkout-Links mit `createBuyUrl`
+# Checkout links with `createBuyUrl`
 
-Die App erzeugt Checkout-URLs zur Laufzeit über die Digistore24-Funktion
-`createBuyUrl` und schickt dabei einen **kompletten Custom Payment Plan** mit —
-Preis, Währung und Intervall bestimmt also die App, nicht das Digistore-Produkt.
-Pro Angebot genügt **ein** Basisprodukt in Digistore24.
+The app creates checkout URLs at runtime via the Digistore24 function
+`createBuyUrl` and sends a **complete custom payment plan** along with it —
+so price, currency and interval are decided by the app, not by the Digistore product.
+**One** base product in Digistore24 per offer is enough.
 
-Implementierung: `lib/digistore/buyUrl.ts`.
+Implementation: `lib/digistore/buyUrl.ts`.
 
-## Verwendung
+## Usage
 
 ```ts
 import { getOrCreateBuyUrl } from "@/lib/digistore/buyUrl";
-import { ds24ApiKey, getOwnerUserId } from "@/lib/digistore/settings";
-
-const userId = await getOwnerUserId();       // Betreiber (role = "owner")
-if (!userId) throw new Error("Kein Betreiber-Benutzer angelegt");
+import { ds24ApiKey } from "@/lib/digistore/settings";
 
 const url = await getOrCreateBuyUrl({
-  apiKey: ds24ApiKey(),                // writable-Key nötig (aus der .env)
-  userId,                              // Betreiber = Cache-Namespace
+  apiKey: ds24ApiKey(),                // writable key needed (from the .env)
   offer: {
-    key: "gold",                       // stabiler Angebots-Schlüssel
-    productId: "123456",               // DS24-Basisprodukt
-    priceCents: 900,                   // 9,00 €
+    key: "gold",                       // stable offer key
+    productId: "123456",               // DS24 base product
+    priceCents: 900,                   // 9.00 EUR
     currency: "EUR",
-    billingInterval: "1_month",        // weglassen = Einmalzahlung
-    title: "Paid Challenge - Gold",    // Platzhalter {TARIF} auf der Checkout-Seite
-    description: "Gold-Tarif (monatlich)",
+    billingInterval: "1_month",        // omit = one-off payment
+    title: "Paid Challenge - Gold",    // placeholder {TARIF} on the checkout page
+    description: "Gold plan (monthly)",
   },
-  thankyouUrl: `${appUrl}/optin/[ORDER_ID]`, // DS24 ersetzt [ORDER_ID]/[BUYER_EMAIL]
+  thankyouUrl: `${appUrl}/optin/[ORDER_ID]`, // DS24 replaces [ORDER_ID]/[BUYER_EMAIL]
 });
-// -> url dem Käufer öffnen (Link/Redirect)
+// -> open url for the buyer (link/redirect)
 ```
 
-## Caching (wichtig)
+## Caching (important)
 
-- URLs werden pro `(userId, offer.key)` in der Tabelle `buy_url_cache` gecacht,
-  **TTL 20h** (Sicherheitspuffer unter der 24h-Gültigkeit der DS24-URL).
-- **Ändert sich das Angebot** (Preis, Intervall, Titel, Thank-You-URL …), ändert
-  sich der `offerHash` → es wird automatisch eine **neue URL** erzeugt.
-- **Nutzerspezifische URLs werden nie gecacht**: Sobald `buyer`, `affiliate`,
-  `campaignKey`, `trackingKey` oder `upgradeOrderId` gesetzt ist, wird jedes Mal
-  frisch erzeugt.
+- URLs are cached per `offer.key` in the table `buy_url_cache`,
+  **TTL 20h** (safety margin below the 24h validity of the DS24 URL).
+- **If the offer changes** (price, interval, title, thank-you URL …), the
+  `offerHash` changes → a **new URL** is created automatically.
+- **User-specific URLs are never cached**: as soon as `buyer`, `affiliate`,
+  `campaignKey`, `trackingKey` or `upgradeOrderId` is set, a fresh one is
+  created every time — and likewise when `customTracking` carries a buyer
+  identity (`m:<memberId>;t:<token>;…`), which names one particular member.
+- `customTracking` is judged by its **content**, not by whether it is set. A
+  token package sets it on every offering (`tokens:<key>`), and those URLs
+  stay shared — otherwise every token card would trigger a live Digistore24
+  call on each page view. See `lib/digistore/custom.ts`.
 
-## Regeln (aus der Referenzimplementierung)
+## Rules (from the reference implementation)
 
-- Bracket-Notation für verschachtelte Parameter (`payment_plan[first_amount]`).
-- Preis als Euro-String mit Punkt (`"9.00"`), nicht in Cent, nicht mit Komma.
-- `number_of_installments = 0` bedeutet **unbegrenztes Abo** (nicht „keine Zahlung").
-- Thank-You-URL muss **HTTPS** sein, sonst lehnt Digistore ab.
-- API-Basis über `DIGISTORE_URL` (`https://www.digistore24.com`).
-- Bei ungültigem Affiliate-Code wird einmal **ohne** Affiliate wiederholt.
+- Bracket notation for nested parameters (`payment_plan[first_amount]`).
+- Price as a euro string with a dot (`"9.00"`), not in cents, not with a comma.
+- `number_of_installments = 0` means an **unlimited subscription** (not "no payment").
+- The thank-you URL must be **HTTPS**, otherwise Digistore rejects it.
+- API base via `DIGISTORE_URL` (`https://www.digistore24.com`).
+- On an invalid affiliate code it is retried once **without** the affiliate.

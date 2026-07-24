@@ -1,93 +1,105 @@
 ---
 name: go-live
-description: Bringt die App online (Deployment) und verifiziert, dass alles live funktioniert. Führt durch Pre-Flight-Check, Hosterwahl (Railway/Render/Fly), Umgebungsvariablen/Secrets, Datenbank-Migration in Produktion, Digistore-IPN auf die Live-Domain, Smoke-Test und Re-Check von Sicherheit/Performance gegen die Live-Instanz. Nutze dies, wenn die App gebaut, abgesichert und skaliert ist — vor der Vermarktung.
+description: Brings the app online (deployment) and verifies that everything works live. Guides through the pre-flight check, choosing a host (Railway/Render/Fly), environment variables/secrets, database migration in production, the Digistore IPN on the live domain, a smoke test and a re-check of security/performance against the live instance. Use this when the app is built, secured and scaled — before marketing.
 ---
 
-# Go-Live — online stellen und verifizieren
+# Go-Live — putting it online and verifying it
 
-Ziel: die App **zuverlässig live** bekommen und beweisen, dass der Kauf-zu-Zugang-
-Fluss in Produktion funktioniert. Führe den Nutzer Schritt für Schritt; er muss
-nichts Technisches auswendig können.
+Goal: get the app **reliably live** and prove that the purchase-to-access flow
+works in production. Guide the user step by step; they do not have to know
+anything technical by heart.
 
-## 1. Pre-Flight (vor dem Deploy)
+## 1. Pre-flight (before the deploy)
 
-- **Grün lokal:** `npm run typecheck && npm run test && npm run build` ohne Fehler.
-- **Env vollständig:** `AUTH_SECRET` (`openssl rand -hex 32`), `DATABASE_URL`
-  (managed Postgres), `APP_URL` (= Live-Domain), mindestens ein Auth-Provider.
-  Alle in `.env.example` gelistet. Dazu `DIGISTORE_API_KEY` und
-  `DIGISTORE_IPN_PASSPHRASE` — lokal von `make ds24-connect` in die `.env`
-  geschrieben, für PROD beim Hoster als Secrets hinterlegen.
-  (`DIGISTORE_DEVELOPER_KEY` ist optional — der Connect-Flow läuft ohne.)
-- **Migrationen bereit:** `drizzle/` aktuell (`npm run db:generate` nach Schemaänderungen).
+- **Green locally:** `node run.mjs test` (typecheck + tests) and `node run.mjs build` without
+  errors. Run them yourself — do not hand the commands to the user.
+- **Env complete:** `AUTH_SECRET` (`node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`), `DATABASE_URL`
+  (managed Postgres), `APP_URL` (= live domain), at least one auth provider.
+  All of them listed in `.env.example`. Plus `DIGISTORE_API_KEY` and
+  `DIGISTORE_IPN_PASSPHRASE` — written into the `.env` locally by
+  `node run.mjs ds24-connect`, for PROD stored as secrets at the host.
+  (`DIGISTORE_DEVELOPER_KEY` is optional — the connect flow works without it.)
+- **Migrations ready:** `drizzle/` up to date (`npm run db:generate` after schema changes).
 
-## 2. Hosten
+## 2. Hosting
 
-- Hoster wählen: **Railway / Render / Fly.io** + **managed Postgres**. Schritt-für-
-  Schritt siehe [`docs/DEPLOY.md`](../../docs/DEPLOY.md).
-- Env-Variablen/Secrets beim Hoster setzen (nicht im Code!).
-- Deployen. Start: `npm run start`.
+- Choose a host: **Railway / Render / Fly.io** + **managed Postgres**. Step by
+  step see [`docs/DEPLOY.md`](../../docs/DEPLOY.md).
+- Set the env variables/secrets at the host (not in the code!).
+- Deploy. Start: `npm run start`.
 
-## 3. Datenbank in Produktion
+## 3. Database in production
 
-- Nach dem ersten Deploy einmalig migrieren: `npm run db:migrate`
-  (bzw. gegen die Prod-`DATABASE_URL`).
+- After the first deploy, migrate once: `npm run db:migrate`
+  (i.e. against the prod `DATABASE_URL`).
 
-## 4. Digistore: Produkte, Freigabe (Approval) & IPN auf Live
+## 4. Digistore: products, approval & IPN on live
 
-Alle Umgebungen nutzen **dieselben Live-Produkte** (siehe `docs/environments.md`).
-Vor dem Verkauf einmalig:
+All environments use **the same live products** (see `docs/environments.md`).
+Once, before selling:
 
-1. **Produkte synchronisieren** (aus `config/digistore-products.json`):
-   `DIGISTORE_API_KEY=... node scripts/ds24/sync-products.mjs --apply`
-   → legt via `createProduct` an / aktualisiert via `updateProduct` und schreibt
-   die `productId`(s) in die Config zurück.
-2. **Preis/Intervall je Produkt** in Digistore24 als **Payment-Plan** anlegen
-   (der Preis lässt sich nicht per API am Produkt setzen — `data[amount]` ist
-   deprecated). Für Abos das Intervall (monatlich/jährlich), für Token-Pakete den
-   Paketpreis.
-3. **Freigabe beantragen (Approval):**
-   `DIGISTORE_API_KEY=... node scripts/ds24/request-approval.mjs --siteowner <id> --apply`
-   → setzt je Produkt `approval_status = requested` (via `updateProduct`). Die
-   Siteowner-ID des DS24-Marktplatzes steht im DS24-Konto. Produkte werden erst
-   nach Freigabe durch Digistore24 öffentlich verkaufbar.
-4. **IPN auf die Live-Domain** setzen: Sobald `APP_URL` auf die öffentliche
-   Domain zeigt, registriert `make ds24-sync ARGS=--apply` die IPN automatisch
-   per API (URL ist immer `/api/ipn`) und schreibt die erzeugte SHA512-Passphrase
-   als `DIGISTORE_IPN_PASSPHRASE` in die `.env`. Diesen Wert **und** die
-   `DIGISTORE_IPN_DOMAIN_ID` beim Hoster als Secrets hinterlegen. Einzeln geht es
-   mit `node scripts/ds24/ipn-setup.mjs --url "https://DEINE-DOMAIN/api/ipn"
-   --domain "DEINE-DOMAIN" --apply`.
+1. **Sync the products + IPN** (from `config/digistore-products.json`) — **you
+   run this**, do not hand the command to the user:
+   `node run.mjs ds24-sync`
+   → creates them via `createProduct` / updates them via `updateProduct`, writes
+   the `productId`(s) back into the config **and** registers the IPN. Do not
+   call `node scripts/ds24/sync-products.mjs` directly: that skips the IPN, and
+   purchases then unlock nothing.
+2. **Nothing to do about prices.** Price, currency and interval live in
+   `config/digistore-products.json` and travel with the checkout call as
+   `payment_plan[...]`. Do **not** create payment plans in the DS24 interface —
+   a second price would only drift from the first.
+3. **Request approval:** `node run.mjs ds24-approval --apply`
+   → sets `approval_status = pending` per product (via `updateProduct`). The
+   reseller/marketplace follows from the language: German → Germany reseller
+   (id 1), otherwise USA (id 2). For the English variant `--lang en --apply`,
+   for a specific marketplace `--siteowner <id> --apply`. Products can
+   only be sold publicly once Digistore24 has approved them. Only request
+   approval when the product description and the app are mature.
 
-> Lokal testen (DEV): IPNs via kostenlosem Cloudflare Quick Tunnel empfangen —
-> `bash scripts/dev/tunnel.sh`, dann die trycloudflare-URL als IPN-Ziel setzen
-> (`docs/environments.md`).
+   > **Test first — without approval only the test purchase works.** As long as a
+   > product is not approved, only **test purchases** are possible. So that you can
+   > play through the purchase-to-access flow from inside the app, the vendor sets
+   > the test-purchase cookie once (instructions from Digistore24):
+   > <https://help.digistore24.com/hc/de/articles/23901169396241>.
+4. **Point the IPN at the live domain**: as soon as `APP_URL` points to the
+   public domain, `node run.mjs ds24-sync` registers the IPN automatically
+   via the API (the URL is always `/api/ipn`) and writes the generated SHA512
+   passphrase into the `.env` as `DIGISTORE_IPN_PASSPHRASE`. Store this value
+   **and** the `DIGISTORE_IPN_DOMAIN_ID` as secrets at the host. Separately it
+   works with `node scripts/ds24/ipn-setup.mjs --url "https://YOUR-DOMAIN/api/ipn"
+   --domain "YOUR-DOMAIN" --apply`.
 
-## 5. Smoke-Test (live)
+> Testing locally (DEV): receive IPNs via a free Cloudflare Quick Tunnel —
+> `node run.mjs ds24-tunnel` opens the address and registers it as the IPN endpoint in one
+> go (`docs/environments.md`).
 
-- `https://DEINE-DOMAIN/api/healthz` → `{"status":"ok"}`, `/api/readyz` → `ready`.
-- **Jede Seite aufrufen:** `make smoke ARGS=--url https://DEINE-DOMAIN` bzw.
-  `node scripts/dev/smoke.mjs --url https://DEINE-DOMAIN`. Kein 5xx — sonst ist
-  der Launch nicht fertig. Produktion trifft Fehler, die lokal nie auftraten
-  (fehlende Env-Werte, nicht eingespielte Migrationen).
-- Login testen (Google/E-Mail).
-- **Kauf-Fluss:** in Digistore24 „Verbindung testen" auslösen (IPN `connection_test`
-  → 200) und einen echten/Test-Kauf durchspielen → Bestellung erscheint, Zugang
-  wird freigeschaltet.
-- Custom-Domain + HTTPS aktiv.
+## 5. Smoke test (live)
 
-## 6. Sicherheit & Performance gegen LIVE prüfen
+- `https://YOUR-DOMAIN/api/healthz` → `{"status":"ok"}`, `/api/readyz` → `ready`.
+- **Call every page:** `node run.mjs smoke --url https://YOUR-DOMAIN` or
+  `node scripts/dev/smoke.mjs --url https://YOUR-DOMAIN`. No 5xx — otherwise
+  the launch is not finished. Production runs into errors that never showed up
+  locally (missing env values, migrations that were never applied).
+- Test the sign-in (Google/e-mail).
+- **Purchase flow:** trigger "test connection" in Digistore24 (IPN `connection_test`
+  → 200) and play through a real/test purchase → the order shows up, access is
+  unlocked.
+- Custom domain + HTTPS active.
 
-- **`security-gateway`** und **`performance-gateway`** noch einmal gegen die
-  Live-Instanz laufen lassen (echter Lasttest gegen die Live-URL, `-c 100`).
-  Erst wenn das grün ist, ist „live" wirklich fertig.
+## 6. Checking security & performance against LIVE
 
-## 7. Absichern
+- Run **`security-gateway`** and **`performance-gateway`** once more against the
+  live instance (a real load test against the live URL, `-c 100`).
+  Only when that is green is "live" really finished.
 
-- Rollback-Weg kennen (vorheriges Deploy beim Hoster zurückrollen).
-- Backups der Produktions-DB aktiviert.
+## 7. Safeguards
 
-## Prinzipien
-- **Erst live testen, dann bewerben.** Nichts vermarkten, was nicht live verifiziert ist.
-- **Secrets nur beim Hoster**, nie im Code/Repo.
+- Know the rollback path (roll the previous deploy back at the host).
+- Backups of the production DB enabled.
 
-Nächster Schritt nach erfolgreichem Go-Live: **`go-to-market`** (Vermarktung).
+## Principles
+- **Test live first, then advertise.** Do not market anything that is not verified live.
+- **Secrets only at the host**, never in the code/repo.
+
+Next step after a successful go-live: **`go-to-market`** (marketing).

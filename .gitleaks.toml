@@ -1,16 +1,16 @@
-# gitleaks — Konfiguration für Secret-Scans.
+# gitleaks — configuration for secret scans.
 #
-# Die Standard-Regeln bleiben vollständig aktiv; hier steht nur eine einzige,
-# begründete Ausnahme.
+# The default rules stay fully active; all that is here is one single,
+# justified exception.
 [extend]
 useDefault = true
 
-# Der eingebaute Digistore24-Developer-Key ist kein Geheimnis: Er trägt keine
-# Rechte an einem Konto, sondern identifiziert nur die Anwendung gegenüber
-# requestApiKey/retrieveApiKey — die Rolle einer OAuth-Client-ID. Der
-# rechtetragende API-Key entsteht erst, wenn der Merchant den Zugriff im Browser
-# freigibt, und liegt danach ausschließlich in dessen lokaler .env.
-# Begründung im Detail: scripts/ds24/connect-api-key.mjs (BUILT_IN_DEVELOPER_KEY).
+# The built-in Digistore24 developer key is not a secret: it carries no rights
+# to any account, it only identifies the application to
+# requestApiKey/retrieveApiKey — the role of an OAuth client ID. The
+# rights-bearing API key comes into existence only once the merchant grants
+# access in the browser, and after that it lives exclusively in their local .env.
+# Full reasoning: scripts/ds24/connect-api-key.mjs (BUILT_IN_DEVELOPER_KEY).
 [[rules.allowlist]]
 description = "Eingebauter DS24-Developer-Key (Client-ID-Rolle, keine Rechte)"
 regexes = ["1706550-aASzoSnqcChueKmMDBvcwqUWvOqnfhXTncfkTN6X"]

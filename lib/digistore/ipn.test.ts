@@ -17,7 +17,7 @@ describe("digistoreShaSign", () => {
     expect(sig).toMatch(/^[0-9A-F]{128}$/);
   });
 
-  it("ist unabhängig von der Feldreihenfolge (Keys werden sortiert)", () => {
+  it("is independent of field order (keys are sorted)", () => {
     const a = digistoreShaSign(
       { order_id: "ABC", product_id: "123", amount: "47.00" },
       PASSPHRASE,
@@ -38,7 +38,7 @@ describe("digistoreShaSign", () => {
     expect(withEmpty).toBe(without);
   });
 
-  it("schließt sha_sign/SHASIGN aus der Berechnung aus", () => {
+  it("excludes sha_sign/SHASIGN from the computation", () => {
     const base = digistoreShaSign({ order_id: "ABC" }, PASSPHRASE);
     const withSig = digistoreShaSign(
       { order_id: "ABC", sha_sign: "DEADBEEF", SHASIGN: "x" },
@@ -47,7 +47,7 @@ describe("digistoreShaSign", () => {
     expect(withSig).toBe(base);
   });
 
-  it("ändert sich bei anderer Passphrase", () => {
+  it("changes with a different passphrase", () => {
     const a = digistoreShaSign({ order_id: "ABC" }, PASSPHRASE);
     const b = digistoreShaSign({ order_id: "ABC" }, "andere");
     expect(a).not.toBe(b);
@@ -72,13 +72,44 @@ describe("verifyIpnSignature", () => {
     expect(verifyIpnSignature(payload, PASSPHRASE)).toBe(true);
   });
 
+  // Regression: Digistore24 signs with the ORIGINAL field-name case
+  // (order_id=…). Signing with uppercased keys (ORDER_ID=…) — as the code once
+  // did unconditionally — made every real IPN read "Signatur ungültig".
+  it("akzeptiert die Original-Schreibweise der Keys (DS24-Standard)", () => {
+    const payload: Record<string, string> = {
+      event: "on_payment",
+      order_id: "ORD-1",
+      buyer_email: "kunde@example.de",
+    };
+    payload.sha_sign = digistoreShaSign(payload, PASSPHRASE, "sha512", false);
+    expect(verifyIpnSignature(payload, PASSPHRASE)).toBe(true);
+  });
+
+  it("akzeptiert auch groß geschriebene Keys (convert_keys_to_uppercase)", () => {
+    const payload: Record<string, string> = {
+      event: "on_payment",
+      order_id: "ORD-1",
+      buyer_email: "kunde@example.de",
+    };
+    payload.sha_sign = digistoreShaSign(payload, PASSPHRASE, "sha512", true);
+    expect(verifyIpnSignature(payload, PASSPHRASE)).toBe(true);
+  });
+
+  it("die beiden Key-Schreibweisen ergeben unterschiedliche Signaturen", () => {
+    // Otherwise the dual acceptance above would be meaningless.
+    const p: Record<string, string> = { order_id: "abc", buyer_email: "x@y.de" };
+    expect(digistoreShaSign(p, PASSPHRASE, "sha512", false)).not.toBe(
+      digistoreShaSign(p, PASSPHRASE, "sha512", true),
+    );
+  });
+
   it("lehnt manipulierte Payloads ab", () => {
     const payload: Record<string, string> = {
       order_id: "ORD-1",
       amount: "47.00",
     };
     payload.sha_sign = digistoreShaSign(payload, PASSPHRASE);
-    payload.amount = "1.00"; // nach Signatur verändert
+    payload.amount = "1.00"; // tampered with after signing
     expect(verifyIpnSignature(payload, PASSPHRASE)).toBe(false);
   });
 
@@ -101,7 +132,7 @@ describe("mapEventToStatus", () => {
     expect(mapEventToStatus("on_payment_missed")).toBe("paused");
     expect(mapEventToStatus("last_paid_day")).toBe("cancelled");
   });
-  it("gibt null für nicht-status-relevante Events zurück", () => {
+  it("returns null for events that carry no status change", () => {
     expect(mapEventToStatus("connection_test")).toBeNull();
     expect(mapEventToStatus("unknown_event")).toBeNull();
   });
@@ -115,12 +146,12 @@ describe("mapEventToSubscriptionStatus", () => {
     );
     expect(mapEventToSubscriptionStatus("on_rebill_resumed")).toBe("active");
   });
-  it("bildet verpasste Zahlung auf 'paused' und Kündigung auf 'cancelled' ab", () => {
+  it("maps a missed payment to 'paused' and a cancellation to 'cancelled'", () => {
     expect(mapEventToSubscriptionStatus("on_payment_missed")).toBe("paused");
     expect(mapEventToSubscriptionStatus("on_rebill_cancelled")).toBe("cancelled");
     expect(mapEventToSubscriptionStatus("last_paid_day")).toBe("cancelled");
   });
-  it("gibt null für abo-neutrale Events zurück", () => {
+  it("returns null for subscription-neutral events", () => {
     expect(mapEventToSubscriptionStatus("on_refund")).toBeNull();
     expect(mapEventToSubscriptionStatus("connection_test")).toBeNull();
   });

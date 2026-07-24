@@ -1,15 +1,15 @@
 #!/usr/bin/env node
-// Listet App-Benutzer mit ihrer Rolle (nur lesend — kein --apply).
+// Lists app users with their role (read-only — no --apply).
 //
-// Nutzung:
+// Usage:
 //   node scripts/users/list-users.mjs
-//   node scripts/users/list-users.mjs --role owner   # nur owner filtern
+//   node scripts/users/list-users.mjs --role owner   # filter for owners only
 import { parseArgs, resolveRole, connect } from "./_db.mjs";
 
 const args = parseArgs(process.argv.slice(2));
 const roleFilter = args.role === undefined ? null : resolveRole(args.role);
 if (args.role !== undefined && roleFilter === null) {
-  console.error("FEHLER: ungültige Rolle für --role (owner|member).");
+  console.error("ERROR: invalid role for --role (owner|member).");
   process.exit(2);
 }
 
@@ -20,15 +20,15 @@ try {
     : await sql`select email, role, name from users order by role desc, email`;
 
   if (rows.length === 0) {
-    console.log("Keine Benutzer gefunden.");
+    console.log("No users found.");
   } else {
     for (const r of rows) {
-      console.log(`${r.role.padEnd(7)}  ${r.email ?? "(keine E-Mail)"}`);
+      console.log(`${r.role.padEnd(7)}  ${r.email ?? "(no email)"}`);
     }
-    console.log(`\n${rows.length} Benutzer.`);
+    console.log(`\n${rows.length} user(s).`);
   }
 } catch (e) {
-  console.error("FEHLER beim Lesen der DB:", e.message);
+  console.error("ERROR while reading the database:", e.message);
   process.exitCode = 1;
 } finally {
   await sql.end();

@@ -1,38 +1,39 @@
-// E-Mail-Versand für den Magic-Link-Login. Zwei Transporte, per Env gewählt:
-//   1) Postmark  — POSTMARK_SERVER_TOKEN + POSTMARK_SENDER (verifizierter Absender)
+// Email delivery for the magic-link sign-in. Two transports, chosen by env:
+//   1) Postmark  — POSTMARK_SERVER_TOKEN + POSTMARK_SENDER (verified sender)
 //   2) SMTP      — SMTP_HOST/PORT/USER/PASSWORD (+ optional SMTP_SECURE, SMTP_FROM)
 //
-// Ist keiner konfiguriert, ist der E-Mail-Login deaktiviert (die Login-Seite zeigt
-// ihn dann nicht an). nodemailer wird nur zur Laufzeit (SMTP-Pfad) geladen —
-// niemals in auth.config.ts importieren (sonst landet es im Edge-Middleware-Bundle).
+// If neither is configured, the email sign-in is disabled (the sign-in page
+// then does not show it). nodemailer is loaded at runtime only (the SMTP path)
+// — never import it in auth.config.ts (that config is shared with proxy.ts and
+// has to stay free of Node-only dependencies).
 import type { Provider } from "next-auth/providers";
 import {
-  istPostmarkKonfiguriert,
-  istSmtpKonfiguriert,
-  istEmailKonfiguriert,
+  hasPostmarkConfig,
+  hasSmtpConfig,
+  hasEmailConfig,
 } from "@/lib/env-guard";
 
-/** Produktname für die E-Mail (optional). */
+/** Product name for the email (optional). */
 function appName(): string {
   return process.env.APP_NAME?.trim() || "";
 }
 
-// Die Erkennung liegt in lib/env-guard.ts (reine Env-Prüfungen, ohne
-// nodemailer-Abhängigkeit) — hier nur die Anwendung auf process.env, damit es
-// genau eine Quelle der Wahrheit gibt.
+// The detection lives in lib/env-guard.ts (pure env checks, without the
+// nodemailer dependency) — here we only apply it to process.env, so that there
+// is exactly one source of truth.
 export function isPostmarkConfigured(): boolean {
-  return istPostmarkKonfiguriert(process.env);
+  return hasPostmarkConfig(process.env);
 }
 
 export function isSmtpConfigured(): boolean {
-  return istSmtpKonfiguriert(process.env);
+  return hasSmtpConfig(process.env);
 }
 
 export function isEmailLoginEnabled(): boolean {
-  return istEmailKonfiguriert(process.env);
+  return hasEmailConfig(process.env);
 }
 
-/** Absender-Adresse (From) je nach konfiguriertem Transport. */
+/** Sender address (From), depending on the configured transport. */
 export function emailFrom(): string {
   return (
     (isPostmarkConfigured() ? process.env.POSTMARK_SENDER : process.env.SMTP_FROM) ||
@@ -41,31 +42,65 @@ export function emailFrom(): string {
   );
 }
 
-function subject(): string {
-  const name = appName();
-  return name ? `Dein Anmelde-Link für ${name}` : "Dein Anmelde-Link";
+/**
+ * The texts of the sign-in email — in the language of whoever is signing in.
+ *
+ * The language comes from the running request (cookie or browser header),
+ * because it was in exactly that request that the person clicked "send sign-in
+ * link". That is why the texts are built here and not somewhere in the
+ * background at send time.
+ */
+interface MailTexts {
+  locale: string;
+  subject: string;
+  heading: string;
+  body: string;
+  cta: string;
+  fallback: string;
+  intro: string;
 }
 
-function heading(): string {
+async function mailTexts(): Promise<MailTexts> {
+  const { getLocale, getTranslations } = await import("next-intl/server");
+  const t = await getTranslations("email");
   const name = appName();
-  return name ? `Anmelden bei ${name}` : "Anmelden";
+  return {
+    locale: await getLocale(),
+    subject: name ? t("subjectForApp", { app: name }) : t("subject"),
+    heading: name ? t("headingForApp", { app: name }) : t("heading"),
+    body: t("body"),
+    cta: t("cta"),
+    fallback: t("fallback"),
+    intro: t("textBody"),
+  };
 }
 
-function htmlBody(url: string): string {
-  return `<!doctype html><html lang="de"><body style="font-family:system-ui,Segoe UI,sans-serif;background:#f5f5fa;padding:24px">
+/** Keeps interpolated values from taking the email's HTML apart. */
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function htmlBody(url: string, texts: MailTexts): string {
+  const href = escapeHtml(url);
+  return `<!doctype html><html lang="${texts.locale}"><body style="font-family:system-ui,Segoe UI,sans-serif;background:#f5f5fa;padding:24px">
   <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:12px;padding:32px;border:1px solid #eee">
-    <h1 style="font-size:20px;margin:0 0 8px">${heading()}</h1>
-    <p style="color:#555;margin:0 0 24px">Klicke auf den Button, um dich anzumelden. Der Link ist 24&nbsp;Stunden gültig.</p>
-    <a href="${url}" style="display:inline-block;background:#111;color:#fff;text-decoration:none;padding:12px 20px;border-radius:8px;font-weight:600">Jetzt anmelden</a>
-    <p style="color:#999;font-size:12px;margin:24px 0 0">Falls der Button nicht funktioniert, kopiere diesen Link:<br>${url}</p>
+    <h1 style="font-size:20px;margin:0 0 8px">${escapeHtml(texts.heading)}</h1>
+    <p style="color:#555;margin:0 0 24px">${escapeHtml(texts.body)}</p>
+    <a href="${href}" style="display:inline-block;background:#4f46e5;color:#fff;text-decoration:none;padding:12px 20px;border-radius:8px;font-weight:600">${escapeHtml(texts.cta)}</a>
+    <p style="color:#999;font-size:12px;margin:24px 0 0">${escapeHtml(texts.fallback)}<br>${href}</p>
   </div></body></html>`;
 }
 
-function textBody(url: string): string {
-  return `${heading()}\n\nÖffne diesen Link, um dich anzumelden (24h gültig):\n${url}\n`;
+function textBody(url: string, texts: MailTexts): string {
+  return `${texts.heading}\n\n${texts.intro}\n${url}\n`;
 }
 
 async function sendViaPostmark(to: string, url: string): Promise<void> {
+  const texts = await mailTexts();
   const res = await fetch("https://api.postmarkapp.com/email", {
     method: "POST",
     headers: {
@@ -76,52 +111,53 @@ async function sendViaPostmark(to: string, url: string): Promise<void> {
     body: JSON.stringify({
       From: emailFrom(),
       To: to,
-      Subject: subject(),
-      HtmlBody: htmlBody(url),
-      TextBody: textBody(url),
+      Subject: texts.subject,
+      HtmlBody: htmlBody(url, texts),
+      TextBody: textBody(url, texts),
       MessageStream: process.env.POSTMARK_MESSAGE_STREAM || "outbound",
     }),
     signal: AbortSignal.timeout(10_000),
   });
   if (!res.ok) {
-    throw new Error(`Postmark-Versand fehlgeschlagen (HTTP ${res.status}): ${await res.text()}`);
+    throw new Error(`Postmark delivery failed (HTTP ${res.status}): ${await res.text()}`);
   }
 }
 
 async function sendViaSmtp(to: string, url: string): Promise<void> {
+  const texts = await mailTexts();
   const nodemailer = await import("nodemailer");
   const transport = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
     port: Number(process.env.SMTP_PORT || 587),
-    secure: process.env.SMTP_SECURE === "true", // true = 465, sonst STARTTLS
+    secure: process.env.SMTP_SECURE === "true", // true = 465, otherwise STARTTLS
     auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD },
   });
   await transport.sendMail({
     to,
     from: emailFrom(),
-    subject: subject(),
-    text: textBody(url),
-    html: htmlBody(url),
+    subject: texts.subject,
+    text: textBody(url, texts),
+    html: htmlBody(url, texts),
   });
 }
 
-/** Versendet den Magic-Link an die Zieladresse. Wirft bei Fehler. */
+/** Sends the magic link to the destination address. Throws on failure. */
 export async function sendLoginEmail(to: string, url: string): Promise<void> {
   if (isPostmarkConfigured()) return sendViaPostmark(to, url);
   if (isSmtpConfigured()) return sendViaSmtp(to, url);
-  throw new Error("Kein E-Mail-Transport konfiguriert (Postmark oder SMTP).");
+  throw new Error("No email transport configured (Postmark or SMTP).");
 }
 
 /**
- * Baut den Auth.js-E-Mail-Provider (Magic-Link). Nutzt den Adapter für die
- * Verifikations-Tokens (in auth.ts). Gibt null zurück, wenn kein Transport gesetzt.
+ * Builds the Auth.js email provider (magic link). Uses the adapter for the
+ * verification tokens (in auth.ts). Returns null if no transport is set.
  */
 export function buildEmailProvider(): Provider | null {
   if (!isEmailLoginEnabled()) return null;
   return {
     id: "email",
     type: "email",
-    name: "E-Mail",
+    name: "Email",
     from: emailFrom(),
     maxAge: 24 * 60 * 60,
     async sendVerificationRequest({ identifier, url }: { identifier: string; url: string }) {

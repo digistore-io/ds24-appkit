@@ -1,33 +1,37 @@
-// Abrechnungs-Modelle jenseits einmaliger/wiederkehrender Käufe:
+// Billing models beyond one-off and recurring purchases:
 //
-//  - subscriptions:  ein wiederkehrendes Abo eines Kunden. Hält die DS24
-//                    `purchase_id` (für stopRebilling + createBillingOnDemand)
-//                    und die von DS24 gelieferten Verwaltungs-Links
-//                    (Bezahldaten ändern, Kündigen, Rechnung). Status/Intervall
-//                    werden über IPN-Events gepflegt.
-//  - tokenAccounts:  Prepaid-Guthaben je Kunde (ganzzahlige "Token"/Credits für
-//                    verbrauchsbasierte KI-Nutzung) inkl. Auto-Aufladen.
-//  - tokenLedger:    fortlaufendes, unveränderliches Buchungsjournal. Jede
-//                    Aufladung/Buchung ist eine Zeile; Aufladungen sind über
-//                    ds24OrderId idempotent (ein IPN darf nie doppelt gutschreiben).
+//  - subscriptions:  a customer's recurring subscription. Holds the DS24
+//                    `purchase_id` (for stopRebilling + createBillingOnDemand)
+//                    and the management links DS24 supplies (change payment
+//                    details, cancel, invoice). Status and interval are
+//                    maintained through IPN events.
+//  - tokenAccounts:  prepaid balance per customer (whole-number "tokens" /
+//                    credits for usage-based AI use), including auto top-up.
+//  - tokenLedger:    an append-only, immutable booking journal. Every top-up
+//                    and booking is one row; top-ups are idempotent by
+//                    ds24OrderId (one IPN must never credit twice).
 //
-// Kunden werden über (userId = Vendor) + buyerEmail identifiziert — dieselbe
-// Kennung wie in `orders`. Wer echte Login-Nutzer statt E-Mail koppeln will,
-// ersetzt buyerEmail durch eine users-Referenz.
+// Customers are identified by `memberId` — the signed-in user, not their email
+// address. An address is a mutable attribute of a person; their id is not, and
+// keying money on something the owner can change is how a balance detaches
+// from the person who paid for it.
 import {
   pgTable,
   text,
   timestamp,
+  date,
   boolean,
   integer,
   numeric,
   pgEnum,
   unique,
+  uniqueIndex,
   index,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { users } from "./schema";
 
-// Status eines Abos, getrieben durch DS24-IPN-Events.
+// Status of a subscription, driven by DS24 IPN events.
 export const subscriptionStatusEnum = pgEnum("subscription_status", [
   "active", // on_payment(_subscription_signup) / on_rebill_resumed
   "paused", // on_payment_missed
@@ -40,25 +44,54 @@ export const subscriptions = pgTable(
     id: text("id")
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
-    // Besitzender Vendor (SAAS-Betreiber).
-    userId: text("user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    // DS24 purchase_id — Grundlage für stopRebilling & createBillingOnDemand.
-    // Unique je Vendor: ein Abo pro Purchase.
+    // DS24 purchase_id — the basis for stopRebilling & createBillingOnDemand.
+    // Globally unique: one subscription per purchase.
     ds24PurchaseId: text("ds24_purchase_id").notNull(),
-    // Ursprüngliche Bestell-ID (Verknüpfung zu `orders`).
+    // Original order ID (link to `orders`).
     ds24OrderId: text("ds24_order_id"),
     ds24ProductId: text("ds24_product_id"),
-    // Kunde (identisch zu orders.buyerEmail).
+    // The CUSTOMER this subscription belongs to — null while unattributed.
+    //
+    // Added because keying the mirror on buyerEmail alone is the weak identity
+    // the rest of the app has already replaced: an address is mutable, and no
+    // claim path would ever repair the row. Digistore24 does not redeliver an
+    // event it already acknowledged, and there is no reconciliation job (AD-8),
+    // so a subscription bought while signed out would keep member_id NULL
+    // forever. Filled at payment time and by both claim paths.
+    //
+    // `set null` to match orders.memberId: deleting a customer must not delete
+    // the record that a subscription existed.
+    memberId: text("member_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    // Customer (identical to orders.buyerEmail). KEPT: it is the mirror's
+    // record of what Digistore24 actually saw. memberId answers "whose", this
+    // answers "what was entered".
     buyerEmail: text("buyer_email"),
     status: subscriptionStatusEnum("status").notNull(),
-    // z. B. "1_month" | "12_month". Bestimmt monatlich/jährlich.
+    // e.g. "1_month" | "12_month". Determines monthly/yearly.
     billingInterval: text("billing_interval"),
     amount: numeric("amount", { precision: 12, scale: 2 }),
     currency: text("currency"),
-    // Von DS24 gelieferte Verwaltungs-Links (aus IPN oder getPurchase).
-    // Bezahldaten ändern: renewUrl. Kündigen: rebillingStopUrl. Rechnung: invoiceUrl.
+    // When the next charge falls due — DISPLAY ONLY (story 2.5). Access is
+    // decided in `grants` by event, never by this date (AD-1, AD-2).
+    //
+    // A `date`, NOT a `timestamp`, and read back as a STRING. Digistore24 types
+    // next_payment_at as a date (~/digistore-api/updatePurchase.php:26): a
+    // calendar day, no time, no zone. As a timestamp, midnight UTC of
+    // 2026-08-21 renders as 20 August for every viewer behind UTC — an
+    // off-by-one on the one number the Member is shown. `mode: "string"` keeps
+    // the day out of the Date/timezone machinery entirely; the single place
+    // that has to build a Date for the formatter pins the zone back to UTC
+    // (lib/digistore/next-payment.ts).
+    //
+    // NULLed again whenever the billing stops — see BILLING_STOPPED_EVENTS.
+    // A stale date advertising a charge that will never come is worse than no
+    // date at all.
+    nextPaymentAt: date("next_payment_at", { mode: "string" }),
+    // Management links supplied by DS24 (from the IPN or getPurchase).
+    // Change payment details: renewUrl. Cancel: rebillingStopUrl.
+    // Invoice: invoiceUrl.
     renewUrl: text("renew_url"),
     rebillingStopUrl: text("rebilling_stop_url"),
     invoiceUrl: text("invoice_url"),
@@ -67,8 +100,9 @@ export const subscriptions = pgTable(
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
   (t) => [
-    unique("subscriptions_vendor_purchase").on(t.userId, t.ds24PurchaseId),
-    index("subscriptions_vendor_email").on(t.userId, t.buyerEmail),
+    unique("subscriptions_purchase").on(t.ds24PurchaseId),
+    index("subscriptions_email").on(t.buyerEmail),
+    index("subscriptions_member").on(t.memberId),
   ],
 );
 
@@ -78,36 +112,41 @@ export const tokenAccounts = pgTable(
     id: text("id")
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
-    userId: text("user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    // Kunde (identisch zu orders.buyerEmail).
-    buyerEmail: text("buyer_email").notNull(),
-    // Aktueller Guthabenstand in Token/Credits (nie negativ).
+    // The CUSTOMER this balance belongs to.
+    //
+    // `set null`, not cascade: cascading would delete the balance AND — through
+    // tokenLedger's cascade on accountId — the entire append-only booking
+    // journal, because an admin deleted a customer. The record that money
+    // moved outlives the account it moved for.
+    memberId: text("member_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    // Current balance in tokens/credits (never negative).
     balance: integer("balance").notNull().default(0),
-    // --- Auto-Aufladen -------------------------------------------------------
+    // --- Auto top-up ---------------------------------------------------------
     autoReloadEnabled: boolean("auto_reload_enabled").notNull().default(false),
-    // Schwelle: fällt balance <= threshold, wird nachgeladen.
+    // Threshold: when balance <= threshold, a top-up is triggered.
     autoReloadThreshold: integer("auto_reload_threshold").notNull().default(0),
-    // Welches Paket (Schlüssel aus lib/tokens/packages.ts) nachgeladen wird.
+    // Which package (key from lib/tokens/packages.ts) gets topped up.
     autoReloadPackageKey: text("auto_reload_package_key"),
-    // DS24 purchase_id, gegen die per createBillingOnDemand abgebucht wird.
+    // DS24 purchase_id charged via createBillingOnDemand.
     ds24PurchaseId: text("ds24_purchase_id"),
-    // Concurrency-Lock gegen Doppelabbuchung: gesetzt vor dem billing-on-demand,
-    // gelöst, sobald der IPN die Gutschrift gebucht hat (oder nach Timeout stale).
+    // Concurrency lock against double charging: set before the
+    // billing-on-demand call, released once the IPN has booked the credit (or
+    // stale after the timeout).
     reloadLockedAt: timestamp("reload_locked_at"),
     lastReloadAt: timestamp("last_reload_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
-  (t) => [unique("token_accounts_vendor_email").on(t.userId, t.buyerEmail)],
+  (t) => [unique("token_accounts_member").on(t.memberId)],
 );
 
-// Buchungsart im Journal.
+// Kind of booking in the journal.
 export const tokenLedgerTypeEnum = pgEnum("token_ledger_type", [
   "topup", // Gutschrift nach bezahltem Paket (IPN)
   "consume", // Verbrauch (KI-Nutzung)
-  "refund", // Rückerstattung/Storno
+  "refund", // refund/reversal
   "adjust", // manuelle Korrektur
 ]);
 
@@ -121,18 +160,62 @@ export const tokenLedger = pgTable(
       .notNull()
       .references(() => tokenAccounts.id, { onDelete: "cascade" }),
     type: tokenLedgerTypeEnum("type").notNull(),
-    // Signierte Menge: + für topup/refund/adjust-hoch, − für consume.
+    // Signed amount: + for topup/refund/upward adjust, − for consume.
     amount: integer("amount").notNull(),
-    // Guthaben nach dieser Buchung (Audit).
+    // Balance after this booking (audit trail).
     balanceAfter: integer("balance_after").notNull(),
-    // DS24-Bestell-ID der auslösenden Zahlung — macht Gutschriften idempotent.
+    // DS24 order ID of the triggering payment — makes credits idempotent.
     ds24OrderId: text("ds24_order_id"),
     note: text("note"),
+    // WHO booked this by hand. Set only for `type = 'adjust'` (story 3.2); NULL
+    // for everything the IPN or a consumption writes, which has no operator.
+    //
+    // Named and typed after the precedent on `grants.issuedBy`, deliberately —
+    // one name for one concept. Without a column of its own the Operator ends
+    // up inside `note` as "Operator alice@x.de: reason", which is unjoinable,
+    // loses the `set null`, and welds actor and reason into one string nobody
+    // can split later.
+    //
+    // `set null`, and with NO constraint demanding it: deleting an Operator
+    // must stay possible, and a NOT NULL CHECK would turn that delete into an
+    // aborted transaction the Operator reads as "unknown error" — the trap
+    // migration 0012 was written to warn about. The rule that an adjustment
+    // needs a reason and an actor lives in lib/tokens/rules.ts, not here; a
+    // CHECK demanding `note` would additionally let an append-only journal
+    // block a GDPR erasure.
+    issuedBy: text("issued_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    // How the crediting purchase was initiated — "sub", "topup" or "auto" —
+    // read from the `k:` pair in tracking[custom]. A NULLABLE COLUMN, not a
+    // new `type` enum member: splitting `topup` in two would silently break
+    // every `where type = 'topup'`. Null for a legacy or unlabelled credit.
+    origin: text("origin"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => [
-    // Ein bezahltes Paket (ds24OrderId) darf nur einmal gutgeschrieben werden.
+    // A paid package (ds24OrderId) must only ever be credited once.
     unique("token_ledger_topup_order").on(t.accountId, t.ds24OrderId),
+    // ...and once GLOBALLY, not merely once per account.
+    //
+    // The composite key above is only as stable as the ACCOUNT is, and it is
+    // not: both `tokenAccounts.memberId` and `orders.memberId` are `set null`
+    // on delete. Delete a Member and let them register again under the same
+    // address, and the sign-in claim re-attributes their orders into a SECOND
+    // account — where (newAccount, sameOrder) collides with nothing and every
+    // top-up they ever bought is credited a second time.
+    //
+    // One Digistore24 order is one payment and is bookable once, whichever
+    // account it lands in. Partial because only top-ups carry an order id.
+    //
+    // The migration for this is HAND-WRITTEN (0016): drizzle emits the
+    // predicate with qualified column names, which Postgres rejects in a
+    // CREATE INDEX — and `db:migrate` prints the error and then reports
+    // success, so the index silently does not exist and every credit 500s on
+    // an unmatched ON CONFLICT.
+    uniqueIndex("token_ledger_topup_order_global")
+      .on(t.ds24OrderId)
+      .where(sql`${t.ds24OrderId} is not null and ${t.type} = 'topup'`),
     index("token_ledger_account").on(t.accountId),
   ],
 );

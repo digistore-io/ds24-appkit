@@ -1,39 +1,70 @@
-// Rollen-basierte Zugriffskontrolle.
+// Role-based access control.
 //
-// Die Rolle steckt in der Session (siehe auth.config.ts → session.user.role).
-// Konvention (db/schema.ts): "owner" = SAAS-Betreiber (Admin), "member" = Kunde.
+// The role lives in the session (see auth.config.ts → session.user.role).
+// Convention (db/schema.ts): "owner" = SAAS operator (admin), "member" = customer.
 //
-// `middleware.ts` schützt nur "eingeloggt vs. nicht" — die *Rollen*-Prüfung
-// passiert serverseitig in der jeweiligen Seite/Route über requireOwner().
+// `proxy.ts` only guards "signed in vs. not" — the *role* check happens
+// server-side in the individual page or route via requireOwner().
 //
-// Die reinen Prädikate (isOwner/hasRole/roleLabel) stehen in lib/roles.ts und
-// werden hier re-exportiert — sie sind damit auch aus Client-Komponenten
-// importierbar, ohne dass der Bundler auth.ts (und den Mailversand) mitzieht.
-// requireOwner lädt auth() erst zur Laufzeit (dynamischer Import); `redirect`
-// bleibt statisch — next/navigation ist leichtgewichtig und liefert die
-// `never`-Typverengung.
+// The pure predicates (isOwner/hasRole/isRole) live in lib/roles.ts and are
+// re-exported here — that way client components can import them too, without
+// the bundler dragging in auth.ts (and with it the mail sending). requireOwner
+// loads auth() at runtime (dynamic import); `redirect` stays static —
+// next/navigation is lightweight and gives us the `never` type narrowing.
 import { redirect } from "next/navigation";
 
-// Rollen-Definitionen und -Prädikate liegen in lib/roles.ts (ohne Server-
-// Abhängigkeiten, damit auch Client-Komponenten sie importieren können) und
-// werden hier weitergereicht — Server-Code braucht so nur einen Import.
-export { ROLES, isRole, roleLabel, isOwner, hasRole } from "./roles";
+// Role definitions and predicates live in lib/roles.ts (free of server
+// dependencies, so client components can import them too) and are passed
+// through here — server code then needs only one import.
+export { ROLES, isRole, isOwner, hasRole } from "./roles";
 export type { Role } from "./roles";
 import { isOwner } from "./roles";
 
 /**
- * Guard für Betreiber-/Admin-Bereiche.
- * - kein Login  → Redirect nach /login
- * - kein owner  → Redirect nach /dashboard
- * Gibt die Session zurück, wenn die Rolle passt.
- *
- * Optional könnte man /-Präfixe zusätzlich in auth.config.ts:authorized() gaten;
- * hier bewusst serverseitig, damit die Rolle aus der DB frisch geprüft wird.
+ * The error parameter the sign-in page uses to show "this account is blocked".
+ * Deliberately the same value Auth.js sets itself when the signIn callback
+ * rejects a sign-in (auth.ts) — so both paths produce exactly one message
+ * instead of two that say the same thing.
  */
-export async function requireOwner() {
+export const ACCESS_DENIED = "AccessDenied";
+
+/**
+ * Guard for EVERY signed-in page.
+ * - not signed in → redirect to /login
+ * - blocked       → redirect to /login with the blocked message
+ * Returns the session if access holds.
+ *
+ * The block check MUST happen here and not in the proxy: that one sees only
+ * the JWT — which says nothing about the account having been blocked since —
+ * and is kept free of the database on purpose. lib/users/blocked.ts explains
+ * why this is necessary.
+ */
+export async function requireActiveUser() {
   const { auth } = await import("@/auth");
   const session = await auth();
   if (!session?.user) redirect("/login");
+
+  const { isUserBlocked } = await import("@/lib/users/blocked");
+  if (await isUserBlocked(session.user.id as string)) {
+    redirect(`/login?error=${ACCESS_DENIED}`);
+  }
+
+  return session;
+}
+
+/**
+ * Guard for operator/admin areas.
+ * - not signed in → redirect to /login
+ * - blocked       → redirect to /login with the blocked message
+ * - not an owner  → redirect to /dashboard
+ * Returns the session if the role fits.
+ *
+ * You could additionally gate path prefixes in auth.config.ts:authorized();
+ * this is deliberately server-side so that role and block are checked fresh
+ * against the database — the JWT would only hold the state from sign-in time.
+ */
+export async function requireOwner() {
+  const session = await requireActiveUser();
   if (!isOwner(session.user.role)) redirect("/dashboard");
   return session;
 }

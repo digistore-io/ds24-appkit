@@ -1,32 +1,69 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
-/* `dark:`-Klassen folgen der `.dark`-Klasse am <html>, nicht der
-   Systemeinstellung des Browsers. Die setzt next-themes (components/theme-
-   provider.tsx) — bei „System" aus der Systemeinstellung abgeleitet, bei
-   „Hell"/„Dunkel" aus der Wahl des Nutzers. Ohne diese Zeile wuerde Tailwind v4
-   weiterhin nur prefers-color-scheme auswerten und der Umschalter bliebe ohne
-   Wirkung. */
+/* `dark:` classes follow the `.dark` class on <html>, not the browser's system
+   setting. next-themes sets it (components/theme-provider.tsx) — derived from
+   the system setting on "system", from the user's choice on "light"/"dark".
+   Without this line Tailwind v4 would keep evaluating prefers-color-scheme only
+   and the toggle would have no effect. */
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* shadcn/ui Design-Tokens (neutral, Light + Dark). Farben immer über Tokens
-   verwenden — nicht hart kodieren. `npx shadcn@latest add <component>` nutzen. */
+/* ─────────────────────────────────────────────────────────────────────────
+   Design tokens (shadcn/ui, light + dark)
+
+   NEVER hard-code colors — always go through these tokens. Write `bg-blue-600`
+   and you get a surface that does not follow into dark mode and gets missed
+   when the app is recolored.
+
+   The base is a neutral grey, the accent an indigo. Both are a deliberate
+   starting point, not a law: **to recolor the whole app, `--primary` (plus
+   `--primary-foreground` and `--ring`) in both blocks is enough.** Everything
+   else — buttons, active menu items, focus rings, badges, links — hangs off it.
+
+   Two things that are easy to get wrong:
+
+   1. `--primary` is a surface (a button, with text on it) AND a text color
+      (`text-primary`, e.g. the active menu item) at the same time. Both roles
+      have to be high-contrast. That is why the accent is dark in light mode
+      (light text on it) and light in dark mode (dark text on it) — not the
+      same color value in both modes.
+   2. Look at both modes after changing it. A tone that looks good on white is
+      often either washed out or glaring on black.
+   ───────────────────────────────────────────────────────────────────────── */
 :root {
   --background: hsl(0 0% 100%);
-  --foreground: hsl(0 0% 3.9%);
+  --foreground: hsl(240 10% 6%);
   --card: hsl(0 0% 100%);
-  --card-foreground: hsl(0 0% 3.9%);
-  --primary: hsl(0 0% 9%);
-  --primary-foreground: hsl(0 0% 98%);
-  --muted: hsl(0 0% 96.1%);
-  --muted-foreground: hsl(0 0% 45.1%);
-  --border: hsl(0 0% 89.8%);
-  --ring: hsl(0 0% 3.9%);
+  --card-foreground: hsl(240 10% 6%);
+  --popover: hsl(0 0% 100%);
+  --popover-foreground: hsl(240 10% 6%);
+
+  /* The app's accent. Turn this dial to recolor. */
+  --primary: hsl(243 70% 58%);
+  --primary-foreground: hsl(0 0% 100%);
+
+  /* Secondary surfaces: secondary buttons, badges. */
+  --secondary: hsl(240 5% 96%);
+  --secondary-foreground: hsl(240 6% 20%);
+  /* Quiet surfaces: table headers, placeholders, set-off boxes. */
+  --muted: hsl(240 5% 96%);
+  --muted-foreground: hsl(240 4% 44%);
+  /* Hover/focus in menus and lists. */
+  --accent: hsl(240 5% 95%);
+  --accent-foreground: hsl(240 6% 12%);
+  /* Destructive actions (delete). White text on it. */
+  --destructive: hsl(0 72% 45%);
+  --destructive-foreground: hsl(0 0% 100%);
+
+  --border: hsl(240 6% 90%);
+  --input: hsl(240 6% 87%);
+  --ring: hsl(243 70% 58%);
   --radius: 0.625rem;
 
-  /* Meldungen (Callout). Vier Absichten, je Flaeche/Rand/Schrift. Die
-     Schriftfarbe ist bewusst dunkel genug fuer >= 7:1 Kontrast auf der
-     zugehoerigen Flaeche (WCAG AAA) — Meldungen muessen ohne Anstrengung
-     lesbar sein, gerade Warnungen und Fehler. */
+  /* Messages (Callout). Four intents, each with surface/border/text. The text
+     color is deliberately dark enough for >= 7:1 contrast on its matching
+     surface (WCAG AAA) — messages have to be readable without effort,
+     warnings and errors above all. */
   --info: hsl(214 95% 96%);
   --info-border: hsl(214 85% 80%);
   --info-foreground: hsl(215 60% 25%);
@@ -42,16 +79,31 @@
 }
 
 .dark {
-  --background: hsl(0 0% 3.9%);
+  --background: hsl(240 10% 5%);
   --foreground: hsl(0 0% 98%);
-  --card: hsl(0 0% 3.9%);
+  /* In dark mode, cards sit deliberately a shade above the background —
+     otherwise every card edge vanishes and the page becomes a grey wall. */
+  --card: hsl(240 8% 9%);
   --card-foreground: hsl(0 0% 98%);
-  --primary: hsl(0 0% 98%);
-  --primary-foreground: hsl(0 0% 9%);
-  --muted: hsl(0 0% 14.9%);
-  --muted-foreground: hsl(0 0% 63.9%);
-  --border: hsl(0 0% 14.9%);
-  --ring: hsl(0 0% 83.1%);
+  --popover: hsl(240 8% 11%);
+  --popover-foreground: hsl(0 0% 98%);
+
+  /* Heller Akzent mit dunkler Schrift darauf — siehe Punkt 1 oben. */
+  --primary: hsl(243 85% 74%);
+  --primary-foreground: hsl(244 55% 13%);
+
+  --secondary: hsl(240 5% 15%);
+  --secondary-foreground: hsl(0 0% 96%);
+  --muted: hsl(240 5% 15%);
+  --muted-foreground: hsl(240 5% 64%);
+  --accent: hsl(240 5% 17%);
+  --accent-foreground: hsl(0 0% 98%);
+  --destructive: hsl(0 62% 52%);
+  --destructive-foreground: hsl(0 0% 100%);
+
+  --border: hsl(240 5% 18%);
+  --input: hsl(240 5% 23%);
+  --ring: hsl(243 85% 74%);
 
   /* Dunkel gespiegelt: gedaempfte Flaeche, heller Rand, sehr helle Schrift.
      Nicht die Hell-Werte invertieren — kraeftige Farbflaechen blenden im
@@ -70,17 +122,29 @@
   --danger-foreground: hsl(0 95% 88%);
 }
 
+/* Tokens -> Tailwind-Utilities. Ein neues Token hier eintragen, sonst gibt es
+   keine `bg-…`/`text-…`-Klasse dafuer. */
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
   --color-border: var(--border);
+  --color-input: var(--input);
   --color-ring: var(--ring);
+
   --color-info: var(--info);
   --color-info-border: var(--info-border);
   --color-info-foreground: var(--info-foreground);
@@ -93,15 +157,38 @@
   --color-danger: var(--danger);
   --color-danger-border: var(--danger-border);
   --color-danger-foreground: var(--danger-foreground);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --font-sans: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 }
 
-* {
-  border-color: var(--border);
-}
+/* WICHTIG: in `@layer base`, nicht davor. CSS-Regeln ausserhalb aller Layer
+   schlagen JEDE Utility-Klasse (Tailwind legt die in `@layer utilities` ab) —
+   ein ungeschichtetes `* { border-color: … }` macht `border-primary`,
+   `border-destructive` und die Callout-Raender wirkungslos. */
+@layer base {
+  * {
+    border-color: var(--border);
+  }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: system-ui, -apple-system, sans-serif;
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Grosse Ueberschriften brauchen engere Laufweite und einen ausgeglichenen
+     Umbruch, sonst fallen sie auseinander. */
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+    letter-spacing: -0.015em;
+  }
 }

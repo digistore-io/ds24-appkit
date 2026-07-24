@@ -1,4 +1,4 @@
-// Readiness — prüft, ob die DB erreichbar ist. 503, wenn nicht.
+// Readiness — checks whether the database is reachable. 503 if not.
 import { db } from "@/db";
 import { sql } from "drizzle-orm";
 

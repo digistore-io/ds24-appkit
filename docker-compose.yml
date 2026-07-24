@@ -1,4 +1,4 @@
-# Lokale Entwicklung: nur Postgres. Die App läuft mit `npm run dev` daneben.
+# Local development: Postgres only. The app runs alongside it via `npm run dev`.
 services:
   db:
     image: postgres:16
@@ -8,10 +8,11 @@ services:
       POSTGRES_PASSWORD: app
       POSTGRES_DB: app
     ports:
-      # Läuft auf deinem Rechner schon eine Postgres (oder ein anderes Projekt)
-      # auf 5432? Dann DB_PORT in .env auf einen freien Port setzen (z. B. 5433)
-      # und die Portangabe in DATABASE_URL mitziehen.
-      - "${DB_PORT:-5432}:5432"
+      # 15432 rather than 5432 on the outside: that way this project's database
+      # gets in the way of neither an installed Postgres nor another project.
+      # If 15432 is taken too, `node run.mjs start` falls back to the next free port on
+      # its own (DB_PORT + DATABASE_URL in .env).
+      - "${DB_PORT:-15432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:

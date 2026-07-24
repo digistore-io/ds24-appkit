@@ -1,35 +1,35 @@
-// Läuft einmal beim Serverstart (Next.js Instrumentation Hook).
+// Runs once at server start (Next.js instrumentation hook).
 //
-// Zweck: die Umgebungs-Regeln aus lib/env-guard.ts durchsetzen, BEVOR die App
-// Anfragen annimmt. In STAGING und PROD ist der E-Mail-Versand Pflicht — fehlt
-// er, startet die App nicht. Lieber ein klarer Abbruch beim Deploy als eine
-// laufende App, bei der sich niemand anmelden kann.
+// Purpose: enforce the environment rules from lib/env-guard.ts BEFORE the app
+// accepts requests. In STAGING and PROD email delivery is mandatory — without
+// it the app does not start. Better a clear abort at deploy time than a
+// running app nobody can sign in to.
 export async function register() {
-  // Nur in der Node-Runtime prüfen (nicht im Edge-Runtime-Durchlauf).
+  // Check in the Node runtime only (not in the edge runtime pass).
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
 
-  // Nur env-guard importieren — NICHT lib/email: das hängt an nodemailer, und
-  // dieser Hook wird auch für die Edge-Runtime gebaut. Ein Import von dort
-  // bricht den Start mit "Can't resolve 'stream'".
-  const { pruefeUmgebung, appEnv, istEmailKonfiguriert } = await import(
+  // Import env-guard only — NOT lib/email: that depends on nodemailer, and
+  // this hook is built for the edge runtime too. An import from there breaks
+  // startup with "Can't resolve 'stream'".
+  const { checkEnvironment, appEnv, hasEmailConfig } = await import(
     "@/lib/env-guard"
   );
 
-  const umgebung = appEnv(process.env.APP_ENV);
-  const probleme = pruefeUmgebung({
+  const environment = appEnv(process.env.APP_ENV);
+  const problems = checkEnvironment({
     APP_ENV: process.env.APP_ENV,
     NODE_ENV: process.env.NODE_ENV,
     AUTH_SECRET: process.env.AUTH_SECRET,
-    emailKonfiguriert: istEmailKonfiguriert(process.env),
+    emailConfigured: hasEmailConfig(process.env),
   });
 
-  if (probleme.length > 0) {
-    console.error("\n✗ Start abgebrochen — die Umgebung ist nicht startklar:\n");
-    for (const p of probleme) console.error(`  • ${p}\n`);
+  if (problems.length > 0) {
+    console.error("\n✗ Startup aborted — the environment is not ready:\n");
+    for (const p of problems) console.error(`  • ${p}\n`);
     throw new Error(
-      `Umgebung ${umgebung} ist nicht korrekt konfiguriert (${probleme.length} Problem(e)).`,
+      `Environment ${environment} is not configured correctly (${problems.length} problem(s)).`,
     );
   }
 
-  console.log(`✓ Umgebung: ${umgebung.toUpperCase()}`);
+  console.log(`✓ Environment: ${environment.toUpperCase()}`);
 }

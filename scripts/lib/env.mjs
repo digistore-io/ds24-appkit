@@ -1,11 +1,12 @@
-// Lädt .env in process.env — für die CLI-Skripte in scripts/.
+// Loads .env into process.env — for the CLI scripts in scripts/.
 //
-// Bewusst ohne Node-Flag (`--env-file`) gelöst: das gibt es je nach Node-Version
-// mit unterschiedlichem Namen. Diese Variante läuft überall ab Node 18.
+// Deliberately solved without a Node flag (`--env-file`): that one exists under
+// different names depending on the Node version. This variant runs everywhere
+// from Node 18 on.
 //
-// Regeln: bereits gesetzte Umgebungsvariablen gewinnen (damit
-// `DATABASE_URL=… npm run db:seed` weiterhin funktioniert), Kommentare und
-// leere Zeilen werden ignoriert, umschließende Anführungszeichen entfernt.
+// Rules: environment variables that are already set win (so that
+// `DATABASE_URL=… npm run db:seed` keeps working), comments and empty lines
+// are ignored, surrounding quotes are stripped.
 import { readFileSync, existsSync } from "node:fs";
 
 export function loadEnv(file = ".env") {
@@ -28,5 +29,5 @@ export function loadEnv(file = ".env") {
   }
 }
 
-// Import mit Seiteneffekt: `import "../lib/env.mjs"` genügt in den Skripten.
+// Import for the side effect: `import "../lib/env.mjs"` is enough in the scripts.
 loadEnv();

@@ -1,54 +1,54 @@
-# Benutzer & Rollen — CLI
+# Users & roles — CLI
 
-Kleine, **idempotente** Skripte, um App-Benutzer anzulegen und Rollen zu vergeben.
-Reines Node ESM — kein Build nötig. Können manuell oder von Claude Code ausgeführt
-werden (z. B. im Skill `build-app`, wenn der Betreiber-Account eingerichtet wird).
+Small, **idempotent** scripts for creating app users and assigning roles.
+Plain Node ESM — no build needed. They can be run by hand or by Claude Code
+(e.g. in the skill `build-app`, when the operator account is set up).
 
-## Voraussetzung (Env)
+## Prerequisite (env)
 
 ```bash
-export DATABASE_URL="postgresql://…"   # dieselbe DB wie die App (siehe .env)
-# lokal: `docker compose up -d` startet Postgres
+export DATABASE_URL="postgresql://…"   # the same DB as the app (see .env)
+# locally: `docker compose up -d` starts Postgres
 ```
 
-## Rollen
+## Roles
 
-Die `users`-Tabelle hat ein `role`-Feld (siehe `db/schema.ts`):
+The `users` table has a `role` field (see `db/schema.ts`):
 
-- **`owner`** — SAAS-Betreiber (Admin). Zugriff auf Admin-Bereiche (`requireOwner()`).
-- **`member`** — normaler Kunde (Default beim Selbst-Login).
+- **`owner`** — SAAS operator (admin). Access to admin areas (`requireOwner()`).
+- **`member`** — regular customer (the default for self sign-in).
 
-`--role` akzeptiert die Aliase `admin` (→ `owner`) und `user` (→ `member`).
+`--role` accepts the aliases `admin` (→ `owner`) and `user` (→ `member`).
 
-## Benutzer anlegen / Rolle setzen (Upsert per E-Mail)
+## Creating a user / setting a role (upsert by email)
 
 ```bash
-# Dry-Run (zeigt nur, was passieren würde):
-node scripts/users/create-user.mjs --email chef@example.de --role owner
+# Dry run (only shows what would happen):
+node scripts/users/create-user.mjs --email owner@example.com --role owner
 
-# Ausführen (anlegen ODER Rolle einer bestehenden E-Mail ändern):
-node scripts/users/create-user.mjs --email chef@example.de --role owner --apply
+# Execute (create OR change the role of an existing email):
+node scripts/users/create-user.mjs --email owner@example.com --role owner --apply
 
-# Optional mit Name; ohne --role wird "member" gesetzt:
-node scripts/users/create-user.mjs --email kunde@example.de --name "Max K." --apply
+# Optionally with a name; without --role, "member" is set:
+node scripts/users/create-user.mjs --email customer@example.com --name "Max K." --apply
 ```
 
-Der Betreiber loggt sich danach unter `/login` per **E-Mail-Magic-Link** ein — die
-vorab angelegte Zeile wird wiederverwendet, er ist also sofort `owner`.
+The operator then signs in at `/login` via an **email magic link** — the row
+created up front is reused, so he is an `owner` right away.
 
-## Benutzer auflisten
+## Listing users
 
 ```bash
-node scripts/users/list-users.mjs            # alle
+node scripts/users/list-users.mjs            # all
 node scripts/users/list-users.mjs --role owner
 ```
 
-## Über Makefile (aus dem Repo-Root)
+## Via the runner (from the repo root)
 
 ```bash
-make user-create ARGS='--email chef@example.de --role owner --apply'
-make user-list   ARGS='--role owner'
+node run.mjs user-create --email owner@example.com --role owner --apply
+node run.mjs user-list --role owner
 ```
 
-Dry-Run ist Standard; erst `--apply` schreibt. `create-user.mjs` ist idempotent
-(Upsert nach E-Mail), `list-users.mjs` ist nur lesend.
+Dry run is the default; only `--apply` writes. `create-user.mjs` is idempotent
+(upsert by email), `list-users.mjs` is read-only.

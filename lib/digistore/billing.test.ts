@@ -11,7 +11,7 @@ describe("buildBillOnDemandBody", () => {
     expect(body.get("purchase_id")).toBe("PUR-1");
     expect(body.get("product_id")).toBe("42");
     expect(body.get("payment_plan[first_amount]")).toBe("9.00");
-    // Einmalige Zusatzbuchung: keine Folgebeträge, genau eine Rate.
+    // One-off extra charge: no follow-up amounts, exactly one installment.
     expect(body.get("payment_plan[other_amounts]")).toBe("0.00");
     expect(body.get("payment_plan[number_of_installments]")).toBe("1");
     expect(body.get("payment_plan[currency]")).toBe("EUR");
@@ -29,7 +29,7 @@ describe("buildBillOnDemandBody", () => {
     expect(body.get("payment_plan[currency]")).toBe("CHF");
   });
 
-  it("übernimmt quantity und den custom-Marker für den IPN", () => {
+  it("carries over quantity and the custom marker for the IPN", () => {
     const body = buildBillOnDemandBody({
       purchaseId: "P",
       productId: "1",
@@ -41,7 +41,7 @@ describe("buildBillOnDemandBody", () => {
     expect(body.get("tracking[custom]")).toBe("tokens:pro");
   });
 
-  it("lässt affiliate/custom weg, wenn nicht gesetzt", () => {
+  it("omits affiliate/custom when unset", () => {
     const body = buildBillOnDemandBody({
       purchaseId: "P",
       productId: "1",

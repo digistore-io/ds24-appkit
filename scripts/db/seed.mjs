@@ -1,27 +1,27 @@
 #!/usr/bin/env node
-// Seed — Ausgangsdaten für die lokale Entwicklung.
+// Seed — starting data for local development.
 //
-// Läuft automatisch am Ende von `make db-reset` und einzeln per `make db-seed`.
-// Muss idempotent sein: mehrfaches Ausführen darf nichts kaputt machen (deshalb
-// überall "on conflict do update/nothing").
+// Runs automatically at the end of `node run.mjs db-reset` and on its own via `node run.mjs db-seed`.
+// It has to be idempotent: running it repeatedly must not break anything (hence
+// "on conflict do update/nothing" everywhere).
 //
-// Hier gehören Entwicklungs-Daten hinein (Admin-Account, Beispiel-Inhalte) —
-// KEINE echten Kundendaten und keine Secrets.
+// Development data belongs in here (admin account, example content) — NO real
+// customer data and no secrets.
 import { randomUUID } from "node:crypto";
 import "../lib/env.mjs";
 import postgres from "postgres";
 
 const url = process.env.DATABASE_URL;
 if (!url) {
-  console.error("FEHLER: DATABASE_URL ist nicht gesetzt (siehe .env).");
+  console.error("ERROR: DATABASE_URL is not set (see .env).");
   process.exit(2);
 }
 
-// Admin-Adresse frei wählbar:  SEED_OWNER_EMAIL=ich@example.de make db-seed
-const ownerEmail = (process.env.SEED_OWNER_EMAIL ?? "admin@example.de")
+// The admin address is free to choose:  SEED_OWNER_EMAIL=me@example.com node run.mjs db-seed
+const ownerEmail = (process.env.SEED_OWNER_EMAIL ?? "owner@example.com")
   .trim()
   .toLowerCase();
-const memberEmail = (process.env.SEED_MEMBER_EMAIL ?? "kunde@example.de")
+const memberEmail = (process.env.SEED_MEMBER_EMAIL ?? "customer@example.com")
   .trim()
   .toLowerCase();
 
@@ -36,13 +36,13 @@ try {
       values (${randomUUID()}, ${email}, ${role})
       on conflict (email) do update set role = excluded.role
     `;
-    console.log(`✓ Benutzer: ${email} (${role})`);
+    console.log(`✓ User: ${email} (${role})`);
   }
   console.log(
-    "\nEinloggen: http://localhost:3000/login — Magic-Link an die obige Adresse.",
+    "\nSign in: http://localhost:3000/login — magic link to the address above.",
   );
 } catch (e) {
-  console.error("FEHLER im Seed:", e.message);
+  console.error("ERROR in the seed:", e.message);
   process.exitCode = 1;
 } finally {
   await sql.end();

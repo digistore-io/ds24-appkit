@@ -1,48 +1,90 @@
 import Link from "next/link";
-import { requireOwner } from "@/lib/authz";
+import { getTranslations } from "next-intl/server";
+import { Users, Receipt, ArrowRight } from "lucide-react";
 
-// Betreiber-/Admin-Bereich — nur für Rolle "owner" (siehe lib/authz.ts).
-// Vorbild für eigene Admin-Seiten: requireOwner() als erste Zeile genügt.
+import { requireOwner } from "@/lib/authz";
+import { PageHeader } from "@/components/page-header";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+} from "@/components/ui/card";
+
+export async function generateMetadata() {
+  const t = await getTranslations("admin");
+  return { title: t("title") };
+}
+
+// Operator/admin area — role "owner" only (see lib/authz.ts).
+// A blueprint for your own admin pages: requireOwner() as the first line is
+// all it takes.
 export default async function AdminPage() {
   const session = await requireOwner();
+  const t = await getTranslations("admin");
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-8">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Admin</h1>
-        <Link href="/dashboard" className="text-sm text-muted-foreground underline">
-          ← Dashboard
-        </Link>
-      </div>
+    <>
+      <PageHeader
+        title={t("title")}
+        description={t("description", { email: session.user.email ?? "" })}
+      />
 
-      <p className="text-muted-foreground">
-        Betreiber-Bereich. Angemeldet als {session.user.email} (Rolle:{" "}
-        {session.user.role}).
-      </p>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <div className="bg-primary/10 text-primary mb-2 grid size-9 place-items-center rounded-lg">
+              <Users aria-hidden className="size-4.5" />
+            </div>
+            <CardTitle>{t("usersTitle")}</CardTitle>
+            <CardDescription>{t("usersBody")}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button asChild>
+              <Link href="/dashboard/admin/users">
+                {t("usersCta")}
+                <ArrowRight aria-hidden />
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
 
-      <div className="rounded-lg border p-4">
-        <h2 className="font-medium">Benutzer verwalten</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Benutzer anlegen, Rollen zwischen Admin und Nutzer wechseln, Konten
-          löschen.
-        </p>
-        <Link
-          href="/dashboard/admin/users"
-          className="mt-3 inline-block rounded-lg bg-primary px-4 py-2 text-primary-foreground"
-        >
-          Zur Benutzerverwaltung
-        </Link>
-      </div>
+        <Card>
+          <CardHeader>
+            <div className="bg-primary/10 text-primary mb-2 grid size-9 place-items-center rounded-lg">
+              <Receipt aria-hidden className="size-4.5" />
+            </div>
+            <CardTitle>{t("purchasesTitle")}</CardTitle>
+            <CardDescription>{t("purchasesBody")}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button asChild>
+              <Link href="/dashboard/admin/purchases">
+                {t("purchasesCta")}
+                <ArrowRight aria-hidden />
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
 
-      <div className="rounded-lg border p-4">
-        <h2 className="font-medium">Nur für Betreiber</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Diese Seite ist über <code>requireOwner()</code> abgesichert — Vorbild
-          für eigene Admin-Funktionen. Admins lassen sich auch im Terminal
-          anlegen:{" "}
-          <code>make user-create ARGS=&quot;--email … --role owner --apply&quot;</code>.
-        </p>
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("ownerOnlyTitle")}</CardTitle>
+            <CardDescription>
+              {t.rich("ownerOnlyBody", {
+                code: (chunks) => <code>{chunks}</code>,
+              })}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <pre className="bg-muted overflow-x-auto rounded-md p-3 font-mono text-xs">
+              node run.mjs user-create --email … --role owner --apply
+            </pre>
+          </CardContent>
+        </Card>
       </div>
-    </main>
+    </>
   );
 }

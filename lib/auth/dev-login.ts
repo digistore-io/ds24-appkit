@@ -1,27 +1,26 @@
-// Entwicklungs-Login — meldet ohne Magic-Link und ohne Passwort an.
+// Development login — signs in without a magic link and without a password.
 //
 // ============================================================================
-// WARNUNG: Das ist ein bewusster Auth-Bypass. Er existiert NUR, damit man die
-// eigene App ausprobieren kann, bevor der E-Mail-Versand eingerichtet ist.
-// Wäre er in Produktion aktiv, könnte sich jeder als beliebiger Nutzer
-// anmelden — inklusive als Admin.
+// WARNING: this is a deliberate auth bypass. It exists ONLY so you can try out
+// your own app before email delivery is set up. If it were active in
+// production, anyone could sign in as any user — including as an admin.
 //
-// Er gilt ausschließlich in der Umgebung DEV. Das ist eine Allowlist, keine
-// Ausschlussliste: Alles, was nicht eindeutig als Entwicklung erkannt wird,
-// gilt als Produktion und sperrt (siehe appEnv() in lib/env-guard.ts — ein
-// Tippfehler in APP_ENV führt dort zu "production", nicht zu "development").
+// It applies exclusively in the DEV environment. That is an allowlist, not a
+// blocklist: anything not clearly recognized as development counts as
+// production and is refused (see appEnv() in lib/env-guard.ts — a typo in
+// APP_ENV lands on "production" there, not on "development").
 //
-// VIER unabhängige Bedingungen, alle müssen gelten:
-//   1. APP_ENV ergibt "development" (STAGING und PROD sind ausgeschlossen)
-//   2. NODE_ENV ist nicht "production"  — beim `next build`/`next start` weg
-//   3. APP_URL zeigt auf localhost      — ein echtes Deployment ist nie offen
-//   4. Es ist KEIN Mailversand konfiguriert — sobald Postmark oder SMTP
-//      eingerichtet ist, verschwindet der Bypass automatisch
+// FOUR independent conditions, all of which must hold:
+//   1. APP_ENV resolves to "development" (STAGING and PROD are ruled out)
+//   2. NODE_ENV is not "production"  — gone under `next build`/`next start`
+//   3. APP_URL points at localhost   — a real deployment is never open
+//   4. NO mail transport is configured — as soon as Postmark or SMTP is set
+//      up, the bypass disappears automatically
 //
-// In STAGING/PROD ist der Mailversand Pflicht; fehlt er, startet die App gar
-// nicht erst (instrumentation.ts → pruefeUmgebung).
+// In STAGING/PROD mail sending is mandatory; without it the app does not even
+// start (instrumentation.ts → checkEnvironment).
 //
-// Ausschalten kann man ihn jederzeit hart: DEV_LOGIN=off in der .env.
+// You can always turn it off hard: DEV_LOGIN=off in .env.
 // ============================================================================
 import Credentials from "next-auth/providers/credentials";
 import type { Provider } from "next-auth/providers";
@@ -33,120 +32,126 @@ export interface DevLoginEnv {
   APP_ENV?: string;
   APP_URL?: string;
   DEV_LOGIN?: string;
-  emailKonfiguriert: boolean;
+  emailConfigured: boolean;
 }
 
-/** true, wenn die URL auf den eigenen Rechner zeigt. */
-export function istLokal(appUrl?: string): boolean {
-  if (!appUrl) return true; // nicht gesetzt = lokale Entwicklung
+/** true if the URL points at this machine. */
+export function isLocalUrl(appUrl?: string): boolean {
+  if (!appUrl) return true; // not set = local development
   try {
     const host = new URL(appUrl).hostname;
     return host === "localhost" || host === "127.0.0.1" || host === "::1";
   } catch {
-    return false; // unparsebar → im Zweifel gesperrt
+    return false; // unparseable → refuse, when in doubt
   }
 }
 
 /**
- * Die eine Stelle, die entscheidet, ob der Entwicklungs-Login existiert.
- * Bewusst als reine Funktion — sie ist sicherheitskritisch und wird in
- * lib/auth/dev-login.test.ts einzeln geprüft.
+ * The one place that decides whether the development login exists at all.
+ * Deliberately a pure function — it is security-critical and is tested on its
+ * own in lib/auth/dev-login.test.ts.
  */
-export function istDevLoginErlaubt(env: DevLoginEnv): boolean {
+export function isDevLoginAllowed(env: DevLoginEnv): boolean {
   if (env.DEV_LOGIN === "off") return false;
-  // Allowlist: NUR die Umgebung DEV. appEnv() stuft alles Unbekannte als
-  // "production" ein — ein Tippfehler öffnet den Bypass also nicht.
+  // Allowlist: ONLY the DEV environment. appEnv() classifies anything unknown
+  // as "production" — so a typo does not open the bypass.
   if (appEnv(env.APP_ENV) !== "development") return false;
   if (env.NODE_ENV === "production") return false;
-  if (env.emailKonfiguriert) return false;
-  if (!istLokal(env.APP_URL)) return false;
+  if (env.emailConfigured) return false;
+  if (!isLocalUrl(env.APP_URL)) return false;
   return true;
 }
 
-/** Liest die Bedingungen aus der echten Umgebung. */
-export function devLoginAktiv(): boolean {
-  return istDevLoginErlaubt({
+/** Reads the conditions from the actual environment. */
+export function isDevLoginActive(): boolean {
+  return isDevLoginAllowed({
     NODE_ENV: process.env.NODE_ENV,
     APP_ENV: process.env.APP_ENV,
     APP_URL: process.env.APP_URL,
     DEV_LOGIN: process.env.DEV_LOGIN,
-    emailKonfiguriert: isEmailLoginEnabled(),
+    emailConfigured: isEmailLoginEnabled(),
   });
 }
 
 /**
- * Adresse, die der Anmeldeseite als Vorschlag dient: bevorzugt der aelteste
- * Admin, sonst der aelteste Nutzer. Gibt null zurueck, solange die App keine
- * Nutzer hat — dann darf man sich mit einer beliebigen Adresse anmelden.
+ * The address offered as a suggestion on the sign-in page: preferably the
+ * oldest admin, otherwise the oldest user. Returns null while the app has no
+ * users — then any address may be used to sign in.
  *
- * Nur fuer die Anzeige im Demo-Betrieb. Rechte haengen nicht daran; wer sich
- * anmeldet, bekommt die Rolle des Kontos aus der Datenbank.
+ * For display in demo mode only. No rights depend on it; whoever signs in gets
+ * the account's role from the database.
  */
-export async function demoLoginVorschlag(): Promise<string | null> {
-  if (!devLoginAktiv()) return null;
+export async function demoLoginSuggestion(): Promise<string | null> {
+  if (!isDevLoginActive()) return null;
   try {
     const { db } = await import("@/db");
     const { users } = await import("@/db/schema");
     const { asc, sql } = await import("drizzle-orm");
 
-    const [treffer] = await db
+    const [match] = await db
       .select({ email: users.email })
       .from(users)
-      // Admins zuerst, danach nach Alter — das ist in aller Regel das Konto,
-      // das der Betreiber sich per `make user-create` angelegt hat.
+      // Admins first, then by age — as a rule that is the account the operator
+      // created for themselves with `node run.mjs user-create`.
       .orderBy(sql`case when ${users.role} = 'owner' then 0 else 1 end`, asc(users.createdAt))
       .limit(1);
-    return treffer?.email ?? null;
+    return match?.email ?? null;
   } catch {
-    // Keine DB erreichbar (z. B. Container noch nicht gestartet) — die
-    // Anmeldeseite soll deswegen nicht kaputtgehen.
+    // No database reachable (e.g. the container has not started yet) — the
+    // sign-in page should not break because of that.
     return null;
   }
 }
 
 /**
- * Baut den Provider — oder null, wenn er nicht erlaubt ist.
+ * Builds the provider — or null if it is not allowed.
  *
- * Der Nutzer gibt nur eine E-Mail-Adresse ein. Existiert sie, wird dieses Konto
- * verwendet (samt Rolle); sonst wird ein neues Konto als "member" angelegt —
- * genau wie beim Magic-Link-Login.
+ * The user only enters an email address. If it exists, that account is used
+ * (role included); otherwise a new account is created — exactly as with the
+ * magic-link sign-in, and with the same role: "member", unless it is the very
+ * first account in the app (see lib/users/bootstrap.ts).
  */
 export function buildDevLoginProvider(): Provider | null {
-  if (!devLoginAktiv()) return null;
+  if (!isDevLoginActive()) return null;
 
   console.warn(
-    "\n⚠️  ENTWICKLUNGS-LOGIN AKTIV — Anmeldung ohne Passwort und ohne Magic-Link.\n" +
-      "   Grund: kein Mailversand konfiguriert. Einrichten mit: make mail-setup\n",
+    "\n⚠️  DEVELOPMENT LOGIN ACTIVE — sign-in without password and without magic link.\n" +
+      "   Reason: no mail transport configured. Set one up with: node run.mjs mail-setup\n",
   );
 
   return Credentials({
     id: "dev-login",
-    name: "Entwicklungs-Login",
-    credentials: { email: { label: "E-Mail", type: "email" } },
+    name: "Development login",
+    credentials: { email: { label: "Email", type: "email" } },
     async authorize(credentials) {
-      // Zweite Prüfung zur Laufzeit: Wird der Provider trotz geänderter
-      // Umgebung noch aufgerufen, ist hier Schluss.
-      if (!devLoginAktiv()) return null;
+      // Second check at runtime: if the provider is still called despite a
+      // changed environment, this is where it stops.
+      if (!isDevLoginActive()) return null;
 
       const email = String(credentials?.email ?? "").trim().toLowerCase();
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return null;
 
-      // Erst zur Laufzeit laden — hält die DB aus dem Edge-/Client-Bundle raus.
+      // Load only at runtime — keeps the database out of the edge/client bundle.
       const { db } = await import("@/db");
       const { users } = await import("@/db/schema");
       const { eq } = await import("drizzle-orm");
 
-      const [vorhanden] = await db
+      const [existing] = await db
         .select({ id: users.id, email: users.email, name: users.name, role: users.role })
         .from(users)
         .where(eq(users.email, email));
-      if (vorhanden) return vorhanden;
+      if (existing) return existing;
 
-      const [neu] = await db
+      // The first account on a fresh installation becomes the owner —
+      // otherwise whoever creates the app could not reach their own admin
+      // area. The rule and its limits live in lib/users/bootstrap.ts.
+      const { roleForNewUser } = await import("@/lib/users/bootstrap");
+
+      const [created] = await db
         .insert(users)
-        .values({ email, emailVerified: new Date() })
+        .values({ email, emailVerified: new Date(), role: await roleForNewUser() })
         .returning({ id: users.id, email: users.email, name: users.name, role: users.role });
-      return neu;
+      return created;
     },
   });
 }

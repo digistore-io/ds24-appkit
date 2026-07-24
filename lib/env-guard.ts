@@ -1,27 +1,27 @@
-// Umgebungs-Regeln: DEV / STAGING / PROD.
+// Environment rules: DEV / STAGING / PROD.
 //
-// Dieses Template kennt drei Umgebungen (siehe docs/environments.md). Sie
-// unterscheiden sich nicht nur im Namen — an ihnen hängen harte Regeln:
+// This template knows three environments (see docs/environments.md). They
+// differ in more than name — hard rules hang off them:
 //
-//   DEV      lokal. Mailversand optional; solange keiner eingerichtet ist,
-//            gibt es den Entwicklungs-Login (Anmeldung ohne Magic-Link).
-//   STAGING  echte Domain, echte Nutzer-Tests. Mailversand ist PFLICHT,
-//            Entwicklungs-Login ausgeschlossen.
-//   PROD     echtes Geld, echte Kunden. Mailversand ist PFLICHT,
-//            Entwicklungs-Login ausgeschlossen.
+//   DEV      local. Mail sending optional; as long as none is set up, the
+//            development login exists (sign-in without a magic link).
+//   STAGING  real domain, real user testing. Mail sending is MANDATORY,
+//            the development login is ruled out.
+//   PROD     real money, real customers. Mail sending is MANDATORY,
+//            the development login is ruled out.
 //
-// Der Entwicklungs-Login ist ein Auth-Bypass (lib/auth/dev-login.ts). Damit er
-// nicht durch ein vergessenes Env-Flag in eine echte Umgebung gerät, prüft
-// diese Datei die Umgebung beim Serverstart (instrumentation.ts) und bricht ab,
-// statt unsicher weiterzulaufen.
+// The development login is an auth bypass (lib/auth/dev-login.ts). So that a
+// forgotten env flag cannot let it slip into a real environment, this file
+// checks the environment at server start (instrumentation.ts) and aborts
+// instead of carrying on unsafely.
 
 export type AppEnv = "development" | "staging" | "production";
 
-// --- Erkennung des Mailversands ------------------------------------------
-// Bewusst hier und nicht in lib/email.ts: Diese Prüfungen lesen nur Env-Werte
-// und ziehen keine Abhängigkeiten nach. lib/email.ts hängt an nodemailer —
-// würde instrumentation.ts von dort importieren, landete nodemailer im
-// Edge-Bundle und die App startet nicht mehr ("Can't resolve 'stream'").
+// --- Detecting the mail transport ----------------------------------------
+// Deliberately here and not in lib/email.ts: these checks only read env values
+// and pull in no dependencies. lib/email.ts depends on nodemailer — if
+// instrumentation.ts imported from there, nodemailer would end up in the edge
+// bundle and the app would stop starting ("Can't resolve 'stream'").
 
 export interface MailEnv {
   POSTMARK_SERVER_TOKEN?: string;
@@ -29,36 +29,36 @@ export interface MailEnv {
   SMTP_HOST?: string;
   SMTP_USER?: string;
   SMTP_PASSWORD?: string;
-  // Index-Signatur, damit sich process.env direkt übergeben lässt.
+  // Index signature so process.env can be passed in directly.
   [key: string]: string | undefined;
 }
 
-export function istPostmarkKonfiguriert(env: MailEnv): boolean {
+export function hasPostmarkConfig(env: MailEnv): boolean {
   return Boolean(env.POSTMARK_SERVER_TOKEN && env.POSTMARK_SENDER);
 }
 
-export function istSmtpKonfiguriert(env: MailEnv): boolean {
+export function hasSmtpConfig(env: MailEnv): boolean {
   return Boolean(env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASSWORD);
 }
 
-/** true, wenn mindestens ein Transport vollständig konfiguriert ist. */
-export function istEmailKonfiguriert(env: MailEnv): boolean {
-  return istPostmarkKonfiguriert(env) || istSmtpKonfiguriert(env);
+/** true if at least one transport is fully configured. */
+export function hasEmailConfig(env: MailEnv): boolean {
+  return hasPostmarkConfig(env) || hasSmtpConfig(env);
 }
 
-export interface UmgebungsEnv {
+export interface EnvCheckInput {
   APP_ENV?: string;
   NODE_ENV?: string;
   AUTH_SECRET?: string;
-  emailKonfiguriert: boolean;
+  emailConfigured: boolean;
 }
 
 /**
- * Normalisiert APP_ENV. Unbekannte Werte gelten als "production" — im Zweifel
- * die strengste Umgebung, nicht die lockerste.
+ * Normalizes APP_ENV. Unknown values count as "production" — when in doubt the
+ * strictest environment, not the loosest.
  */
-export function appEnv(wert?: string): AppEnv {
-  const v = (wert ?? "").trim().toLowerCase();
+export function appEnv(value?: string): AppEnv {
+  const v = (value ?? "").trim().toLowerCase();
   if (v === "" || v === "development" || v === "dev" || v === "local") {
     return "development";
   }
@@ -66,38 +66,39 @@ export function appEnv(wert?: string): AppEnv {
   return "production";
 }
 
-/** true für Umgebungen, die echte Nutzer sehen (STAGING und PROD). */
-export function istEchteUmgebung(wert?: string): boolean {
-  return appEnv(wert) !== "development";
+/** true for environments real users see (STAGING and PROD). */
+export function isRealEnvironment(value?: string): boolean {
+  return appEnv(value) !== "development";
 }
 
 /**
- * Prüft die Umgebung und liefert die Liste der Verstöße (leer = in Ordnung).
- * Reine Funktion, damit sie in lib/env-guard.test.ts einzeln geprüft werden kann.
+ * Checks the environment and returns the list of violations (empty = fine).
+ * A pure function, so it can be tested on its own in lib/env-guard.test.ts.
  */
-export function pruefeUmgebung(env: UmgebungsEnv): string[] {
-  const probleme: string[] = [];
-  const umgebung = appEnv(env.APP_ENV);
+export function checkEnvironment(env: EnvCheckInput): string[] {
+  const problems: string[] = [];
+  const environment = appEnv(env.APP_ENV);
 
-  if (umgebung === "development") return probleme;
+  if (environment === "development") return problems;
 
-  // Ab hier: STAGING oder PROD.
-  if (!env.emailKonfiguriert) {
-    probleme.push(
-      `APP_ENV=${umgebung}: Es ist kein E-Mail-Versand konfiguriert. ` +
-        "In STAGING und PROD ist er Pflicht — ohne ihn könnte sich niemand " +
-        "anmelden, und der Entwicklungs-Login steht dort bewusst nicht zur " +
-        "Verfügung. Setze Postmark (POSTMARK_SERVER_TOKEN + POSTMARK_SENDER) " +
-        "oder SMTP (SMTP_HOST + SMTP_USER + SMTP_PASSWORD).",
+  // From here on: STAGING or PROD.
+  if (!env.emailConfigured) {
+    problems.push(
+      `APP_ENV=${environment}: No email delivery is configured. ` +
+        "In STAGING and PROD it is mandatory — without it nobody could sign " +
+        "in, and the development login is deliberately unavailable there. " +
+        "Set up Postmark (POSTMARK_SERVER_TOKEN + POSTMARK_SENDER) " +
+        "or SMTP (SMTP_HOST + SMTP_USER + SMTP_PASSWORD).",
     );
   }
 
   if (!env.AUTH_SECRET) {
-    probleme.push(
-      `APP_ENV=${umgebung}: AUTH_SECRET fehlt. Ohne Geheimnis lassen sich ` +
-        "Sitzungen nicht sicher signieren. Erzeugen mit: openssl rand -hex 32",
+    problems.push(
+      `APP_ENV=${environment}: AUTH_SECRET is missing. Without a secret, ` +
+        "sessions cannot be signed securely. Generate one with:\n" +
+        `  node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`,
     );
   }
 
-  return probleme;
+  return problems;
 }

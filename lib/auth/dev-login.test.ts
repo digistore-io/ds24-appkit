@@ -1,44 +1,44 @@
 import { describe, it, expect } from "vitest";
-import { istDevLoginErlaubt, istLokal, type DevLoginEnv } from "./dev-login";
+import { isDevLoginAllowed, isLocalUrl, type DevLoginEnv } from "./dev-login";
 
 // Der Entwicklungs-Login ist ein Auth-Bypass. Diese Tests sind die Wache davor:
-// Jede einzelne Bedingung muss ihn allein abschalten können.
+// Each individual condition must be able to switch it off on its own.
 const erlaubt: DevLoginEnv = {
   NODE_ENV: "development",
   APP_ENV: "development",
   APP_URL: "http://localhost:3000",
-  emailKonfiguriert: false,
+  emailConfigured: false,
 };
 
-describe("istDevLoginErlaubt", () => {
+describe("isDevLoginAllowed", () => {
   it("erlaubt ihn nur im lokalen Entwicklungsfall ohne Mailversand", () => {
-    expect(istDevLoginErlaubt(erlaubt)).toBe(true);
+    expect(isDevLoginAllowed(erlaubt)).toBe(true);
   });
 
   it("sperrt bei NODE_ENV=production", () => {
-    expect(istDevLoginErlaubt({ ...erlaubt, NODE_ENV: "production" })).toBe(false);
+    expect(isDevLoginAllowed({ ...erlaubt, NODE_ENV: "production" })).toBe(false);
   });
 
   it("sperrt bei APP_ENV=production", () => {
-    expect(istDevLoginErlaubt({ ...erlaubt, APP_ENV: "production" })).toBe(false);
+    expect(isDevLoginAllowed({ ...erlaubt, APP_ENV: "production" })).toBe(false);
   });
 
   it("sperrt bei APP_ENV=staging", () => {
-    expect(istDevLoginErlaubt({ ...erlaubt, APP_ENV: "staging" })).toBe(false);
+    expect(isDevLoginAllowed({ ...erlaubt, APP_ENV: "staging" })).toBe(false);
   });
 
   it("sperrt bei unbekanntem oder vertipptem APP_ENV (Allowlist)", () => {
     // appEnv() stuft alles Unbekannte als "production" ein — ein Tippfehler
-    // darf den Bypass niemals öffnen.
-    for (const wert of ["prod", "produktion", "developmnt", "DEV ", "live", "x"]) {
-      const ergebnis = istDevLoginErlaubt({ ...erlaubt, APP_ENV: wert });
+    // must never open the bypass.
+    for (const value of ["prod", "produktion", "developmnt", "DEV ", "live", "x"]) {
+      const ergebnis = isDevLoginAllowed({ ...erlaubt, APP_ENV: value });
       // "DEV " (mit Leerzeichen) wird normalisiert und ist erlaubt.
-      expect(ergebnis).toBe(wert.trim().toLowerCase() === "dev");
+      expect(ergebnis).toBe(value.trim().toLowerCase() === "dev");
     }
   });
 
   it("sperrt, sobald ein Mailversand konfiguriert ist", () => {
-    expect(istDevLoginErlaubt({ ...erlaubt, emailKonfiguriert: true })).toBe(false);
+    expect(isDevLoginAllowed({ ...erlaubt, emailConfigured: true })).toBe(false);
   });
 
   it("sperrt bei nicht-lokaler APP_URL", () => {
@@ -47,39 +47,39 @@ describe("istDevLoginErlaubt", () => {
       "http://192.168.1.10:3000",
       "https://staging.meine-app.de",
     ]) {
-      expect(istDevLoginErlaubt({ ...erlaubt, APP_URL: url })).toBe(false);
+      expect(isDevLoginAllowed({ ...erlaubt, APP_URL: url })).toBe(false);
     }
   });
 
-  it("lässt sich mit DEV_LOGIN=off hart abschalten", () => {
-    expect(istDevLoginErlaubt({ ...erlaubt, DEV_LOGIN: "off" })).toBe(false);
+  it("can be switched off hard with DEV_LOGIN=off", () => {
+    expect(isDevLoginAllowed({ ...erlaubt, DEV_LOGIN: "off" })).toBe(false);
   });
 
   it("bleibt gesperrt, wenn mehrere Bedingungen zugleich verletzt sind", () => {
     expect(
-      istDevLoginErlaubt({
+      isDevLoginAllowed({
         ...erlaubt,
         NODE_ENV: "production",
         APP_URL: "https://meine-app.de",
-        emailKonfiguriert: true,
+        emailConfigured: true,
       }),
     ).toBe(false);
   });
 });
 
-describe("istLokal", () => {
+describe("isLocalUrl", () => {
   it("erkennt lokale Adressen", () => {
-    expect(istLokal("http://localhost:3000")).toBe(true);
-    expect(istLokal("http://127.0.0.1:3001")).toBe(true);
-    expect(istLokal(undefined)).toBe(true); // nicht gesetzt = lokal
+    expect(isLocalUrl("http://localhost:3000")).toBe(true);
+    expect(isLocalUrl("http://127.0.0.1:3001")).toBe(true);
+    expect(isLocalUrl(undefined)).toBe(true); // nicht gesetzt = lokal
   });
 
   it("erkennt fremde Adressen", () => {
-    expect(istLokal("https://meine-app.de")).toBe(false);
-    expect(istLokal("http://app.internal:3000")).toBe(false);
+    expect(isLocalUrl("https://meine-app.de")).toBe(false);
+    expect(isLocalUrl("http://app.internal:3000")).toBe(false);
   });
 
   it("sperrt bei unparsebarer URL", () => {
-    expect(istLokal("kaputt")).toBe(false);
+    expect(isLocalUrl("kaputt")).toBe(false);
   });
 });

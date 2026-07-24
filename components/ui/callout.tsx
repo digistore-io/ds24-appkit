@@ -2,22 +2,21 @@ import * as React from "react";
 import { Info, CheckCircle2, AlertTriangle, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-// Die EINE Form für Hinweise, Erfolgs-, Warn- und Fehlermeldungen.
+// The ONE shape for notices, success, warning and error messages.
 //
-// Warum zentral: Meldungen sind die Stellen, an denen selbstgebaute Farben am
-// haeufigsten schiefgehen — z. B. `text-amber-900` auf `bg-amber-50`, das im
-// Dunkelmodus grau auf sandfarben wird und unlesbar ist. Die Varianten hier
-// haengen an Token-Paaren aus app/globals.css, die in BEIDEN Themes geprueft
-// sind. Deshalb: keine eigenen Farb-Klassen fuer Meldungen schreiben, sondern
-// diese Komponente nutzen.
+// Why centralized: messages are where hand-picked colors go wrong most often —
+// e.g. `text-amber-900` on `bg-amber-50`, which turns grey on sand in dark
+// mode and becomes unreadable. The variants here hang off token pairs from
+// app/globals.css that are checked in BOTH themes. So: do not write your own
+// color classes for messages, use this component.
 //
-//   <Callout variant="warning" title="Kein Mailversand">Text …</Callout>
+//   <Callout variant="warning" title="No mail transport">Text …</Callout>
 //
-// Varianten:
-//   info    — neutraler Hinweis, Standard
-//   success — hat geklappt
-//   warning — Achtung, aber nichts kaputt
-//   danger  — Fehler / etwas ist fehlgeschlagen
+// Variants:
+//   info    — neutral notice, the default
+//   success — it worked
+//   warning — pay attention, but nothing is broken
+//   danger  — error / something failed
 
 const VARIANTS = {
   info: {
@@ -41,13 +40,13 @@ const VARIANTS = {
 export type CalloutVariant = keyof typeof VARIANTS;
 
 export interface CalloutProps
-  // `title` ist am div ein string-Attribut (Tooltip) — hier ist es die
-  // Überschrift und darf beliebiges JSX sein, deshalb ausgeschlossen.
+  // On a div, `title` is a string attribute (tooltip) — here it is the
+  // heading and may be arbitrary JSX, hence it is excluded.
   extends Omit<React.HTMLAttributes<HTMLDivElement>, "title"> {
   variant?: CalloutVariant;
-  /** Fettgesetzte erste Zeile. Weglassen für eine einzeilige Meldung. */
+  /** Bold first line. Omit for a single-line message. */
   title?: React.ReactNode;
-  /** Icon ausblenden (z. B. in sehr schmalen Spalten). */
+  /** Hide the icon (e.g. in very narrow columns). */
   hideIcon?: boolean;
 }
 
@@ -62,9 +61,9 @@ export function Callout({
   const { box, Icon } = VARIANTS[variant];
   return (
     <div
-      // role="status" statt "alert": Callouts stehen im Seitenfluss und sollen
-      // Screenreader nicht unterbrechen. Für wirklich Unterbrechendes (z. B.
-      // ein fehlgeschlagener Kauf) role="alert" von aussen setzen.
+      // role="status" rather than "alert": callouts sit in the page flow and
+      // should not interrupt screen readers. For something genuinely
+      // interrupting (e.g. a failed purchase) set role="alert" from outside.
       role="status"
       className={cn(
         "flex gap-3 rounded-xl border px-4 py-3 text-sm [&_a]:underline [&_code]:rounded [&_code]:bg-black/10 [&_code]:px-1 [&_code]:py-0.5 dark:[&_code]:bg-white/10",

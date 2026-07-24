@@ -1,13 +1,13 @@
-// Gemeinsamer Digistore24-API-Client für die Setup-Skripte (reines Node ESM).
-// Auth: Header X-DS-API-KEY. Basis über DIGISTORE_URL (Test/Prod).
+// Shared Digistore24 API client for the setup scripts (plain Node ESM).
+// Auth: header X-DS-API-KEY. Base URL via DIGISTORE_URL (test/prod).
 //
 // Env:
-//   DIGISTORE_API_KEY  (erforderlich zum Ausführen; für Produkt-/IPN-Verwaltung
-//                       i. d. R. ein "writable"- bzw. "developer"-Key)
-//   DIGISTORE_URL      (optional; Default Prod)
+//   DIGISTORE_API_KEY  (required in order to run; for product/IPN management
+//                       usually a "writable" or "developer" key)
+//   DIGISTORE_URL      (optional; defaults to prod)
 //
-// .env wird automatisch geladen (scripts/lib/env.mjs); gesetzte Shell-Variablen
-// haben Vorrang.
+// The .env is loaded automatically (scripts/lib/env.mjs); variables already set
+// in the shell take precedence.
 import "../lib/env.mjs";
 
 export function baseUrl() {
@@ -17,15 +17,15 @@ export function baseUrl() {
 export function requireApiKey() {
   const key = process.env.DIGISTORE_API_KEY;
   if (!key) {
-    console.error("FEHLER: DIGISTORE_API_KEY ist nicht gesetzt.");
+    console.error("ERROR: DIGISTORE_API_KEY is not set.");
     process.exit(2);
   }
   return key;
 }
 
 /**
- * Ruft eine DS24-API-Funktion auf. Params dürfen Bracket-Notation nutzen.
- * Wirft bei HTTP- oder Logik-Fehler (result != success).
+ * Calls a DS24 API function. Params may use bracket notation.
+ * Throws on an HTTP error or a logical error (result != success).
  */
 export async function ds24Call(fn, apiKey, params = {}) {
   const body = new URLSearchParams(params).toString();
@@ -44,16 +44,33 @@ export async function ds24Call(fn, apiKey, params = {}) {
   try {
     data = JSON.parse(text);
   } catch {
-    throw new Error(`DS24 ungültiges JSON (${fn}): ${text}`);
+    throw new Error(`DS24 invalid JSON (${fn}): ${text}`);
   }
   if (data.result !== "success") {
-    throw new Error(`DS24 API-Fehler (${fn}): ${data.message || "unbekannt"}`);
+    throw new Error(`DS24 API error (${fn}): ${data.message || "unknown"}`);
   }
   return data.data;
 }
 
-/** Minimaler Flag-Parser: --key value  und  --flag (boolean). */
+/**
+ * Digistore24 answers boolean fields with the STRINGS "Y" and "N" (see
+ * base.php → bool() in the API source). In JavaScript **both are truthy**, so
+ * `if (res.created)` is true even when nothing was created — which is exactly
+ * how `ipnSetup` came to report "created" on every update. Every Y/N field
+ * goes through here.
+ */
+export function isYes(value) {
+  if (value === true || value === 1) return true;
+  const v = String(value ?? "").trim().toUpperCase();
+  return v === "Y" || v === "1" || v === "TRUE";
+}
+
+/**
+ * Minimal flag parser: --key value  and  --flag (boolean).
+ * @returns {Record<string, string | true>}
+ */
 export function parseArgs(argv) {
+  /** @type {Record<string, string | true>} */
   const out = {};
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];

@@ -1,171 +1,209 @@
-# Abrechnungs-Modelle: Abos + Prepaid-Token
+# Billing models: subscriptions + prepaid tokens
 
-Neben einmaligen Käufen (`createBuyUrl`, siehe `digistore-createbuyurl.md`) unter-
-stützt das Template zwei weitere Modelle, einzeln oder **kombiniert**:
+Besides one-off purchases (`createBuyUrl`, see `digistore-createbuyurl.md`) the
+template supports two further models, on their own or **combined**:
 
-1. **Abo mit fester Zahlung** — monatlich/jährlich wiederkehrend.
-2. **Verbrauchsabrechnung mit Prepaid-Token** — der Kunde kauft Token-Pakete;
-   Nutzung zieht Token ab; bei niedrigem Stand wird **automatisch nachgeladen**.
+1. **Subscription with a fixed payment** — recurring monthly/yearly.
+2. **Usage billing with prepaid tokens** — the customer buys token packages;
+   usage draws tokens down; at a low balance it is **topped up automatically**.
 
-Ein typischer Zuschnitt: **Basis-Abo (fix) + verbrauchsbasierte Token für die
-KI-Nutzung**. Beides läuft über denselben DS24-Account, IPN und Checkout.
+A typical cut: **base subscription (fixed) + usage-based tokens for the AI
+usage**. Both run through the same DS24 account, IPN and checkout.
 
 Code:
-- `config/digistore-products.json` — **Produkt-Registry** (Source of Truth): je
-  Angebot ein DS24-Produkt; `productId` von `sync-products.mjs` zurückgeschrieben.
-- `lib/digistore/products.ts` — Registry-Zugriff + **`productBuyUrl`** (Checkout
-  über Produkt-Link, **statt** createBuyUrl).
+- `config/digistore-products.json` — **product registry** (source of truth): one
+  DS24 product per offer; `productId` written back by `sync-products.mjs`.
+- `lib/digistore/products.ts` — registry access (price, interval, features).
+- `lib/digistore/checkout.ts` — **registry entry → checkout link**
+  (`checkoutLinksFor`), on top of `createBuyUrl`.
 - `lib/digistore/billing.ts` — `createBillingOnDemand`, `stopRebilling`,
   `getPurchase`, `listPurchases`.
-- `lib/tokens/packages.ts` — Token-Pakete (aus der Registry, kind="token").
-- `lib/tokens/account.ts` — Guthaben, Verbrauch, Gutschrift, Auto-Aufladen.
+- `lib/tokens/packages.ts` — token packages (from the registry, kind="token").
+- `lib/tokens/account.ts` — balance, consumption, credit, auto-reload.
+- `lib/entitlements/manage.ts` — **what a Member may use** (`hasPlan`,
+  `entitlementsFor`). The access question is answered here, never from the
+  billing tables below; see `entitlements.md`.
 - `db/schema-tokens.ts` — `subscriptions`, `tokenAccounts`, `tokenLedger`.
-- IPN: `app/api/ipn/route.ts` (Gutschrift + Abo-Upsert).
-- Scripts: `scripts/ds24/sync-products.mjs` (anlegen/aktualisieren),
-  `scripts/ds24/request-approval.mjs` (Freigabe im Go-Live).
+- IPN: `app/api/ipn/route.ts` (credit + subscription upsert).
+- Scripts: `scripts/ds24/sync-products.mjs` (create/update),
+  `scripts/ds24/request-approval.mjs` (approval at go-live).
 
-## Produkte: Registry + Checkout über Produkt-Links
+## Products: registry + checkout via createBuyUrl
 
-Jedes Angebot (Abo-Tarif **und** Token-Paket) ist **ein DS24-Produkt** mit stabiler
-`productId`. Deklariere Produkte in `config/digistore-products.json` und lege sie an:
+Every offer (subscription plan **and** token package) is **one DS24 product** with a
+stable `productId`. Declare products in `config/digistore-products.json` and create them:
 
 ```bash
-DIGISTORE_API_KEY=... node scripts/ds24/sync-products.mjs --apply
+node run.mjs ds24-sync
 ```
 
-Das Skript schreibt die `productId`(s) in die Config zurück. **Preis/Intervall**
-werden je Produkt als **DS24-Payment-Plan** gepflegt (in der DS24-Oberfläche) — der
-Preis lässt sich nicht per API am Produkt setzen (`data[amount]` ist deprecated).
+That writes the `productId`(s) back into the config **and** registers the IPN.
+(`node scripts/ds24/sync-products.mjs --apply` only does the products — the
+purchases would then unlock nothing.)
 
-Checkout ohne createBuyUrl — direkt über den Produkt-Link:
+**The price stays in the registry.** `data[amount]` on the DS24 product is
+deprecated and discarded; instead `priceCents`, `currency` and `billingInterval`
+travel with every checkout call as `payment_plan[...]`. DS24 does offer a
+`createPaymentPlan` API, but a stored plan would put the price in a second place
+and could not do free trials, upgrades, vouchers or per-link affiliate
+commissions. **No payment plans in the DS24 interface.**
+
+Checkout:
 
 ```ts
-import { productBuyUrl } from "@/lib/digistore/products";
-import { tokenCustomMarker } from "@/lib/tokens/packages";
+import { checkoutLinksFor } from "@/lib/digistore/checkout";
+import { productsByKind } from "@/lib/digistore/products";
 
-// Abo:
-const url = productBuyUrl("basis_monatlich", { email });
-// Token-Paket (custom-Marker für die spätere Gutschrift):
-const tokenUrl = productBuyUrl("pro", { email, custom: tokenCustomMarker("pro") });
-// -> url dem Käufer öffnen. Alle Umgebungen nutzen dieselbe Live-productId.
+const plans = [...productsByKind("subscription"), ...productsByKind("token")];
+const links = await checkoutLinksFor(plans, { buyer: { email } });
+
+const link = links.get("pro");
+// { url } → render the buy button
+// { url: null, blocker } → "notSynced" | "notConnected" | "error"
 ```
+
+`checkoutLinksFor` sets two things per token package by itself: the
+`tokens:<key>` marker the IPN books the credit against, and
+`settings[force_rebilling]=Y` — without which no chargeable `purchase_id` comes
+into being and the auto-reload below cannot work. URLs are cached for 20h
+(`buy_url_cache`) and regenerate whenever the offer changes. Blueprint:
+`app/plans/page.tsx`. All environments use the same live `productId`.
 
 ---
 
-## 1. Prepaid-Token: nachkaufen & auto-aufladen (`createBillingOnDemand`)
+## 1. Prepaid tokens: buying more & auto-reload (`createBillingOnDemand`)
 
-`createBillingOnDemand` bucht gegen eine **bestehende `purchase_id`** eine weitere
-Zahlung ab — die Zahlungsmethode des Kunden ist bereits autorisiert, es ist **kein
-neuer Checkout** nötig. Genau das trägt den Token-Nachkauf und das Auto-Aufladen.
+`createBillingOnDemand` charges a further payment against an **existing
+`purchase_id`** — the customer's payment method is already authorized, **no new
+checkout** is needed. That is exactly what carries buying more tokens and the auto-reload.
 
-### Voraussetzungen
+### Prerequisites
 
-- **writable-API-Key** und im DS24-Konto das Recht **„billing on demand"**.
-- Eine **abbuchbare `purchase_id`**. Sie entsteht durch:
-  - ein **Abo** (jede Abo-`purchase_id` ist abbuchbar), oder
-  - einen Kauf, dessen **Payment-Plan Rebilling erlaubt** (im DS24-Produkt-Payment-
-    Plan aktivieren) — so bleibt die Zahlungsmethode für spätere On-Demand-Buchungen
-    hinterlegt.
-- **DS24-Limits:** 10 Buchungen/Tag und 1/Minute je `purchase_id` (Produktion).
+- A **writable API key** and, in the DS24 account, the **"billing on demand"** right.
+- A **chargeable `purchase_id`**. It comes into being through:
+  - a **subscription** (every subscription `purchase_id` is chargeable), or
+  - a purchase made with **`settings[force_rebilling]=Y`** — that keeps the
+    payment method on file for later on-demand charges. `checkoutLinksFor` sets
+    this for every `kind: "token"` entry (`forceRebilling` in
+    `lib/digistore/checkout.ts`).
+- **DS24 limits:** 10 charges/day and 1/minute per `purchase_id` (production).
 
-### Ablauf (wichtig: Gutschrift erst per IPN)
+### Flow (important: credit only via IPN)
 
 ```
-Kunde hat purchase_id ──▶ createBillingOnDemand(apiKey, {purchaseId, productId,
-                                                  priceCents, custom:"tokens:pro"})
-      │                         (bucht ab; schreibt NICHT gut)
+Customer has purchase_id ──▶ createBillingOnDemand(apiKey, {purchaseId, productId,
+                                                     priceCents, custom:"m:…;t:…;p:pro"})
+      │                         (charges; does NOT credit)
       ▼
-DS24 verarbeitet Zahlung ──▶ IPN on_payment (custom = "tokens:pro")
+DS24 processes payment ──▶ IPN on_payment (custom = "m:…;t:…;p:pro")
       ▼
-IPN-Handler ──▶ creditTokens(...)  (idempotent über order_id → Guthaben +credits)
+IPN handler ──▶ creditTokens(...)  (idempotent via order_id → balance +credits)
+                 only once the payment is attributed to a member; an
+                 anonymous purchase waits for the buyer to sign in
 ```
 
-Die Gutschrift passiert **nie synchron** in `createBillingOnDemand`, sondern erst,
-wenn DS24 die Zahlung per IPN bestätigt — exakt wie bei einem normalen Kauf. Der
-`custom`-Marker `tokens:<paketSchlüssel>` verbindet Buchung und Gutschrift.
+The credit **never** happens synchronously in `createBillingOnDemand`, but only
+once DS24 confirms the payment via IPN — exactly as with a normal purchase. The
+The `custom` value carries the buyer's identity — member id, checkout token
+and product key — which connects charge and credit and says WHOSE credit it
+is. See `lib/digistore/custom.ts`. The older `tokens:<packageKey>` marker is
+still parsed for purchases created before this, but is never sent again.
 
-### Erst-Kauf eines Pakets (ohne On-Demand)
+### First purchase of a package (without on-demand)
 
-Für den **ersten** Kauf genügt der Produkt-Link mit dem custom-Marker:
+The **first** purchase runs through the normal checkout link:
 
 ```ts
-import { productBuyUrl } from "@/lib/digistore/products";
-import { tokenCustomMarker } from "@/lib/tokens/packages";
+import { checkoutLinksFor } from "@/lib/digistore/checkout";
+import { getProduct } from "@/lib/digistore/products";
 
-const url = productBuyUrl("pro", { email, custom: tokenCustomMarker("pro") });
-// -> dem Käufer öffnen. Für spätere Auto-Aufladung muss der Payment-Plan des
-//    Produkts in DS24 Rebilling erlauben.
+const links = await checkoutLinksFor([getProduct("pro")], { buyer: { email } });
+const link = links.get("pro");
+// -> if link.url, open it for the buyer.
 ```
 
-Der IPN schreibt die Credits gut **und** merkt sich die `purchase_id` am
-Token-Konto (`linkPurchaseId`) — Grundlage fürs spätere Auto-Aufladen.
+The `custom` identity string and `settings[force_rebilling]=Y` are set by
+`checkoutLinksFor` itself. The latter is what makes the later auto-reload
+possible at all — it is what keeps the payment method on file.
 
-### Auto-Aufladen
+The IPN credits the tokens **and** remembers the `purchase_id` on the token
+account (`linkPurchaseId`) — the basis for the later auto-reload.
 
-Konto konfigurieren und danach bei Bedarf auslösen:
+### Auto-reload
+
+Configure the account and then trigger it when needed:
 
 ```ts
 import { setAutoReload, consumeTokens, autoReloadIfNeeded } from "@/lib/tokens/account";
 
-// Einmalig (z. B. im Kunden-Dashboard):
+// Once (e.g. in the customer dashboard):
 await setAutoReload({
-  userId: vendorId, buyerEmail: email,
-  enabled: true, threshold: 500,      // nachladen, sobald ≤ 500 Token
-  packageKey: "pro", ds24PurchaseId,  // welches Paket, welche purchase_id
+  memberId,                           // the signed-in customer
+  enabled: true, threshold: 500,      // reload as soon as ≤ 500 tokens
+  packageKey: "pro", ds24PurchaseId,  // which package, which purchase_id
 });
 
-// Bei jeder Nutzung:
-await consumeTokens({ userId: vendorId, buyerEmail: email, amount: 42 });
-await autoReloadIfNeeded({ userId: vendorId, buyerEmail: email, apiKey });
+// On every use:
+await consumeTokens({ memberId, amount: 42 });
+await autoReloadIfNeeded({ memberId, apiKey });
 ```
 
-`autoReloadIfNeeded` prüft die Schwelle, holt **atomar einen Lock**
-(`claimReloadSlot` → verhindert Doppelabbuchung bei parallelen Requests) und ruft
-`createBillingOnDemand`. Gutschrift + Lock-Freigabe erfolgen im IPN. Schlägt die
-Abbuchung fehl, wird der Lock sofort freigegeben. Alternativ **per Cron** über alle
-Konten mit niedrigem Guthaben iterieren (robuster als der Inline-Aufruf).
+`autoReloadIfNeeded` checks the threshold, takes **a lock atomically**
+(`claimReloadSlot` → prevents a double charge on parallel requests) and calls
+`createBillingOnDemand`. Credit + lock release happen in the IPN. If the charge
+fails, the lock is released immediately. Alternatively iterate **via cron** over
+all accounts with a low balance (more robust than the inline call).
 
-### Verbrauch abrechnen
+### Billing consumption
 
-`consumeTokens` läuft in einer Transaktion mit Row-Lock (`FOR UPDATE`) und wirft
-`InsufficientTokensError`, wenn das Guthaben nicht reicht — davor mit
-`hasSufficientBalance` prüfen und ggf. zum Nachkauf leiten. Jede Buchung landet im
-`tokenLedger` (Audit).
+`consumeTokens` runs in a transaction with a row lock (`FOR UPDATE`) and throws
+`InsufficientTokensError` when the balance is not enough — check with
+`hasSufficientBalance` beforehand and, if needed, guide the customer to buy more.
+Every booking lands in the `tokenLedger` (audit).
 
 ---
 
-## 2. Abo-Verwaltung (Kündigen · Bezahldaten · Rechnungen)
+## 2. Subscription management (cancel · payment details · invoices)
 
-Der IPN pflegt je Abo eine Zeile in `subscriptions` (Status, Intervall und die von
-DS24 gelieferten Verwaltungs-Links). Im Kunden-Dashboard bietest du damit an:
+The IPN maintains one row per subscription in `subscriptions` (status, interval and
+the management links supplied by DS24). With that you offer in the customer dashboard:
 
-| Funktion | Umsetzung |
-|----------|-----------|
-| **Status/Intervall** | `subscriptions.status` (`active`/`paused`/`cancelled`) + `billingInterval` (`1_month`/`12_month`). |
-| **Kündigen** | `stopRebilling(apiKey, ds24PurchaseId)`. Zugang bleibt bis Periodenende (DS24 sendet `last_paid_day`). Alternativ dem Kunden `rebillingStopUrl` verlinken. |
-| **Bezahldaten ändern** | **Keine API** — den DS24-Link `renewUrl` verlinken (Kunde aktualisiert dort seine Zahlungsdaten). |
-| **Rechnungen ansehen** | `invoiceUrl` je Zahlung; Historie über `listPurchases(apiKey, { email })`. |
+| Function | Implementation |
+|----------|----------------|
+| **Status/interval** | `subscriptions.status` (`active`/`paused`/`cancelled`) + `billingInterval` (`1_month`/`12_month`). Shown to the customer; it is **not** the access check — see below. | <!-- not-an-access-check: display in the self-service UI -->
+| **Cancel** | `stopRebilling(apiKey, ds24PurchaseId)`. Access remains until the end of the period (DS24 sends `last_paid_day`). Alternatively link the customer to `rebillingStopUrl`. |
+| **Change payment details** | **No API** — link to the DS24 link `renewUrl` (the customer updates their payment data there). |
+| **View invoices** | `invoiceUrl` per payment; history via `listPurchases(apiKey, { email })`. |
 
-Fehlen Links im IPN-Payload, mit `getPurchase(apiKey, purchaseId)` nachladen.
+If links are missing in the IPN payload, load them with `getPurchase(apiKey, purchaseId)`.
 
 ```ts
 import { stopRebilling } from "@/lib/digistore/billing";
 import { ds24ApiKey } from "@/lib/digistore/settings";
-// Kündigung nach Bestätigung durch den eingeloggten Kunden:
+// Cancellation after confirmation by the signed-in customer:
 await stopRebilling(ds24ApiKey(), sub.ds24PurchaseId);
-// Der IPN setzt subscriptions.status später auf 'cancelled'.
+// The IPN sets it to 'cancelled' later. (not-an-access-check: display only.)
+// The mirror row is not the access answer. The customer KEEPS access until
+// DS24 sends last_paid_day — hasPlan() answers true until then.
 ```
+
+**What the customer may use is a separate question**, and this table does not
+answer it. `subscriptions` mirrors what Digistore24 believes about the billing;
+`grants` is the app's own record of access, and `hasPlan(memberId, productKey)`
+reads it. The gap between them is not academic: between the cancellation and
+`last_paid_day` the mirror says "cancelled" and the customer is still entitled
+to everything they paid for. See **`entitlements.md`**.
 
 ---
 
-## Regeln
+## Rules
 
-- **Gutschrift nur über den IPN.** Nie im `createBillingOnDemand`-Aufruf direkt
-  gutschreiben — sonst wird bei fehlgeschlagener Zahlung fälschlich gutgeschrieben.
-- **Idempotenz.** Gutschriften sind über `(accountId, ds24OrderId)` eindeutig; ein
-  doppelter IPN bucht nicht erneut.
-- **Lock gegen Doppelabbuchung.** Auto-Aufladen immer über `claimReloadSlot`.
-- **Signaturprüfung (SHA512) bleibt Pflicht** — der IPN-Handler ist fail-closed.
-- **Writable-Key & Passphrase sind Secrets** (liegen in der `.env` bzw. in der
-  Secret-Verwaltung des Hosters, gelesen über `lib/digistore/settings.ts`).
-- Bei Änderungen an dieser Abrechnungslogik zuerst den Skill **`guardrails`** lesen.
+- **Credit only through the IPN.** Never credit directly in the
+  `createBillingOnDemand` call — otherwise a failed payment gets credited wrongly.
+- **Idempotency.** Credits are unique over `(accountId, ds24OrderId)`; a
+  duplicate IPN does not book again.
+- **Lock against double charging.** Always run auto-reload through `claimReloadSlot`.
+- **The signature check (SHA512) stays mandatory** — the IPN handler is fail-closed.
+- **Writable key & passphrase are secrets** (they live in the `.env` or in the
+  host's secret management, read via `lib/digistore/settings.ts`).
+- Before changing this billing logic, read the skill **`guardrails`** first.

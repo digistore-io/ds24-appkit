@@ -1,0 +1,46 @@
+"use server";
+
+// Server actions of the unattributed-purchases screen.
+//
+// SECURITY — the same two layers as the user management screen: requireOwner()
+// as the first line of the action (server actions are HTTP endpoints of their
+// own), and the refusal reasons decided in lib/digistore/purchases.ts.
+//
+// LANGUAGE: here — and only here — the result codes become sentences.
+import { revalidatePath } from "next/cache";
+import { getTranslations } from "next-intl/server";
+
+import { requireOwner } from "@/lib/authz";
+import { attachOrder } from "@/lib/digistore/purchases";
+
+const PAGE = "/dashboard/admin/purchases";
+
+/** Return value for useActionState — `error`/`ok` are finished messages. */
+export type ActionState = { error: string | null; ok: string | null };
+
+export async function attachOrderAction(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  try {
+    await requireOwner();
+
+    const ds24OrderId = String(formData.get("orderId") ?? "");
+    const memberId = String(formData.get("memberId") ?? "");
+    const t = await getTranslations("purchases");
+    if (!ds24OrderId || !memberId) {
+      return { error: t("attachIncomplete"), ok: null };
+    }
+
+    const result = await attachOrder(ds24OrderId, memberId);
+    revalidatePath(PAGE);
+
+    if (!result.ok) return { error: t(`attachFailed_${result.reason}`), ok: null };
+    return { error: null, ok: t("attached", { count: result.credited }) };
+  } catch (error) {
+    // Anything unexpected belongs in the log, not in front of the Operator.
+    console.error("[purchases] unexpected error:", error);
+    const t = await getTranslations("errors");
+    return { error: t("unknown"), ok: null };
+  }
+}

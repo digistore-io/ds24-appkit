@@ -1,0 +1,1 @@
+CREATE INDEX "orders_purchase" ON "orders" USING btree ("ds24_purchase_id");

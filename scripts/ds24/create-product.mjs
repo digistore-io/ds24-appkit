@@ -1,21 +1,21 @@
 #!/usr/bin/env node
-// Idempotente Digistore24-Produkt-Anlage.
+// Idempotent Digistore24 product creation.
 //
-// Erzeugt ein Basisprodukt je Tarif. Name/Beschreibung dienen als Platzhalter —
-// der reale Preis wird NICHT am Produkt gesetzt, sondern zur Laufzeit über
+// Creates one base product per plan. Name/description serve as placeholders —
+// the real price is NOT set on the product, but at runtime via
 // createBuyUrl (payment_plan[...] + placeholders[TITLE]/[DESCRIPTION]).
 //
-// Parameter gemäß echter DS24-API (createProduct.expectedArgs, data[...]):
+// Parameters as per the real DS24 API (createProduct.expectedArgs, data[...]):
 //   data[name], data[name_intern], data[description], data[currency]
-//   (data[amount] ist deprecated → kein Preis am Produkt.) Rückgabe: product_id.
+//   (data[amount] is deprecated → no price on the product.) Returns: product_id.
 //
-// Idempotenz: Produktliste laden und per name/name_intern matchen → kein Doppel.
+// Idempotency: load the product list and match by name/name_intern → no dupes.
 //
-// Nutzung:
-//   node scripts/ds24/create-product.mjs --saas "Paid Challenge" --tarif "Gold" \
-//        --description "Zugang zur Gold-Challenge" [--currency EUR]
-//   # oder direkt:  --name "Paid Challenge - Gold"
-//   Dry-Run ist Standard. Zum Ausführen: --apply
+// Usage:
+//   node scripts/ds24/create-product.mjs --saas "Paid Challenge" --plan "Gold" \
+//        --description "Access to the Gold challenge" [--currency EUR]
+//   # or directly:  --name "Paid Challenge - Gold"
+//   Dry run is the default. To execute: --apply
 import { ds24Call, requireApiKey, parseArgs } from "./_client.mjs";
 
 const args = parseArgs(process.argv.slice(2));
@@ -23,26 +23,26 @@ const apply = Boolean(args.apply);
 
 const name =
   args.name ||
-  (args.saas && args.tarif ? `${args.saas} - ${args.tarif}` : null);
+  (args.saas && args.plan ? `${args.saas} - ${args.plan}` : null);
 if (!name) {
   console.error(
-    'FEHLER: --name "..." oder --saas "..." --tarif "..." erforderlich.',
+    'ERROR: --name "..." or --saas "..." --plan "..." required.',
   );
   process.exit(2);
 }
 const description = args.description || `${name} ({DESCRIPTION})`;
 const currency = args.currency || "EUR";
 
-// ── FIELD-MAPPING (createProduct.expectedArgs — verifiziert) ────────────────
+// ── FIELD-MAPPING (createProduct.expectedArgs — verified) ───────────────────
 function createProductParams() {
   return {
     "data[name]": name,
-    "data[name_intern]": name, // interner, eindeutiger Name
+    "data[name_intern]": name, // internal, unique name
     "data[description]": description,
     "data[currency]": currency,
   };
 }
-// getProductList (readonly) — Antwortform je Version leicht unterschiedlich.
+// listProducts (readonly) — the response shape differs slightly per version.
 function extractProducts(data) {
   if (Array.isArray(data)) return data;
   if (data && Array.isArray(data.products)) return data.products;
@@ -62,8 +62,8 @@ function productId(p) {
 
 const apiKey = requireApiKey();
 
-const list = await ds24Call("getProductList", apiKey).catch((e) => {
-  console.error("Konnte Produktliste nicht laden:", e.message);
+const list = await ds24Call("listProducts", apiKey).catch((e) => {
+  console.error("Could not load the product list:", e.message);
   process.exit(1);
 });
 const existing = extractProducts(list).find(matchesName);
@@ -73,33 +73,33 @@ if (existing) {
   const pid = productId(existing);
   if (!doUpdate) {
     console.log(
-      `✓ Produkt existiert bereits: "${name}" (product_id=${pid}) — nichts zu tun. (--update für Aktualisierung)`,
+      `✓ Product already exists: "${name}" (product_id=${pid}) — nothing to do. (--update to update it)`,
     );
     process.exit(0);
   }
-  // updateProduct: product_id + data[...] (gleiche Keys wie createProduct).
+  // updateProduct: product_id + data[...] (same keys as createProduct).
   const updateParams = { product_id: String(pid), ...createProductParams() };
   if (!apply) {
-    console.log(`DRY-RUN — Produkt (product_id=${pid}) würde aktualisiert:`);
+    console.log(`DRY-RUN — product (product_id=${pid}) would be updated:`);
     console.log(JSON.stringify(updateParams, null, 2));
-    console.log("\nZum Ausführen erneut mit --apply aufrufen.");
+    console.log("\nTo execute, call again with --apply.");
     process.exit(0);
   }
   await ds24Call("updateProduct", apiKey, updateParams);
-  console.log(`✓ Produkt aktualisiert: "${name}" (product_id=${pid})`);
+  console.log(`✓ Product updated: "${name}" (product_id=${pid})`);
   process.exit(0);
 }
 
 if (!apply) {
-  console.log("DRY-RUN — es würde folgendes Produkt angelegt:");
+  console.log("DRY-RUN — the following product would be created:");
   console.log(JSON.stringify(createProductParams(), null, 2));
-  console.log("\nZum Ausführen erneut mit --apply aufrufen.");
+  console.log("\nTo execute, call again with --apply.");
   process.exit(0);
 }
 
 const created = await ds24Call("createProduct", apiKey, createProductParams());
-console.log(`✓ Produkt angelegt: "${name}" (product_id=${productId(created) ?? "?"})`);
+console.log(`✓ Product created: "${name}" (product_id=${productId(created) ?? "?"})`);
 console.log(
-  "Tipp: die product_id als DIGISTORE_PRODUCT_ID_<TARIF> in .env hinterlegen;",
+  "Tip: store the product_id as DIGISTORE_PRODUCT_ID_<PLAN> in .env;",
 );
-console.log("der Preis wird pro Angebot über createBuyUrl gesetzt.");
+console.log("the price is set per offer via createBuyUrl.");

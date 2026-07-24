@@ -1,5 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { buildBuyUrlBody, offerHash, type Offer } from "./buyUrl";
+import {
+  buildBuyUrlBody,
+  offerHash,
+  isUnknownAffiliateError,
+  isUserSpecific,
+  type Offer,
+} from "./buyUrl";
+import { buildIdentity } from "./custom";
+import { tokenCustomMarker } from "@/lib/tokens/packages";
 
 const monthly: Offer = {
   key: "gold",
@@ -7,7 +15,7 @@ const monthly: Offer = {
   priceCents: 900,
   billingInterval: "1_month",
   title: "Paid Challenge - Gold",
-  description: "Gold-Tarif (monatlich)",
+  description: "Gold plan (monthly)",
 };
 
 describe("buildBuyUrlBody", () => {
@@ -29,10 +37,10 @@ describe("buildBuyUrlBody", () => {
     expect(b.get("payment_plan[first_amount]")).toBe("47.00");
   });
 
-  it("übernimmt Platzhalter und Thank-You-URL", () => {
+  it("carries over placeholders and the thank-you URL", () => {
     const b = buildBuyUrlBody(monthly, {}, "https://app.example/optin/[ORDER_ID]");
     expect(b.get("placeholders[TITLE]")).toBe("Paid Challenge - Gold");
-    expect(b.get("placeholders[DESCRIPTION]")).toBe("Gold-Tarif (monatlich)");
+    expect(b.get("placeholders[DESCRIPTION]")).toBe("Gold plan (monthly)");
     expect(b.get("urls[thankyou_url]")).toBe(
       "https://app.example/optin/[ORDER_ID]",
     );
@@ -48,7 +56,7 @@ describe("buildBuyUrlBody", () => {
     expect(b.get("settings[hide_double_buy_info]")).toBe("Y");
   });
 
-  it("belegt Käuferfelder vor und schützt die E-Mail", () => {
+  it("prefills buyer fields and protects the email address", () => {
     const b = buildBuyUrlBody(monthly, {
       buyer: { email: "k@test.de", firstName: "Erika" },
     });
@@ -70,17 +78,87 @@ describe("buildBuyUrlBody", () => {
 });
 
 describe("offerHash", () => {
-  it("ist stabil bei gleichem Angebot", () => {
+  it("is stable for the same offering", () => {
     expect(offerHash(monthly)).toBe(offerHash({ ...monthly }));
   });
-  it("ändert sich, wenn sich der Preis ändert (→ neue URL)", () => {
+  it("changes when the price changes (→ new URL)", () => {
     expect(offerHash(monthly)).not.toBe(
       offerHash({ ...monthly, priceCents: 1900 }),
     );
   });
-  it("ändert sich mit der Thank-You-URL", () => {
+  it("changes with the thank-you URL", () => {
     expect(offerHash(monthly, "https://a/[ORDER_ID]")).not.toBe(
       offerHash(monthly, "https://b/[ORDER_ID]"),
     );
+  });
+
+  it("changes with the custom marker", () => {
+    // customTracking is cacheable (it does not make a URL user-specific) and
+    // ends up inside the generated URL. Were it missing from the hash, two
+    // token packages sharing an offerKey would serve each other's cached URL
+    // and credit the wrong balance.
+    expect(offerHash(monthly, undefined, "tokens:pro")).not.toBe(
+      offerHash(monthly, undefined, "tokens:business"),
+    );
+    expect(offerHash(monthly, undefined, "tokens:pro")).toBe(
+      offerHash(monthly, undefined, "tokens:pro"),
+    );
+  });
+});
+
+describe("isUnknownAffiliateError", () => {
+  it("recognizes the affiliate we sent in the message", () => {
+    const err = new Error("The user 'partner1' is not known at digistore24.com");
+    expect(isUnknownAffiliateError(err, "partner1")).toBe(true);
+  });
+
+  it("leaves unrelated failures alone", () => {
+    // The point of the narrow check: a network or key problem must NOT be
+    // retried away without the affiliate and reported as the second error.
+    expect(isUnknownAffiliateError(new Error("fetch failed"), "partner1")).toBe(
+      false,
+    );
+    expect(
+      isUnknownAffiliateError(
+        new Error("Digistore24 API HTTP 401 (createBuyUrl)"),
+        "partner1",
+      ),
+    ).toBe(false);
+  });
+
+  it("is false without an affiliate", () => {
+    expect(isUnknownAffiliateError(new Error("anything"), "")).toBe(false);
+  });
+});
+
+describe("isUserSpecific", () => {
+  it("is true for a checkout carrying a buyer identity", () => {
+    const ref = buildIdentity({
+      memberId: "9f3c1b7e-5d21-4a88-b0c4-2e6f7a1d9c30",
+      checkoutToken: "a7Kd2Pq9Zx",
+      productKey: "pro",
+    });
+    expect(isUserSpecific({ customTracking: ref })).toBe(true);
+  });
+
+  it("is false for a token marker — those URLs stay shared", () => {
+    // The whole point of testing customTracking by content: token packages
+    // set it on every offering. A presence check here would uncache every
+    // token card and turn each page render into a live Digistore24 call.
+    expect(isUserSpecific({ customTracking: tokenCustomMarker("pro") })).toBe(
+      false,
+    );
+  });
+
+  it("is false for an empty context", () => {
+    expect(isUserSpecific({})).toBe(false);
+  });
+
+  it("still recognises the other user-specific fields", () => {
+    expect(isUserSpecific({ buyer: { email: "a@b.de" } })).toBe(true);
+    expect(isUserSpecific({ affiliate: "partner" })).toBe(true);
+    expect(isUserSpecific({ campaignKey: "spring" })).toBe(true);
+    expect(isUserSpecific({ trackingKey: "abc" })).toBe(true);
+    expect(isUserSpecific({ upgradeOrderId: "4711" })).toBe(true);
   });
 });

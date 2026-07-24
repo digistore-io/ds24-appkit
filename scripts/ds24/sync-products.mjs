@@ -1,61 +1,73 @@
 #!/usr/bin/env node
-// Digistore24-Produkte aus der Registry synchronisieren (idempotent).
+// Synchronize the Digistore24 products from the registry (idempotent).
 //
-// Liest config/digistore-products.json, legt jedes Produkt via createProduct an
-// bzw. aktualisiert es via updateProduct und schreibt die erzeugte `productId`
-// zurück in die Config. So ist die Config die Source of Truth und der Checkout
-// (Produkt-Link …/product/<id>) hat stabile IDs.
+// Reads config/digistore-products.json, creates each product via createProduct
+// or updates it via updateProduct, and writes the resulting `productId` back
+// into the config. That way the config is the source of truth and the checkout
+// (product link …/product/<id>) has stable IDs.
 //
-// WICHTIG — warum hier kein Preis gesetzt wird:
-// Die DS24-API verwirft `data[amount]` ausdrücklich ("is deprecated - create a
-// payment plan instead"), und es gibt KEINEN API-Endpunkt, um Bezahlpläne
-// anzulegen. Deshalb geht dieses Template den anderen Weg: Preis und Intervall
-// werden beim Checkout aus der Registry als `payment_plan[...]` an createBuyUrl
-// übergeben (lib/digistore/buyUrl.ts). Du musst also in der DS24-Oberfläche
-// KEINE Bezahlpläne pflegen — priceCents/billingInterval in der Registry genügen.
+// IMPORTANT — why no price is set here:
+// The DS24 API explicitly rejects `data[amount]` ("is deprecated - create a
+// payment plan instead"), and there is NO API endpoint for creating payment
+// plans. This template therefore takes the other route: price and interval are
+// passed from the registry to createBuyUrl as `payment_plan[...]` at checkout
+// time (lib/digistore/buyUrl.ts). So you do NOT have to maintain any payment
+// plans in the DS24 UI — priceCents/billingInterval in the registry are enough.
 //
-// Dieses Skript verwaltet die Produkt-Stammdaten: Name, interner Name,
-// Beschreibung, Produktbild, Thank-You-URL, Mengen — und die productId.
+// This script manages the product master data: name, internal name,
+// description, product image, thank-you URL, quantities — and the productId.
 //
-// Matching/Idempotenz: 1) vorhandene productId aus der Config, sonst
-// 2) name_intern/name in getProductList → keine Duplikate. `name_intern` ist
-// der stabile Registry-Schlüssel, damit ein geänderter Anzeigename das
-// Wiederfinden nicht bricht.
+// Matching/idempotency: 1) existing productId from the config, otherwise
+// 2) name_intern/name in listProducts → no duplicates. `name_intern` is the
+// stable registry key, so that a changed display name does not break finding
+// the product again.
 //
-// Nutzung:
-//   node scripts/ds24/sync-products.mjs                 # Dry-Run (alle)
-//   node scripts/ds24/sync-products.mjs --apply         # anlegen/aktualisieren
+// Usage:
+//   node scripts/ds24/sync-products.mjs                 # dry run (all)
+//   node scripts/ds24/sync-products.mjs --apply         # create/update
 //   node scripts/ds24/sync-products.mjs --key pro --apply
-//   [--thankyou "https://app.example.de/optin/[ORDER_ID]"]  # sonst aus APP_URL
-// Env: DIGISTORE_API_KEY (writable), optional DIGISTORE_URL, APP_URL.
+//   node scripts/ds24/sync-products.mjs --dry-run       # never writes, beats --apply
+//   [--thankyou "https://app.example.de/optin/[ORDER_ID]"]  # otherwise from APP_URL
+// Env: DIGISTORE_API_KEY (writable), optionally DIGISTORE_URL, APP_URL.
+//
+// `node run.mjs ds24-sync` adds --apply by itself — the preview there is
+// `node run.mjs ds24-sync --dry-run`.
 import { ds24Call, requireApiKey, parseArgs } from "./_client.mjs";
 import { readProducts, writeProducts, extractProducts, idOf } from "./_products.mjs";
+import { publicUrlFor, redirUrl } from "./_public-url.mjs";
 
 const args = parseArgs(process.argv.slice(2));
-const apply = Boolean(args.apply);
+// --dry-run wins over --apply: run.mjs hands --apply in by default, and
+// asking for a preview has to be able to override that.
+const apply = Boolean(args.apply) && !args["dry-run"];
 const onlyKey = args.key ? String(args.key) : null;
 
-const appUrl = args.thankyou
-  ? String(args.thankyou)
-  : process.env.APP_URL
-    ? `${process.env.APP_URL.replace(/\/$/, "")}/optin/[ORDER_ID]`
-    : null;
+// The thank-you page. Digistore24 stores public https URLs only, so a local app
+// travels as a redirect address (scripts/ds24/_public-url.mjs) — without it the
+// whole sync fails on "Please only use secure URLs with https://".
+const appUrl = publicUrlFor(
+  args.thankyou
+    ? String(args.thankyou)
+    : process.env.APP_URL
+      ? `${process.env.APP_URL.replace(/\/$/, "")}/optin/[ORDER_ID]`
+      : null,
+);
 
-// data[...] für create/update aus einer Registry-Definition (ohne Preis).
+// data[...] for create/update from a registry definition (without a price).
 function productData(key, def) {
   const data = {
     "data[name]": def.name,
-    // Stabiler interner Name = Registry-Schlüssel. Der Anzeigename darf sich
-    // dadurch jederzeit ändern, ohne dass das Wiederfinden bricht.
+    // Stable internal name = registry key. The display name may therefore
+    // change at any time without breaking the ability to find the product.
     "data[name_intern]": key,
     "data[description]": def.description || def.name,
     "data[currency]": def.currency || "EUR",
   };
   if (appUrl) data["data[thankyou_url]"] = appUrl;
-  // Produktbild: öffentlich erreichbare URL, sonst lehnt DS24 sie ab.
+  // Product image: a publicly reachable URL, otherwise DS24 rejects it.
   if (def.imageUrl) data["data[image_url]"] = def.imageUrl;
-  // Token-Pakete sind Mengenprodukte: genau 1 Paket je Kauf, sonst stimmt die
-  // Gutschrift (credits) nicht mehr mit dem Kauf überein.
+  // Token packages are quantity products: exactly 1 package per purchase,
+  // otherwise the credits no longer match the purchase.
   if (def.kind === "token") {
     data["data[default_quantity]"] = "1";
     data["data[max_quantity]"] = "1";
@@ -63,19 +75,26 @@ function productData(key, def) {
   return data;
 }
 
-// Warnt bei Registry-Einträgen, die später im Checkout auffallen würden.
-function pruefeDefinition(key, def) {
+// Warns about registry entries that would only show up later, at checkout.
+function checkDefinition(key, def) {
   const warn = [];
   if (def.priceCents == null)
-    warn.push("kein priceCents — der Checkout kann keinen Preis setzen");
+    warn.push("no priceCents — the checkout cannot set a price");
   if (def.kind === "subscription" && !def.billingInterval)
-    warn.push("kind=subscription ohne billingInterval (z. B. 1_month)");
+    warn.push("kind=subscription without billingInterval (e.g. 1_month)");
   if (def.kind === "token" && !def.credits)
-    warn.push("kind=token ohne credits — es würde kein Guthaben gutgeschrieben");
+    warn.push("kind=token without credits — no balance would be credited");
   if (def.imageUrl && !/^https:\/\//.test(def.imageUrl))
-    warn.push("imageUrl ist keine https-URL — DS24 lehnt sie ab");
+    warn.push("imageUrl is not an https URL — DS24 rejects it");
   for (const w of warn) console.warn(`  ! ${key}: ${w}`);
   return warn.length;
+}
+
+// Say it out loud — otherwise the address at Digistore24 looks wrong to anyone
+// who checks it in the UI.
+if (appUrl && appUrl.startsWith(redirUrl())) {
+  console.log(`• Thank-you page runs through the redirect: ${appUrl}`);
+  console.log("  Digistore24 stores no localhost URL; the redirect leads back to your app.");
 }
 
 const apiKey = requireApiKey();
@@ -84,20 +103,20 @@ const entries = Object.entries(config.products).filter(
   ([key]) => !onlyKey || key === onlyKey,
 );
 if (entries.length === 0) {
-  console.error(onlyKey ? `Kein Produkt "${onlyKey}" in der Config.` : "Keine Produkte in der Config.");
+  console.error(onlyKey ? `No product "${onlyKey}" in the config.` : "No products in the config.");
   process.exit(2);
 }
 
-// Produktliste einmal laden (für Matching per Name).
+// Load the product list once (for matching by name).
 const list = extractProducts(
-  await ds24Call("getProductList", apiKey).catch((e) => {
-    console.error("Konnte Produktliste nicht laden:", e.message);
+  await ds24Call("listProducts", apiKey).catch((e) => {
+    console.error("Could not load the product list:", e.message);
     process.exit(1);
   }),
 );
-// Matching: erst über den stabilen Registry-Schlüssel (name_intern), dann über
-// den Anzeigenamen — Letzteres fängt Produkte ab, die vor dieser Konvention
-// bereits von Hand in DS24 angelegt wurden.
+// Matching: first via the stable registry key (name_intern), then via the
+// display name — the latter catches products that were already created by hand
+// in DS24 before this convention existed.
 function findExisting(key, name) {
   return (
     list.find((p) => p.name_intern === key) ||
@@ -108,18 +127,18 @@ function findExisting(key, name) {
 }
 
 let changed = false;
-let warnungen = 0;
+let warnings = 0;
 for (const [key, def] of entries) {
-  warnungen += pruefeDefinition(key, def);
+  warnings += checkDefinition(key, def);
   const data = productData(key, def);
   const existingId = def.productId || idOf(findExisting(key, def.name) || {});
 
   if (existingId) {
     if (!apply) {
-      console.log(`DRY-RUN — würde aktualisieren: "${key}" (product_id=${existingId})`);
+      console.log(`DRY-RUN — would update: "${key}" (product_id=${existingId})`);
     } else {
       await ds24Call("updateProduct", apiKey, { product_id: String(existingId), ...data });
-      console.log(`✓ aktualisiert: "${key}" (product_id=${existingId})`);
+      console.log(`✓ updated: "${key}" (product_id=${existingId})`);
     }
     if (def.productId !== String(existingId)) {
       config.products[key].productId = String(existingId);
@@ -129,34 +148,34 @@ for (const [key, def] of entries) {
   }
 
   if (!apply) {
-    console.log(`DRY-RUN — würde anlegen: "${key}" (${def.name})`);
+    console.log(`DRY-RUN — would create: "${key}" (${def.name})`);
     continue;
   }
   const created = await ds24Call("createProduct", apiKey, data);
   const newId = idOf(created);
   if (!newId) {
-    console.error(`✗ createProduct lieferte keine product_id für "${key}".`);
+    console.error(`✗ createProduct returned no product_id for "${key}".`);
     process.exit(1);
   }
   config.products[key].productId = String(newId);
   changed = true;
-  console.log(`✓ angelegt: "${key}" (product_id=${newId})`);
+  console.log(`✓ created: "${key}" (product_id=${newId})`);
 }
 
 if (apply && changed) {
   writeProducts(config);
-  console.log("→ productId(s) in config/digistore-products.json geschrieben.");
+  console.log("→ productId(s) written to config/digistore-products.json.");
 } else if (!apply) {
-  console.log("\nZum Ausführen erneut mit --apply aufrufen.");
+  console.log("\nNothing was changed. To execute: node run.mjs ds24-sync");
 }
 
-if (warnungen > 0) {
+if (warnings > 0) {
   console.log(
-    `\n${warnungen} Hinweis(e) oben pruefen — sie fallen sonst erst beim Checkout auf.`,
+    `\nCheck the ${warnings} note(s) above — otherwise they only surface at checkout.`,
   );
 }
 
 console.log(
-  "\nPreise kommen aus der Registry (priceCents/billingInterval) und werden beim\n" +
-    "Checkout als payment_plan uebergeben. In DS24 sind KEINE Bezahlplaene noetig.",
+  "\nPrices come from the registry (priceCents/billingInterval) and are passed as\n" +
+    "payment_plan at checkout. NO payment plans are needed in DS24.",
 );

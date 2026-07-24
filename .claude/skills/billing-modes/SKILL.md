@@ -1,106 +1,128 @@
 ---
 name: billing-modes
-description: Richtet die Abrechnungs-Modelle jenseits des Einmalkaufs ein — feste Abos (monatlich/jährlich), verbrauchsbasierte Prepaid-Token mit Auto-Aufladen (createBillingOnDemand) sowie die Abo-Selbstverwaltung für Kunden (Kündigen, Bezahldaten ändern, Rechnungen ansehen). Nutze dies nach setup-digistore, wenn die App wiederkehrend oder nach Verbrauch abrechnen soll (z. B. Token für KI-Nutzung).
+description: Sets up the billing models beyond the one-off purchase — fixed subscriptions (monthly/yearly), usage-based prepaid tokens with auto top-up (createBillingOnDemand) as well as subscription self-service for customers (cancel, change payment details, view invoices). Use this after setup-digistore, when the app is meant to bill recurring or by usage (e.g. tokens for AI usage).
 ---
 
-# Abrechnungs-Modelle: Abos & Prepaid-Token
+# Billing models: subscriptions & prepaid tokens
 
-Voraussetzung: **`setup-digistore` ist erledigt** (API-Key, IPN, Checkout stehen).
-Dieser Skill baut darauf auf. Der Code liegt fertig in `lib/digistore/billing.ts`,
-`lib/tokens/` und `db/schema-tokens.ts` — deine Aufgabe ist, den Vendor durch
-Auswahl und Konfiguration zu führen, **nicht** die Abrechnung neu zu schreiben.
+Prerequisite: **`setup-digistore` is done** (API key, IPN, checkout are in
+place). This skill builds on that. The code is ready to use in
+`lib/digistore/billing.ts`, `lib/tokens/` and `db/schema-tokens.ts` — your job
+is to guide the vendor through selection and configuration, **not** to rewrite
+the billing.
 
-Vollständige Referenz mit Code-Beispielen: **`docs/digistore-billing-modes.md`**.
+Full reference with code examples: **`docs/digistore-billing-modes.md`**.
 
-## Schritt 1 — Abrechnungs-Modell wählen
+## Step 1 — Choose a billing model
 
-Frag den Vendor, wie abgerechnet werden soll (Mehrfachauswahl möglich):
+Ask the vendor how billing should work (multiple choices possible):
 
-| Modell | Wann | Was es braucht |
+| Model | When | What it needs |
 |--------|------|----------------|
-| **Fixes Abo** (monatl./jährl.) | planbarer Zugang, Mitgliedschaft | Abo-Tarif(e) + Abo-Verwaltung |
-| **Prepaid-Token** (Verbrauch) | KI-Nutzung, API-Calls, „pay per use" | Token-Pakete + Verbrauchslogik + Auto-Aufladen |
-| **Beides kombiniert** | Basis-Abo + Verbrauch obendrauf | beide Bausteine |
+| **Fixed subscription** (monthly/yearly) | plannable access, membership | subscription plan(s) + subscription management |
+| **Prepaid tokens** (usage) | AI usage, API calls, "pay per use" | token packages + consumption logic + auto top-up |
+| **Both combined** | base subscription + usage on top | both building blocks |
 
-Ein sehr häufiger Zuschnitt für KI-Apps: **kleines Basis-Abo + Token nach Verbrauch**.
+A very common cut for AI apps: **a small base subscription + tokens by usage**.
 
-## Schritt 2 — Produkte anlegen (Registry)
+## Step 2 — Create products (registry)
 
-Jedes Angebot (Abo-Tarif **und** Token-Paket) ist **ein Digistore24-Produkt**.
-Deklariere sie in **`config/digistore-products.json`** (`kind`, Name, Beschreibung,
-für Abos `billingInterval`, für Token `credits`/`priceCents`). Dann anlegen:
+Every offering (subscription plan **and** token package) is **one Digistore24
+product**. Declare them in **`config/digistore-products.json`** (`kind`, name,
+description, `priceCents`, for subscriptions `billingInterval`, for tokens
+`credits`). Then create them — **you run this yourself**, do not ask the user to
+type it:
 
 ```bash
-DIGISTORE_API_KEY=... node scripts/ds24/sync-products.mjs --apply
+node run.mjs ds24-sync
 ```
 
-Das schreibt die `productId`(s) in die Config zurück. Danach **je Produkt in DS24
-einen Payment-Plan** (Preis/Intervall) anlegen — der Preis lässt sich nicht per API
-setzen (`data[amount]` deprecated). Alle Umgebungen nutzen dieselben Live-Produkte
-(siehe `docs/environments.md`).
+That writes the `productId`(s) back into the config and registers the IPN. Use
+the `make` target, **not** `node scripts/ds24/sync-products.mjs` directly — the
+script alone skips the IPN hookup, and purchases then never unlock anything.
 
-Checkout läuft über den **Produkt-Link** (`productBuyUrl(key, { email })` aus
-`lib/digistore/products.ts`), **nicht** über createBuyUrl.
+**No payment plans in the DS24 interface.** Price, currency and interval come
+from the registry and travel with the checkout call as `payment_plan[...]`. All
+environments use the same live products (see `docs/environments.md`).
 
-## Schritt 3 — Fixes Abo (falls gewählt)
+Checkout for a signed-in Member runs through **`checkoutLinkFor`** from a
+server action, carrying `buildIdentity({ memberId, checkoutToken, productKey,
+kind })` in `tracking[custom]`; blueprint: `app/plans/actions.ts`. For anonymous
+visitors it is **`checkoutLinksFor`** (the shared, cached links). Never a plain
+product link.
 
-Tarif als Produkt mit `kind: "subscription"` + `billingInterval` (`"1_month"` /
-`"12_month"`, real im DS24-Payment-Plan). Checkout: `productBuyUrl("basis_monatlich",
-{ email })`. Der IPN pflegt Status und Verwaltungs-Links in die Tabelle
-**`subscriptions`**.
+## Step 3 — Fixed subscription (if chosen)
 
-Baue im Kunden-Dashboard die **Abo-Selbstverwaltung**:
-- **Status/Intervall** anzeigen (`subscriptions.status`, `billingInterval`).
-- **Kündigen** → `stopRebilling(apiKey, ds24PurchaseId)` (nach Bestätigung durch den
-  eingeloggten Kunden). Zugang bleibt bis Periodenende.
-- **Bezahldaten ändern** → DS24-Link `renewUrl` verlinken (keine eigene API).
-- **Rechnungen** → `invoiceUrl` je Zahlung; Historie via `listPurchases`.
+Plan as a product with `kind: "subscription"` + `billingInterval` (`"1_month"` /
+`"12_month"`) and `priceCents`. Both travel with the checkout call, so nothing
+is maintained inside DS24. The IPN maintains status and management links in the
+table **`subscriptions`**.
 
-## Schritt 4 — Prepaid-Token (falls gewählt)
+Build the **subscription self-service** into the customer dashboard:
+- Show the billing state: `subscriptions.status` + `billingInterval`. <!-- not-an-access-check: displayed to the customer -->
+  Information for the customer, **never** the access check — that one is
+  `hasPlan(memberId, productKey)`, see `docs/entitlements.md`.
+- **Cancel** → `stopRebilling(apiKey, ds24PurchaseId)` (after confirmation by
+  the signed-in customer). Access stays until the end of the period — the
+  entitlement ends on `last_paid_day`, not on the cancellation.
+- **Change payment details** → link to the DS24 `renewUrl` (no API of your own).
+- **Invoices** → `invoiceUrl` per payment; history via `listPurchases`.
 
-1. **Pakete** sind Produkte mit `kind: "token"` in der Registry (`credits`,
-   `priceCents`) — via `sync-products.mjs` angelegt (Schritt 2).
-2. **Kauf**: `productBuyUrl(key, { email, custom: tokenCustomMarker(key) })`. Für
-   späteres Auto-Aufladen muss der Payment-Plan des Produkts in DS24 **Rebilling
-   erlauben**.
-3. **Gutschrift**: passiert automatisch im IPN (`creditTokens`, idempotent) —
-   nichts synchron gutschreiben.
-4. **Verbrauch**: `consumeTokens(...)` bei jeder Nutzung (transaktional, wirft bei
-   zu wenig Guthaben `InsufficientTokensError`). Vorher `hasSufficientBalance`.
-5. **Auto-Aufladen**: `setAutoReload({ enabled, threshold, packageKey,
-   ds24PurchaseId })`, dann `autoReloadIfNeeded(...)` nach Verbrauch **oder** per
-   Cron über alle Konten mit niedrigem Guthaben. Nutzt `createBillingOnDemand`
-   gegen die hinterlegte `purchase_id`; Lock schützt vor Doppelabbuchung.
+## Step 4 — Prepaid tokens (if chosen)
 
-### So funktioniert die On-Demand-Abbuchung
+1. **Packages** are products with `kind: "token"` in the registry (`credits`,
+   `priceCents`) — created via `node run.mjs ds24-sync` (step 2).
+2. **Purchase**: the identity string carries the product key, so the IPN knows
+   which package to book (`p:<productKey>`). `tokens:<key>` remains only for
+   anonymous checkouts and for purchases made before this shipped. Either way
+   `forceRebilling` (`settings[force_rebilling]=Y`) is set automatically.
+   **`forceRebilling` is not optional:** it stores the payment details and thus
+   creates the chargeable `purchase_id`. Without it, step 5's auto top-up has
+   nothing to charge against and silently cannot work.
+3. **Crediting**: happens automatically in the IPN (`creditTokens`, idempotent)
+   — don't credit anything synchronously. It requires an attributed payment:
+   a purchase made without signing in is credited when the buyer first signs
+   in, not at payment time.
+4. **Consumption**: `consumeTokens({ memberId, amount })` on every use (transactional, throws
+   `InsufficientTokensError` when the balance is too low). Beforehand
+   `hasSufficientBalance`.
+5. **Auto top-up**: `setAutoReload({ memberId, enabled, threshold, packageKey,
+   ds24PurchaseId })`, then `autoReloadIfNeeded(...)` after consumption **or**
+   via cron across all accounts with a low balance. Uses `createBillingOnDemand`
+   against the stored `purchase_id`; a lock protects against double charging.
 
-`createBillingOnDemand` bucht gegen eine **bestehende `purchase_id`** ab (kein neuer
-Checkout). Voraussetzung: writable-Key + DS24-Recht „billing on demand" + eine
-abbuchbare purchase_id (Abo **oder** ein Kauf mit rebilling-fähigem Payment-Plan).
-DS24-Limit: 10 Buchungen/Tag, 1/Minute je purchase_id.
+### How the on-demand charge works
 
-## Schritt 5 — Tests & Datenbank
+`createBillingOnDemand` charges against an **existing `purchase_id`** (no new
+checkout). Prerequisites: a writable key + the DS24 permission "billing on
+demand" + a chargeable purchase_id — a subscription, or a purchase that was
+bought with `settings[force_rebilling]=Y` (see step 4.2). DS24 limit: 10
+charges/day, 1/minute per purchase_id.
 
-- Schema übernehmen: `make db-migrate` (die Migration für
-  `subscriptions`/`token_accounts`/`token_ledger` liegt bereits in `drizzle/`).
-  Eigene Schemaänderungen vorher mit `make db-generate` in eine Migration gießen.
-- **Tests schreiben** für deine Abrechnungs-Regeln (Vorbilder: `lib/tokens/
-  tokens.test.ts`, `lib/digistore/billing.test.ts`). `npm run typecheck && npm run
-  test` müssen grün sein.
+## Step 5 — Tests & database
 
-## Nächster Schritt
+- Apply the schema: `node run.mjs db-migrate` (the migration for
+  `subscriptions`/`token_accounts`/`token_ledger` is already in `drizzle/`).
+  Pour your own schema changes into a migration with `node run.mjs db-generate` first.
+- **Write tests** for your billing rules (models: `lib/tokens/tokens.test.ts`,
+  `lib/digistore/billing.test.ts`). `npm run typecheck && npm run test` must be
+  green.
 
-Wenn die Abrechnung steht, vor dem Launch der Reihe nach: **`security-gateway`** →
-**`performance-gateway`** → **`compliance-check`** → **`go-live`** →
-**`go-to-market`**.
+## Next step
 
-## Wichtige Regeln
+Once the billing is in place, before the launch in this order:
+**`security-gateway`** → **`performance-gateway`** → **`compliance-check`** →
+**`go-live`** → **`go-to-market`**.
 
-- **Gutschrift ausschließlich über den IPN.** Ein `createBillingOnDemand`-Aufruf
-  schreibt **nie** direkt gut — sonst wird bei fehlgeschlagener Zahlung fälschlich
-  Guthaben gebucht.
-- **Idempotenz & Lock sind Pflicht.** Gutschriften sind über `(accountId,
-  ds24OrderId)` eindeutig; Auto-Aufladen läuft nur über `claimReloadSlot`.
-- **Signaturprüfung (SHA512) niemals abschalten** — der IPN-Handler ist fail-closed.
-- **Kein Mock-/Demo-Fallback** bei DS24-API-Fehlern — Fehler werfen.
-- **Bei Änderungen an der Abrechnungslogik zuerst `guardrails` lesen** (STOPP-Kriterium).
+## Important rules
+
+- **Crediting exclusively through the IPN.** A `createBillingOnDemand` call
+  **never** credits directly — otherwise balance would wrongly be booked when a
+  payment fails.
+- **Idempotency & lock are mandatory.** Credits are unique via `(accountId,
+  ds24OrderId)`; auto top-up only runs through `claimReloadSlot`.
+- **Never switch off the signature verification (SHA512)** — the IPN handler is
+  fail-closed.
+- **No mock/demo fallback** on DS24 API errors — throw errors.
+- **For changes to the billing logic, read `guardrails` first** (STOP
+  criterion).
