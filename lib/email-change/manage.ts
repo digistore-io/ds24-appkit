@@ -25,6 +25,8 @@ import {
   CONFIRMATION_ACCOUNT_BUCKET,
   CONFIRMATION_LIMIT,
   CONFIRMATION_TARGET_BUCKET,
+  PROBE_BUCKET,
+  PROBE_LIMIT,
   EmailChangeError,
   checkRequestedEmail,
   expiryFrom,
@@ -81,10 +83,20 @@ export async function requestEmailChange(
   const denial = checkRequestedEmail(me.email, newEmail);
   if (denial) throw new EmailChangeError(denial);
 
+  // Every request that gets this far is counted, refused or not — this is the
+  // counter that meters the disclosure below rather than the mail. It must be
+  // recorded BEFORE the lookup, or a refusal would slip past it for free,
+  // which is precisely the hole it exists to close.
+  if (isLimited(PROBE_BUCKET, userId, PROBE_LIMIT)) {
+    throw new EmailChangeError("tooManyRequests");
+  }
+  record(PROBE_BUCKET, userId, PROBE_LIMIT);
+
   // Told straight away rather than at confirmation time. This does confirm to
   // the requester that an account exists at that address — judged acceptable
   // for a single-operator SAAS, and cheaper than spending a mail and the
-  // Member's day on a request that was never going to succeed.
+  // Member's day on a request that was never going to succeed. Metered by the
+  // probe counter above, so it answers a person and not a script.
   const [taken] = await db
     .select({ id: users.id })
     .from(users)

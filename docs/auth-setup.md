@@ -19,10 +19,12 @@ Two consequences worth knowing before you go looking for them:
   theirs signs in with a magic link exactly as before and sets a new one. The
   magic link *is* the recovery path, which is why mail delivery stays a hard
   requirement even for accounts that have a password.
-- **Two things are rate-limited**, both in a sliding window (`lib/rate-limit.ts`):
-  failed password sign-ins, ten per quarter hour per address; and requests to
+- **Three things are rate-limited**, all in a sliding window (`lib/rate-limit.ts`):
+  failed password sign-ins, ten per quarter hour per address; requests to
   change an address, three per hour — counted per account *and* per target
-  address, so the same mailbox cannot be hit again from the next account.
+  address, so the same mailbox cannot be hit again from the next account; and
+  address *lookups*, twenty per hour per account, which meters the "that address
+  is already taken" answer so it cannot be used to enumerate accounts for free.
   The counters live in memory, in one process — run several app instances
   behind a load balancer and each keeps its own, which multiplies every limit
   by the number of instances. That is a known limitation of the single-process

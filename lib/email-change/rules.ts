@@ -121,3 +121,24 @@ export const CONFIRMATION_ACCOUNT_BUCKET = "email-change:account";
 
 /** Hits against the address the mail would go to. */
 export const CONFIRMATION_TARGET_BUCKET = "email-change:target";
+
+/**
+ * A third counter, and the one that is not about mail at all.
+ *
+ * Refusing a taken address openly (FR-19) is a deliberate disclosure: it tells
+ * the requester an account exists there. That was judged acceptable — and the
+ * judgement quietly assumed a person correcting a typo, not a script.
+ *
+ * The two counters above cannot constrain it, because a refused request sends
+ * nothing and therefore costs nothing: without this, a signed-in attacker can
+ * ask "does an account exist at X?" without limit and for free. The disclosure
+ * stays — a silent failure at confirmation time is worse for every honest user
+ * — but it stops being an unmetered oracle.
+ *
+ * Twenty an hour, counted on every request that reaches the lookup. Nobody
+ * correcting an address approaches it; anybody enumerating hits it at once.
+ */
+export const PROBE_LIMIT = { max: 20, windowMs: 60 * 60 * 1000 } as const;
+
+/** Hits by the Member who asked, whether or not anything was sent. */
+export const PROBE_BUCKET = "email-change:probe";

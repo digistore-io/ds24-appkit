@@ -95,8 +95,14 @@ next one):
   `matcher` lists — today `/dashboard/:path*` — and `auth.config.ts` returns
   true for every other path. **Any new route outside `/dashboard` is public
   until you add it to the matcher.**
-  Public by design: the home page, `/login`, `/plans`, `/optin/*` and the IPN
-  endpoint `/api/ipn` (secured via the SHA512 signature). `/plans` is public on purpose — a visitor can buy without signing
+  Public by design: the home page, `/login`, `/plans`, `/optin/*`,
+  `/account/confirm-email` and the IPN endpoint `/api/ipn` (secured via the
+  SHA512 signature).
+  **`/account/confirm-email` is public deliberately and must stay that way** —
+  it is authenticated by its single-use token, and the mail carrying it is read
+  on whichever device holds the inbox, which is routinely not the one signed in.
+  Adding it to the matcher would break the feature for exactly the person it
+  exists for. `/plans` is public on purpose — a visitor can buy without signing
   in, and the purchase is attached to their account the first time they do.
 - **IPN signature verification (SHA512) is mandatory.** Never switch off
   `lib/digistore/ipn.ts`. Set order status only through IPN events.
@@ -401,13 +407,18 @@ screen. What holds:
 - **One pending change per Member.** A new request replaces the old one and
   kills its link — that is how a typo'd address is corrected, and why there is
   no cancel button to build.
-- **Requests are rate-limited twice: per account AND per target address**
-  (`lib/rate-limit.ts`, three an hour). This is the one action where a signed-in
-  person chooses both that mail is sent and who it goes to; left open, the
-  account page mails a stranger repeatedly from the operator's own verified
-  sending domain, and it is the operator's sender reputation that pays. The
-  per-target counter is not redundant — without it the same address is reachable
-  again from the next account.
+- **Requests are rate-limited three ways** (`lib/rate-limit.ts`). Two meter the
+  *mail*, three an hour: **per account**, so one session cannot hammer the
+  button, and **per target address**, so the same mailbox is not reachable again
+  from the next account. This is the one action where a signed-in person chooses
+  both that mail is sent and who it goes to, and it is the operator's sender
+  reputation that pays for leaving it open.
+  The third meters the *answer*: refusing an address as already taken (FR-19)
+  tells the requester an account exists there, and a refusal sends nothing, so
+  neither mail counter charges for it. Twenty an hour per account, counted on
+  every request that reaches the lookup. Without it the refusal is an
+  enumeration oracle a script can query for free — found by `security-gateway`
+  after the feature shipped, which is why it is written down here.
 - **Confirming SETS `emailVerified`**, where the Operator's `setUserEmail()`
   clears it. Not an inconsistency to tidy away: there an address is asserted by
   somebody else and has proved nothing; here following the link IS the proof.

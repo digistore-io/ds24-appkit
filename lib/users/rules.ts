@@ -174,11 +174,27 @@ export function canSendLoginLink(actor: Actor, target: Target): Denial {
 }
 
 /**
+ * The longest address this app will accept — the limit RFC 5321 puts on a
+ * forward path, so nothing deliverable is turned away.
+ *
+ * It is a security bound rather than a formatting one. `users.email` and
+ * `email_changes.newEmail` are unbounded `text`, and an address also becomes a
+ * key in the in-memory rate-limit map (lib/rate-limit.ts). Without a cap, a
+ * signed-in Member can hand the server a megabyte per request and have it
+ * stored and retained; the pattern that matched before this line accepted a
+ * 200,000-character address in a millisecond.
+ */
+export const MAX_EMAIL_LENGTH = 254;
+
+/**
  * Normalizes and validates an email input.
  * @returns the trimmed, lowercased address, or null if it is unusable.
  */
 export function normalizeEmail(input: unknown): string | null {
   if (typeof input !== "string") return null;
+  // Checked before the pattern, and on the RAW input: the point is to refuse
+  // absurd input cheaply, not to measure it after work has been done on it.
+  if (input.length > MAX_EMAIL_LENGTH) return null;
   const email = input.trim().toLowerCase();
   // Deliberately simple: one character before and after the @, a dot in the domain.
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return null;

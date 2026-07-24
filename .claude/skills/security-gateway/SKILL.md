@@ -20,8 +20,13 @@ template.
   guarded, and `auth.config.ts` returns true for the rest. Check that every
   route added since the last audit is either in the matcher or genuinely
   public — a page absent from both lists is public by accident, not by design.
-  Public are only the home page, `/login`, `/plans`, `/optin/*`
-  and `/api/ipn`. Add new protected areas to the matcher.
+  Public are only the home page, `/login`, `/plans`, `/optin/*`,
+  `/account/confirm-email` and `/api/ipn`. Add new protected areas to the
+  matcher — and when a route is public on purpose, add it to this list in the
+  same change, or the next audit reads it as an accident. The confirmation
+  route is authenticated by a single-use token because the mail carrying it is
+  read on whichever device holds the inbox; putting it behind the matcher
+  breaks the feature.
 - **IDOR:** does a server action/route only access data belonging to the
   signed-in user? Check every query for `where memberId = session.user.id` — `memberId` is the
   buyer column on every customer-owned table (`orders`, `grants`,

@@ -133,7 +133,10 @@ Server Action, and both refuse without a written reason.
   its `matcher` lists (today `/dashboard/:path*`); `auth.config.ts` returns
   true for everything else. **A new page holding customer data is world-
   readable until you add it to the matcher.** Public by design: home, `/login`,
-  `/plans`, `/optin/*` and the IPN endpoint.
+  `/plans`, `/optin/*`, `/account/confirm-email` and the IPN endpoint.
+  The confirmation route is authenticated by its single-use token, not by a
+  session — the mail is read wherever the inbox is. Do not "fix" it into the
+  matcher.
 
 ## STOP — involve a human here
 

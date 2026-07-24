@@ -1,4 +1,36 @@
 import { describe, it, expect } from "vitest";
+import { MAX_EMAIL_LENGTH } from "./rules";
+
+describe("normalizeEmail — length bound", () => {
+  // A security bound, not a formatting one: the columns are unbounded `text`
+  // and an address also becomes a key in the in-memory rate-limit map. Before
+  // this cap the pattern accepted a 200,000-character address in a millisecond.
+  it("refuses an address longer than RFC 5321 allows", async () => {
+    const { normalizeEmail } = await import("./rules");
+    const huge = "a".repeat(100_000) + "@" + "b".repeat(100_000) + ".de";
+    expect(normalizeEmail(huge)).toBeNull();
+  });
+
+  it("accepts one exactly at the limit", async () => {
+    const { normalizeEmail } = await import("./rules");
+    const domain = "@example.de";
+    const at = "a".repeat(MAX_EMAIL_LENGTH - domain.length) + domain;
+    expect(at).toHaveLength(MAX_EMAIL_LENGTH);
+    expect(normalizeEmail(at)).toBe(at);
+  });
+
+  it("refuses one character over", async () => {
+    const { normalizeEmail } = await import("./rules");
+    const domain = "@example.de";
+    const over = "a".repeat(MAX_EMAIL_LENGTH - domain.length + 1) + domain;
+    expect(normalizeEmail(over)).toBeNull();
+  });
+
+  it("still accepts an ordinary address", async () => {
+    const { normalizeEmail } = await import("./rules");
+    expect(normalizeEmail("  Sabine@Neu.DE ")).toBe("sabine@neu.de");
+  });
+});
 import {
   canDeleteUser,
   canChangeRole,
