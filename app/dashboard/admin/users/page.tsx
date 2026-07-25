@@ -2,6 +2,7 @@ import { getTranslations } from "next-intl/server";
 
 import { requireOwner } from "@/lib/authz";
 import { listUsers } from "@/lib/users/manage";
+import { isImpersonationEnabled } from "@/lib/impersonation/config";
 import { PageHeader } from "@/components/page-header";
 import { UserTable, CreateUserDialog } from "./ui";
 
@@ -33,7 +34,15 @@ export default async function AdminUsersPage() {
         <CreateUserDialog />
       </PageHeader>
 
-      <UserTable users={users} currentUserId={session.user.id as string} />
+      {/* The switch is read here, on the server: the config module imports JSON
+          that has no business in a browser bundle. It only hides the menu entry
+          — the server action refuses on its own, because a Server Action is an
+          HTTP endpoint of its own and a hidden menu protects nobody. */}
+      <UserTable
+        users={users}
+        currentUserId={session.user.id as string}
+        impersonationEnabled={isImpersonationEnabled()}
+      />
 
       <p className="text-muted-foreground mt-4 text-sm">
         {t.rich("hint", { code: (chunks) => <code>{chunks}</code> })}

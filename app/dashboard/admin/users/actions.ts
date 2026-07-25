@@ -15,6 +15,7 @@ import { unstable_rethrow } from "next/navigation";
 // sentences. The language is that of the running request, i.e. of the admin
 // currently clicking.
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { requireOwner, isRole } from "@/lib/authz";
 import {
@@ -24,8 +25,9 @@ import {
   setUserEmail,
   loginLinkTarget,
   deleteUser,
+  findUser,
 } from "@/lib/users/manage";
-import { UserError, type Actor } from "@/lib/users/rules";
+import { UserError, canImpersonate, type Actor } from "@/lib/users/rules";
 
 const PAGE = "/dashboard/admin/users";
 
@@ -197,4 +199,64 @@ export async function deleteUserAction(
   } catch (error) {
     return toState(error);
   }
+}
+
+/**
+ * Sign in as this user.
+ *
+ * The order below is the security of the feature and is not an implementation
+ * detail. `requireOwner()` establishes who is asking, `canImpersonate()`
+ * decides whether they may, and `openImpersonation()` writes the record —
+ * BEFORE `unstable_update()` is allowed to touch the session.
+ *
+ * That last ordering looks like audit-trail etiquette and is not. The record
+ * row is what the `jwt` callback accepts as proof that this impersonation was
+ * authorised, because the update endpoint it goes through is reachable by any
+ * signed-in user. Reordering these two lines does not merely lose a log entry;
+ * it removes the authorisation. See lib/impersonation/session.ts.
+ */
+export async function startImpersonationAction(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  try {
+    const session = await requireOwner();
+    const me: Actor = {
+      id: session.user.id as string,
+      role: session.user.role as string,
+    };
+
+    const id = String(formData.get("id") ?? "");
+    const target = await findUser(id);
+    if (!target) throw new UserError("userNotFound");
+
+    const { isImpersonationEnabled } = await import("@/lib/impersonation/config");
+    const denial = canImpersonate(me, target, {
+      enabled: isImpersonationEnabled(),
+      alreadyImpersonating: Boolean(session.user.impersonation),
+    });
+    if (denial) throw new UserError(denial);
+
+    const { openImpersonation } = await import("@/lib/impersonation/manage");
+    const record = await openImpersonation({ operatorId: me.id, memberId: target.id });
+
+    const { unstable_update } = await import("@/auth");
+    await unstable_update({
+      // The id and nothing else. Every other value the callback needs it reads
+      // from the row or from the database — a member id sent from here would be
+      // a value the callback might be tempted to believe, and this payload
+      // arrives over an endpoint any signed-in user can reach.
+      impersonation: { start: record.id },
+    } as Parameters<typeof unstable_update>[0]);
+
+    revalidatePath(PAGE, "layout");
+  } catch (error) {
+    return toState(error);
+  }
+
+  // Outside the try: redirect() signals by throwing, and toState() would
+  // rethrow it anyway — but keeping it here says so plainly. No success message
+  // is needed and none is sent: the banner IS the feedback, and it is on the
+  // page they land on.
+  redirect("/dashboard");
 }

@@ -26,6 +26,7 @@ import {
   AtSign,
   Ban,
   CircleCheck,
+  LogIn,
 } from "lucide-react";
 
 // Deliberately from lib/roles (not lib/authz): authz depends on auth.ts and
@@ -89,6 +90,7 @@ import {
   setEmailAction,
   sendLoginLinkAction,
   deleteUserAction,
+  startImpersonationAction,
   type ActionState,
 } from "./actions";
 
@@ -187,9 +189,19 @@ interface Row {
 export function UserTable({
   users,
   currentUserId,
+  impersonationEnabled,
 }: {
   users: Row[];
   currentUserId: string;
+  /**
+   * Whether `config/impersonation.json` has the feature switched on. Passed in
+   * from the page rather than read here: the config module is server-side.
+   *
+   * It hides the menu entry and NOTHING else — the server action refuses on its
+   * own (FR-75). A hidden menu is cosmetics; a Server Action is an HTTP
+   * endpoint of its own.
+   */
+  impersonationEnabled: boolean;
 }) {
   const t = useTranslations("users");
   const tCommon = useTranslations("common");
@@ -199,17 +211,25 @@ export function UserTable({
   const [blockState, blockAction] = useActionState(setBlockedAction, EMPTY);
   const [linkState, linkAction] = useActionState(sendLoginLinkAction, EMPTY);
   const [deleteState, deleteAction] = useActionState(deleteUserAction, EMPTY);
+  const [impersonateState, impersonateAction] = useActionState(
+    startImpersonationAction,
+    EMPTY,
+  );
   const [isPending, startAction] = useTransition();
   // The user whose delete confirmation is open (null = none).
   const [toDelete, setToDelete] = useState<Row | null>(null);
   // …the same for the block confirmation and the email dialog.
   const [toBlock, setToBlock] = useState<Row | null>(null);
   const [toEdit, setToEdit] = useState<Row | null>(null);
+  // …and for "sign in as this user", which is consequential enough to confirm:
+  // the mis-click it prevents is picking the wrong row on a long list.
+  const [toImpersonate, setToImpersonate] = useState<Row | null>(null);
 
   useActionToast(roleState);
   useActionToast(blockState);
   useActionToast(linkState);
   useActionToast(deleteState);
+  useActionToast(impersonateState);
 
   // The confirmation only closes once the delete succeeded. If it fails (e.g.
   // last admin) it stays up — the message explains why.
@@ -367,6 +387,24 @@ export function UserTable({
                             <Mail aria-hidden />
                             {t("sendLoginLink")}
                           </DropdownMenuItem>
+                          {/* Sign in as this user.
+                              Absent for an admin and for a blocked account
+                              rather than offered and then refused — the same
+                              treatment the sign-in link above gets. Both
+                              refusals also live in canImpersonate(), because a
+                              request that never passed through this menu has to
+                              be refused identically: an owner target would
+                              otherwise hand over every right that owner holds. */}
+                          {impersonationEnabled &&
+                            user.role !== "owner" &&
+                            !isBlocked && (
+                              <DropdownMenuItem
+                                onSelect={() => setToImpersonate(user)}
+                              >
+                                <LogIn aria-hidden />
+                                {t("impersonate")}
+                              </DropdownMenuItem>
+                            )}
                           <DropdownMenuSeparator />
                           {isBlocked ? (
                             // Unblocking takes nothing away from anyone — that
@@ -409,6 +447,46 @@ export function UserTable({
           </TableBody>
         </Table>
       </div>
+
+      {/* Signing in as somebody asks first, and names the address while doing
+          so. Not because it is destructive — it takes nothing away — but
+          because it is consequential and leaves a permanent record, and the
+          mistake it prevents is the ordinary one: the wrong row on a long list.
+
+          The confirm button is NOT `variant="destructive"`. Red is reserved
+          here for actions that remove something; using it for every serious
+          action is how it stops meaning anything. */}
+      <AlertDialog
+        open={toImpersonate !== null}
+        onOpenChange={(open) => !open && setToImpersonate(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t("impersonateTitle", {
+                email: toImpersonate?.email ?? tCommon("none"),
+              })}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("impersonateBody")}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{tCommon("cancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isPending}
+              onClick={(event) => {
+                event.preventDefault();
+                if (toImpersonate) {
+                  run(impersonateAction, { id: toImpersonate.id });
+                }
+              }}
+            >
+              {isPending ? tCommon("loading") : t("impersonateConfirm")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Blocking asks first: it throws someone out of their running session
           immediately. Being reversible does not make it casual. */}

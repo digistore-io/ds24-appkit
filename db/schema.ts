@@ -132,3 +132,9 @@ export * from "./schema-ai-usage";
 // lock that keeps two app instances from running it at once. See schema-cron.ts
 // and docs/cron.md.
 export * from "./schema-cron";
+
+// --- Signing in as a user ------------------------------------------------------
+// `impersonations` — one row per support session in which an Operator acted as
+// a customer. Written BEFORE the session changes, because the row is also what
+// authorises the change. See schema-impersonation.ts.
+export * from "./schema-impersonation";

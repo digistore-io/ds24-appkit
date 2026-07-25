@@ -11,6 +11,10 @@
 import type { NextAuthConfig } from "next-auth";
 import Google from "next-auth/providers/google";
 import { devCookies } from "@/lib/auth/cookie-names";
+// Pure, database-free, and free of auth.ts — see lib/impersonation/claim.ts.
+// It only reads a value out of the signed token, which is exactly what this
+// file is allowed to do.
+import { impersonationState } from "@/lib/impersonation/claim";
 
 const providers: NextAuthConfig["providers"] = [];
 
@@ -59,11 +63,54 @@ export default {
       }
       return token;
     },
+    // Who the app is talking to — which, while an Operator is signed in as one
+    // of their customers, is NOT whoever signed in.
+    //
+    // Three states, and the expiry is resolved on every read rather than by
+    // rewriting the token when the clock passes: Next.js forbids setting a
+    // cookie during a server-component render, so there is no moment in a page
+    // load at which a rewrite could happen. A stale token is harmless as long as
+    // every reader honours the expiry — and every reader goes through here.
+    //
+    // This stays free of the database, like the rest of this file:
+    // `impersonationState()` only reads a value out of the signed token.
     session({ session, token }) {
-      if (session.user) {
+      if (!session.user) return session;
+
+      const state = impersonationState(token);
+
+      if (state.kind === "running") {
+        // The member, with the member's role. Every requireOwner() in the app
+        // therefore refuses, with no guard modified to make that true (AD-23).
         session.user.id = token.sub as string;
         session.user.role = (token.role as string) ?? "member";
+        session.user.impersonation = {
+          id: state.claim.id,
+          operatorEmail: state.claim.operatorEmail,
+          memberEmail: state.claim.memberEmail ?? (session.user.email ?? null),
+          expiresAt: state.claim.expiresAt,
+        };
+        return session;
       }
+
+      if (state.kind === "expired") {
+        // The thirty minutes are up. The Operator is themselves again — from
+        // the claim, which is inside a token we signed — and is told once that
+        // it ended, because silently swapping the identity under somebody
+        // mid-task is the drift the banner exists to prevent, in reverse.
+        session.user.id = state.claim.operatorId;
+        session.user.role = state.claim.operatorRole;
+        // An account without an address is possible here (created by CLI), and
+        // showing the member's address next to the Operator's own id would be
+        // the one wrong answer — keep whatever was there rather than inventing.
+        session.user.email = state.claim.operatorEmail ?? session.user.email;
+        session.user.impersonation = null;
+        session.user.impersonationEnded = true;
+        return session;
+      }
+
+      session.user.id = token.sub as string;
+      session.user.role = (token.role as string) ?? "member";
       return session;
     },
   },

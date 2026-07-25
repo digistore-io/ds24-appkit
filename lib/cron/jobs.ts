@@ -57,6 +57,13 @@ export interface CronJob {
 /** How long AI-usage rows are kept when the config says nothing. */
 export const AI_USAGE_RETENTION_MONTHS = 12;
 
+/**
+ * How long the record of who signed in as whom is kept when the config says
+ * nothing. The same twelve months, and for the same reason it is written down
+ * rather than inlined: it is the number `docs/data-protection.md` quotes.
+ */
+export const IMPERSONATION_RETENTION_MONTHS = 12;
+
 // Both go through `configuredNumber`, NOT `Number()`. `Number(null)` is 0, and
 // zero retention means delete everything — see the warning in rules.mjs.
 function months(settings: Record<string, unknown>, fallback: number): number {
@@ -164,6 +171,46 @@ export const CRON_JOBS: readonly CronJob[] = Object.freeze([
       const retentionDays = days(settings, IPN_LOG_RETENTION_DAYS);
       const deleted = await pruneIpnEvents(now, retentionDays);
       return `${deleted} row(s) older than ${retentionDays} day(s) deleted`;
+    },
+  },
+  {
+    id: "close-impersonations",
+    describe: "Close impersonation records whose 30 minutes ran out and that nobody ended.",
+    // The one ending no request can observe. Stepping out, signing out and
+    // noticing the expiry on a live request all have a moment to write the end
+    // — closing the tab does not. Nothing ever comes back to that session, so
+    // without this job those rows stay open for ever and the record becomes
+    // unreadable within a week: a finished session and a running one look
+    // identical.
+    //
+    // Idempotent by construction — the UPDATE excludes rows that already have
+    // an end, so a second run finds nothing. That is rule 1 for a job here, and
+    // this one satisfies it without needing to remember anything.
+    async run() {
+      const { closeAbandonedImpersonations } = await import(
+        "@/lib/impersonation/manage"
+      );
+      const closed = await closeAbandonedImpersonations();
+      // Numbers only (rule 2). Naming the member or the Operator here would put
+      // "who was in whose account" into `cron_runs`, which is a table with no
+      // privacy question attached and must stay one. The record itself is where
+      // that belongs, and it is covered by data-protection.
+      return `${closed} abandoned session(s) closed`;
+    },
+  },
+  {
+    id: "prune-impersonations",
+    describe: "Delete impersonation records older than the retention window (default 12 months).",
+    async run({ settings }) {
+      const retentionMonths = months(settings, IMPERSONATION_RETENTION_MONTHS);
+      // ⚠️ This deletes the answer to "did somebody go into my account last
+      // spring". Twelve months matches what this template already keeps AI
+      // usage for; a shorter window weakens a member's own subject access
+      // request, and that is the trade being made here rather than a default
+      // nobody thought about.
+      const { pruneImpersonations } = await import("@/lib/impersonation/manage");
+      const deleted = await pruneImpersonations(retentionMonths);
+      return `${deleted} row(s) older than ${retentionMonths} month(s) deleted`;
     },
   },
 ]);

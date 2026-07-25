@@ -604,6 +604,56 @@ signed in either. Open it by hand with a real Member id after changing anything
 there, then `node run.mjs errors`: this page renders dates and grant states, which
 is exactly the material that breaks without changing the status code.
 
+**An Operator can sign in as one of their customers** — the row menu on
+`/dashboard/admin/users`, entry "Als Benutzer einloggen". It exists because the
+alternative is worse: `setUserEmail()` needs no confirmation link, so without
+this feature the way to see what a customer sees is to change their address to
+one you control and change it back, which leaves a foreign address on the
+account and mails them about a change they never made.
+
+While it runs, **the session IS the member** — `session.user.role` says
+`member`, so every `requireOwner()` in the app refuses without a single guard
+being modified, including on pages you write later. What you get instead is
+`session.user.impersonation`, which is set only during one.
+
+Four properties keep it from being a back door, and all four are load-bearing:
+
+| | |
+|---|---|
+| **Narrow** | owner → member only. Never another owner (they hold the same rights you do), never a blocked account (`requireActiveUser()` would eject you to `/login` with no way back), never yourself, never chained. `canImpersonate()` in `lib/users/rules.ts` |
+| **Visible** | a banner on **every** page, from the root layout — not from `AppShell`, which stops at `/dashboard`. It cannot be dismissed and it names both identities |
+| **Bounded** | 30 minutes, then it ends by itself |
+| **Recorded** | one row in `impersonations`, written **before** the session changes |
+
+Three things about it are worth knowing before you touch any of it:
+
+- **The record is the authorisation, not a log line.** `/api/auth/session`
+  accepts a POST from any signed-in user, and the body reaches the `jwt`
+  callback — `@auth/core`'s own types say *"you should validate this data before
+  using it"*. So the callback believes nothing in it: it looks the record row up
+  by id and rewrites the session only if that row already names the caller as
+  its operator. Write the row *after* the swap, or take a member id from the
+  payload, and any customer can become any other. `lib/impersonation/session.ts`
+  spells it out and `lib/impersonation/guard.test.ts` fails the build on it.
+- **The exit action deliberately does NOT call `requireOwner()`**
+  (`app/impersonation-actions.ts`). It is the only server action in this app
+  that does not, it will read like an oversight, and adding the check would lock
+  an Operator inside a customer's account — because by then their session says
+  `member`. The guard is `canStopImpersonating()`, and the action takes no id at
+  all: the session it ends is always the caller's own.
+- **Money stops at the card.** An impersonated session may spend the member's
+  token balance, deliberately — but automatic top-up is suppressed
+  (`lib/tokens/spend.ts`), because `createBillingOnDemand` charges a stored
+  payment method with nobody there to agree to it. A shortfall behaves exactly
+  as it would for a real member with an empty balance.
+
+Switch it off entirely with `"enabled": false` in `config/impersonation.json`,
+read through `isImpersonationEnabled()` — a malformed file counts as off. Who
+signed in as whom is at `/dashboard/admin/impersonations`, appears in
+`node run.mjs data-export`, and is kept for 12 months
+(`docs/data-protection.md` §12). What was *done* while inside is deliberately
+not recorded anywhere.
+
 **Blocking** (`users.blockedAt`) takes effect in two places — both are needed, see
 `lib/users/blocked.ts`:
 

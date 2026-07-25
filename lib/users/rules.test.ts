@@ -38,6 +38,10 @@ import {
   canBlockUser,
   canChangeEmail,
   canSendLoginLink,
+  canImpersonate,
+  canStopImpersonating,
+  impersonationExpired,
+  IMPERSONATION_MINUTES,
   normalizeEmail,
 } from "./rules";
 
@@ -185,5 +189,109 @@ describe("normalizeEmail", () => {
     for (const bad of ["", "no-at", "a@b", "a b@c.de", null, 42, undefined]) {
       expect(normalizeEmail(bad)).toBeNull();
     }
+  });
+});
+
+describe("canImpersonate", () => {
+  const on = { enabled: true, alreadyImpersonating: false };
+
+  it("lets an admin sign in as a customer", () => {
+    expect(canImpersonate(admin, customer, on)).toBeNull();
+  });
+
+  it("refuses a customer", () => {
+    expect(canImpersonate(customer, admin, on)).toBe("notOwner");
+  });
+
+  it("refuses while the feature is switched off", () => {
+    expect(
+      canImpersonate(admin, customer, { ...on, enabled: false }),
+    ).toBe("impersonationDisabled");
+  });
+
+  // A chain has no end anybody can see, and the record could not say who is
+  // really at the keyboard.
+  it("refuses a second impersonation from inside one", () => {
+    expect(
+      canImpersonate(admin, customer, { ...on, alreadyImpersonating: true }),
+    ).toBe("alreadyImpersonating");
+  });
+
+  it("refuses yourself", () => {
+    expect(canImpersonate(admin, admin, on)).toBe("selfImpersonate");
+  });
+
+  // THE privilege-escalation rule. Every guard in this app answers from
+  // session.user.role, so this would hand over every right the target holds.
+  // It lives here rather than in the menu because a request that never passed
+  // through the menu has to be refused identically.
+  it("refuses another admin", () => {
+    expect(canImpersonate(admin, secondAdmin, on)).toBe("ownerImpersonate");
+  });
+
+  it("refuses an admin target even when the menu never rendered", () => {
+    // The same call an attacker would make straight against the server action.
+    expect(canImpersonate(admin, { id: "u9", role: "owner" }, on)).toBe(
+      "ownerImpersonate",
+    );
+  });
+
+  // Not because a blocked account is uninteresting: requireActiveUser() sends a
+  // blocked session to /login, and the way out lives inside the app — the
+  // Operator would be stranded in a session they can neither see nor end.
+  it("refuses a blocked customer", () => {
+    expect(canImpersonate(admin, blockedCustomer, on)).toBe("userBlocked");
+  });
+
+  it("checks the role before anything else, so a customer learns nothing", () => {
+    // A member poking at the action gets "notOwner" whatever else is true —
+    // never "that account is blocked", which would be an oracle.
+    expect(canImpersonate(customer, blockedCustomer, on)).toBe("notOwner");
+  });
+});
+
+describe("canStopImpersonating", () => {
+  it("lets a running impersonation end", () => {
+    expect(canStopImpersonating({ alreadyImpersonating: true })).toBeNull();
+  });
+
+  it("refuses when there is nothing to end", () => {
+    expect(canStopImpersonating({ alreadyImpersonating: false })).toBe(
+      "notImpersonating",
+    );
+  });
+
+  // The regression this guards: somebody reads the exit action, sees no
+  // requireOwner(), reads it as an oversight and "fixes" it. During an
+  // impersonation the session's role IS the member's (AD-23), so an owner check
+  // here refuses the only way out. The rule takes no role at all — it CANNOT be
+  // made to depend on one without changing its signature, which is the point.
+  it("does not consider the actor's role at all", () => {
+    expect(canStopImpersonating.length).toBe(1);
+  });
+});
+
+describe("impersonationExpired", () => {
+  const start = new Date("2026-07-25T10:00:00Z").getTime();
+  const expiresAt = start + IMPERSONATION_MINUTES * 60_000;
+
+  it("is not expired one minute in", () => {
+    expect(impersonationExpired(expiresAt, start + 60_000)).toBe(false);
+  });
+
+  it("is not expired one millisecond before the cap", () => {
+    expect(impersonationExpired(expiresAt, expiresAt - 1)).toBe(false);
+  });
+
+  it("is expired exactly at the cap", () => {
+    expect(impersonationExpired(expiresAt, expiresAt)).toBe(true);
+  });
+
+  it("is expired long after", () => {
+    expect(impersonationExpired(expiresAt, expiresAt + 86_400_000)).toBe(true);
+  });
+
+  it("caps at thirty minutes", () => {
+    expect(IMPERSONATION_MINUTES).toBe(30);
   });
 });

@@ -58,12 +58,33 @@ const adapter: typeof drizzleAdapter = {
   },
 };
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
+export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
   ...authConfig,
   adapter,
   providers,
   callbacks: {
     ...authConfig.callbacks,
+    // Signing in as a customer, and stepping back out.
+    //
+    // It lives HERE rather than in auth.config.ts for the same reason `signIn`
+    // below does: it needs the database, and auth.config.ts sits in front of
+    // every matched request and stays free of it.
+    //
+    // ⚠️ `trigger === "update"` means somebody POSTed to `/api/auth/session`,
+    // and ANY signed-in user can do that. `session` is their request body.
+    // Nothing in it is trusted — see the header of lib/impersonation/session.ts,
+    // which is where the one line that authorises a rewrite lives. A change
+    // here that starts believing the payload is an account-takeover bug, and it
+    // will look perfectly ordinary in a diff.
+    async jwt({ token, user, trigger, session }) {
+      const base = authConfig.callbacks!.jwt!({ token, user }) as typeof token;
+      if (trigger !== "update") return base;
+
+      const { applyImpersonationUpdate } = await import(
+        "@/lib/impersonation/session"
+      );
+      return applyImpersonationUpdate(base, session);
+    },
     // Blocked accounts do not get in at all — no matter which provider. The
     // check lives here and not in auth.config.ts because it needs the database
     // and auth.config.ts stays free of the database (see there).
@@ -160,6 +181,31 @@ declare module "next-auth" {
       email?: string | null;
       image?: string | null;
       role?: string;
+      /**
+       * Set while an Operator is signed in as this member — and only then.
+       *
+       * Its presence is the banner's whole condition, and it is why every page
+       * in the app can show one without a database query: the two addresses and
+       * the deadline all travel in the session token.
+       *
+       * ⚠️ `id`, `email` and `role` above describe the MEMBER while this is
+       * set. That is deliberate (AD-23) and it is what makes `requireOwner()`
+       * refuse everywhere without a single guard being modified. Code that
+       * needs to know who is really at the keyboard reads this field.
+       */
+      impersonation?: {
+        /** The record row — see SessionImpersonation in lib/impersonation/claim.ts. */
+        id: string;
+        operatorEmail: string | null;
+        memberEmail: string | null;
+        /** Epoch milliseconds. */
+        expiresAt: number;
+      } | null;
+      /**
+       * True on the first session read after the thirty minutes ran out, so
+       * the app can say so once instead of silently changing who you are.
+       */
+      impersonationEnded?: boolean;
     };
   }
 }

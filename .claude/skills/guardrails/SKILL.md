@@ -127,6 +127,49 @@ Server Action, and both refuse without a written reason.
 - Do not pass buyer data on to third parties/external services without a clear
   purpose and consent.
 
+## Signing in as a user
+
+An operator can sign in as one of their customers from
+`/dashboard/admin/users` — see **Users & roles** in `CLAUDE.md`. It is a
+deliberate hole in this app's own access control, and four properties are what
+keep it from being a back door. Do not remove any of them:
+
+- **Narrow.** Only an owner, only onto a member. `canImpersonate()`
+  (`lib/users/rules.ts`) refuses another owner outright — every guard in this
+  app answers from `session.user.role`, so impersonating an owner would hand
+  over every right that owner holds, including this feature. The refusal is in
+  the rule, not in the menu: a request that never passed through the menu has to
+  be refused identically.
+- **Visible.** A banner on every page, in the root layout, that cannot be
+  dismissed. If you make it conditional on a route, you have re-opened the gap
+  it exists to close.
+- **Bounded.** Thirty minutes, then it ends by itself.
+- **Recorded.** One row in `impersonations`, written **before** the session
+  changes.
+
+**That ordering is the authorisation, not a log line.** `/api/auth/session`
+accepts a POST from any signed-in user, and the body reaches the `jwt` callback.
+The callback trusts nothing in it — it looks up the record row and rewrites the
+session only if that row already names the caller as its operator. Write the row
+after the swap, or believe a member id out of the payload, and any customer can
+become any other, including you. `lib/impersonation/session.ts` says so at
+length; `lib/impersonation/guard.test.ts` fails the build if either changes.
+
+**The exit action is deliberately not `requireOwner()`.** While an impersonation
+runs the session's role IS the member's, so an owner check on the way out would
+lock the operator inside. It looks like an oversight and is not.
+
+**Money stops at the customer's card.** An impersonated session may spend the
+customer's token balance — that is what makes support useful — but automatic
+top-up is suppressed (`lib/tokens/spend.ts`), because `createBillingOnDemand`
+charges a stored payment method with nobody present to agree to it.
+
+**Never build**: impersonation of an owner, a way to reach it other than the
+user list, a chain (impersonating from inside an impersonation), a longer cap
+without saying so in `docs/data-protection.md`, or an activity log of what was
+done while inside — that last one is a surveillance log of a customer's own
+data, and the changes that matter are already recorded elsewhere.
+
 ## Auth
 
 - Auth protection is **opt-in, not opt-out**. `proxy.ts` guards only what
@@ -143,7 +186,8 @@ Server Action, and both refuse without a written reason.
 Do **not** carry on alone, ask instead, when you are about to:
 
 - fundamentally change the billing/payout logic or the price calculation,
-- adjust or deactivate the signature/auth checks,
+- adjust or deactivate the signature/auth checks — **including anything in
+  `lib/impersonation/`**, which rewrites the subject of a signed-in session,
 - export, delete or send personal data to external systems,
 - connect a new external integration with access to payments or customer data,
 - run database migrations that change existing order/user data,

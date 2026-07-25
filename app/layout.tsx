@@ -7,6 +7,7 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { ImpersonationBanner } from "@/components/impersonation-banner";
 import { APP_NAME } from "@/lib/app";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -42,6 +43,12 @@ export default async function RootLayout({
         <NextIntlClientProvider>
           <ThemeProvider>
             <TooltipProvider delayDuration={300}>
+              {/* "You are signed in as somebody else." Renders nothing at all
+                  unless an Operator is inside a customer's account — but it is
+                  HERE, above every page including the public ones, because the
+                  moment it is missing from one is the moment somebody forgets.
+                  It reads the session token only; no query. See the component. */}
+              <ImpersonationBanner />
               {children}
               {/* Short messages after an action ("saved", "deleted"). Sits
                   here once for the whole app — in pages just call

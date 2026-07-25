@@ -30,7 +30,8 @@
     "users": "Benutzer",
     "groupOperator": "Betreiber",
     "purchases": "Käufe",
-    "aiCosts": "KI-Kosten"
+    "aiCosts": "KI-Kosten",
+    "impersonations": "Zugriffe"
   },
   "shell": {
     "openNavigation": "Navigation öffnen",
@@ -216,7 +217,11 @@
     "linkSent": "Anmelde-Link an {email} gesendet.",
     "blocked": "Benutzer gesperrt.",
     "unblocked": "Sperre aufgehoben.",
-    "deleted": "Benutzer gelöscht."
+    "deleted": "Benutzer gelöscht.",
+    "impersonate": "Als Benutzer einloggen",
+    "impersonateTitle": "Als {email} einloggen?",
+    "impersonateBody": "Du siehst die App genau so wie dieser Kunde und kannst in seinem Namen handeln. Ein Banner zeigt, in wessen Konto du bist, die Sitzung endet nach 30 Minuten von selbst, und sie wird festgehalten.",
+    "impersonateConfirm": "Als Benutzer einloggen"
   },
   "memberBilling": {
     "title": "Abrechnungsstand",
@@ -509,6 +514,11 @@
     "lastOwnerRole": "Das ist der letzte Admin — seine Rolle kann nicht geändert werden.",
     "selfBlock": "Du kannst dich nicht selbst sperren — du kämst nicht mehr zum Entsperren herein.",
     "lastOwnerBlock": "Das ist der letzte Admin — er kann nicht gesperrt werden.",
+    "selfImpersonate": "Du bist bereits als du selbst angemeldet.",
+    "ownerImpersonate": "Als Admin kann man sich nicht einloggen — er hat dieselben Rechte wie du.",
+    "alreadyImpersonating": "Du bist bereits als jemand anderes angemeldet. Beende das zuerst.",
+    "impersonationDisabled": "Das Einloggen als Benutzer ist für diese App abgeschaltet (config/impersonation.json).",
+    "notImpersonating": "Du bist nicht als jemand anderes angemeldet.",
     "emptyReason": "Bitte einen Grund angeben — er ist der einzige Hinweis, warum das Guthaben von Hand geändert wurde.",
     "invalidAmount": "Bitte eine ganze Zahl angeben, z. B. 100 oder -50.",
     "zeroAmount": "0 ist keine Korrektur — bitte einen Betrag ungleich null angeben.",
@@ -687,5 +697,27 @@
     "callsHeadingFocused": "Einzelne Aufrufe — {focus}",
     "callsShowAll": "Alle Aufrufe zeigen",
     "callsNoneInGroup": "Zu dieser Auswahl gibt es im Zeitraum keine Aufrufe. Vielleicht ist der Link älter als die Daten — mit „Alle Aufrufe zeigen“ kommst du zurück."
+  },
+  "impersonation": {
+    "signedInAs": "Du bist als <strong>{member}</strong> angemeldet — du bist {operator}.",
+    "stop": "Beenden",
+    "unknownMember": "dieser Benutzer",
+    "unknownOperator": "ein Admin",
+    "ended": "Die Sitzung als anderer Benutzer ist beendet — du bist wieder du selbst.",
+    "title": "Als Benutzer angemeldet",
+    "description": "Jedes Mal, wenn ein Admin sich als Kunde angemeldet hat. Der Zugriff wird festgehalten, nicht was dabei getan wurde.",
+    "columnOperator": "Admin",
+    "columnMember": "Als Benutzer",
+    "columnStarted": "Beginn",
+    "columnDuration": "Dauer",
+    "running": "läuft",
+    "endedBy_operator": "vom Admin beendet",
+    "endedBy_expired": "Zeit abgelaufen",
+    "endedBy_signout": "abgemeldet",
+    "endedBy_abandoned": "liegengelassen — automatisch geschlossen",
+    "emptyTitle": "Noch hat sich niemand als Benutzer angemeldet",
+    "emptyBody": "Sobald ein Admin sich aus der Benutzerliste heraus als Kunde anmeldet, steht es hier.",
+    "hint": "Automatisch geschlossene Zeilen nennen das Ende der erlaubten Zeit, nicht dass der Admin bis dahin da war. Aufbewahrung: 12 Monate.",
+    "minutes": "{count, plural, one {# Minute} other {# Minuten}}"
   }
 }

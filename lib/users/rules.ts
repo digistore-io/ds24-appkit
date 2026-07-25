@@ -46,6 +46,11 @@ export const USER_ERROR_CODES = [
   "userBlocked",
   "userWithoutEmail",
   "emailNotConfigured",
+  "selfImpersonate",
+  "ownerImpersonate",
+  "alreadyImpersonating",
+  "impersonationDisabled",
+  "notImpersonating",
 ] as const;
 
 export type UserErrorCode = (typeof USER_ERROR_CODES)[number];
@@ -171,6 +176,93 @@ export function canSendLoginLink(actor: Actor, target: Target): Denial {
   if (!target.email) return "userWithoutEmail";
   if (target.blockedAt) return "userBlocked";
   return null;
+}
+
+/** What the app knows about the impersonation the actor is (or is not) already in. */
+export interface ImpersonationContext {
+  /** Is the feature switched on at all? `config/impersonation.json`. */
+  enabled: boolean;
+  /** Is this actor already acting as somebody else? */
+  alreadyImpersonating: boolean;
+}
+
+/**
+ * May `actor` sign in as the user `target`?
+ *
+ * This is the whole security of the impersonation feature, which is why it is a
+ * pure function with a test per branch rather than a series of checks spread
+ * across a menu and a form. Every refusal below is repeated by nothing else —
+ * the server action asks this and only this.
+ *
+ * Forbidden:
+ *  - not being an admin,
+ *  - the feature being switched off (`config/impersonation.json`),
+ *  - already impersonating somebody — a chain has no end anybody can see, and
+ *    the record could not say who is really at the keyboard,
+ *  - yourself (there would be nothing to step into),
+ *  - **an admin.** This is the privilege-escalation rule and the reason the
+ *    check cannot live in the menu: every guard in this app answers from
+ *    `session.user.role`, so impersonating an owner hands the impersonator
+ *    every right that owner holds — including this feature. A request that
+ *    never passed through the menu has to be refused identically.
+ *  - a BLOCKED account. Not because it is uninteresting, but because
+ *    `requireActiveUser()` (lib/authz.ts) sends a blocked session to
+ *    `/login?error=AccessDenied`, and the banner carrying the way out lives
+ *    inside the app. The Operator would be ejected into a session they can
+ *    neither see nor end. To look at a blocked account, unblock it first.
+ */
+export function canImpersonate(
+  actor: Actor,
+  target: Target,
+  context: ImpersonationContext,
+): Denial {
+  if (actor.role !== "owner") return "notOwner";
+  if (!context.enabled) return "impersonationDisabled";
+  if (context.alreadyImpersonating) return "alreadyImpersonating";
+  if (actor.id === target.id) return "selfImpersonate";
+  if (target.role === "owner") return "ownerImpersonate";
+  if (target.blockedAt) return "userBlocked";
+  return null;
+}
+
+/**
+ * May this session STOP impersonating?
+ *
+ * Deliberately not `requireOwner()`, and this is the sharpest edge in the whole
+ * feature: while an impersonation runs, the session's role IS the member's
+ * (AD-23), so an owner check here would refuse the one action that gets the
+ * Operator out again — an unescapable session. The only precondition is that an
+ * impersonation is in fact running.
+ *
+ * It takes no target and no id for the same reason `spendTokens()` takes no
+ * member id: the session it ends is always the caller's own.
+ */
+export function canStopImpersonating(context: {
+  alreadyImpersonating: boolean;
+}): Denial {
+  if (!context.alreadyImpersonating) return "notImpersonating";
+  return null;
+}
+
+/**
+ * How long an impersonation lasts before it ends by itself, in minutes.
+ *
+ * Long enough to work through a support ticket, short enough that a laptop
+ * somebody walked away from is bounded. It is a constant rather than a setting
+ * because nobody has asked for a second value, and a setting nobody changes is
+ * a field somebody eventually sets to a year.
+ */
+export const IMPERSONATION_MINUTES = 30;
+
+/**
+ * Has this impersonation run out?
+ *
+ * Pure, and takes `now` rather than reading the clock, so the boundary is
+ * testable. The comparison is `>=` on purpose: at exactly the expiry moment the
+ * session is over, not in its final millisecond.
+ */
+export function impersonationExpired(expiresAt: number, now: number): boolean {
+  return now >= expiresAt;
 }
 
 /**

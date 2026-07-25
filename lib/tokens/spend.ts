@@ -131,6 +131,24 @@ export async function spendTokens(args: {
   const session = await requireActiveUser();
   const memberId = session.user.id as string;
 
+  // ── The one carve-out to "an impersonated session IS the member" ──────────
+  // An Operator signed in as a customer can do everything that customer can,
+  // deliberately — including spending their tokens, which is what makes a
+  // support session useful. It stops at their CARD.
+  //
+  // `autoReloadIfNeeded` calls `createBillingOnDemand`, which charges a stored
+  // payment method with nobody present to agree to it. Left armed, an Operator
+  // clicking around a customer's account to reproduce a bug can bill that
+  // customer real money — a support session turning into a charge on somebody's
+  // statement, with no way to tell it apart from one they made themselves.
+  //
+  // Suppressed here, at the spend, and NOT in whichever page happened to call
+  // it: applications built on this template will call `spendTokens()` without
+  // knowing this feature exists. The spend itself still goes through, and a
+  // shortfall still throws `insufficientBalance` — which is exactly what a real
+  // member with an empty balance and no top-up armed would see.
+  const impersonating = Boolean(session.user.impersonation);
+
   if (!isSpendableAmount(args.amount)) {
     // Deliberately NOT a TokenError. A translatable code is a sentence shown to
     // the Member, and "please enter a whole number" is nonsense to somebody who
@@ -156,7 +174,7 @@ export async function spendTokens(args: {
       // before the trigger below ever ran. An armed account could then strand
       // for good — balance above the threshold but below the next price, so no
       // successful spend ever crosses the line either, and nothing tops it up.
-      scheduleTopUp(memberId);
+      if (!impersonating) scheduleTopUp(memberId);
       throw mapped;
     }
     throw err;
@@ -166,7 +184,7 @@ export async function spendTokens(args: {
   // must not be able to turn a successful operation into an error the Member
   // sees — they did their work, they paid for it, and whether their card could
   // be charged for the NEXT batch is not their problem right now.
-  scheduleTopUp(memberId);
+  if (!impersonating) scheduleTopUp(memberId);
   return balance;
 }
 

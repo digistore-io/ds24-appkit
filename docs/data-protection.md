@@ -313,7 +313,51 @@ this file: it is the **evidence** that the retention promises above are kept.
 `node run.mjs cron --list` answers "is the 60-day deletion actually happening",
 and without it the honest answer would be "probably".
 
-## 12. What this app does not do
+## 12. Signing in as a user (operator access)
+
+`impersonations` — one row every time an operator used **"sign in as this
+user"** on somebody's account.
+
+| Column | What it holds |
+| --- | --- |
+| `operator_id` | which admin it was. Survives that admin's deletion as `null` — this is evidence, and it does not stop having happened |
+| `member_id` | whose account was entered. Deleted **with** the member (`on delete cascade`), because the row is that member's personal data |
+| `started_at`, `expires_at`, `ended_at`, `ended_by` | when, until when it was allowed to run, when it actually stopped, and what stopped it |
+
+**This is the section a customer's question lands in.** *"Has anyone from your
+company been in my account?"* is a data-protection question with a specific
+answer here, and it is the reason the feature is defensible rather than being a
+back door: an operator can see what a customer sees, and the customer can find
+out that they did.
+
+**What it deliberately does NOT hold is what the operator did while inside.** No
+page list, no actions, no keystrokes. That is a decision, not a gap: an activity
+log of a support session is a surveillance log of the customer's own data. The
+changes that matter leave their own records anyway — `token_ledger`, `grants`,
+`email_changes`, `ai_usage`.
+
+**What an operator can do while signed in as somebody** is everything that
+person can do, with one carve-out: an automatic token top-up is suppressed, so a
+support session can never charge a customer's stored payment method
+(`lib/tokens/spend.ts`). Anything they *do* spend is debited from the customer's
+balance and appears in that customer's own ledger, under the customer's name —
+which is worth knowing before you answer a question about a balance.
+
+**Retention: 12 months**, then the rows are deleted by the scheduled job
+`prune-impersonations` (`config/cron.json`). The same window as `ai_usage`.
+Shortening it weakens the answer above; there is no legal obligation pulling the
+other way, so it is yours to set.
+
+**In a subject access request** it appears as `impersonations[]`, with the
+operator's **address** rather than a generic "an administrator" — in a business
+with more than one admin, the generic answer is no answer.
+
+**If your installation must not have this capability at all**, set
+`"enabled": false` in `config/impersonation.json`. The menu entry disappears and
+the server action refuses. The record of sessions that already happened stays
+readable, which is the point.
+
+## 13. What this app does not do
 
 Worth stating, because a privacy policy that claims less is easier to keep true:
 

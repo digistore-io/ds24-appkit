@@ -35,6 +35,7 @@ import {
   Users,
   Receipt,
   Coins,
+  LogIn,
   LogOut,
   Menu,
   type LucideIcon,
@@ -125,6 +126,17 @@ export const NAVIGATION: NavItem[] = [
     href: "/dashboard/admin/ai-costs",
     labelKey: "aiCosts",
     icon: Coins,
+    ownerOnly: true,
+  },
+  // Who signed in as whom, and when. NOT behind the impersonation switch:
+  // turning the feature off does not unmake the sessions that already
+  // happened, and the page an Operator needs when a customer asks "did
+  // somebody access my account?" is exactly the one that must not disappear
+  // because a setting changed afterwards.
+  {
+    href: "/dashboard/admin/impersonations",
+    labelKey: "impersonations",
+    icon: LogIn,
     ownerOnly: true,
   },
 ];

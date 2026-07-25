@@ -31,6 +31,20 @@ export default async function DashboardLayout({
 
   async function signOutAction() {
     "use server";
+    // Signing out while acting as somebody else ends BOTH identities — the
+    // session is destroyed, so there is no half-exit that could leave an
+    // Operator authenticated as a customer they thought they had left.
+    //
+    // The record is closed on the way out. The scheduled job would eventually
+    // do it (`close-impersonations`), but only once the cap had passed, and
+    // until then the record page would show a session as running that ended the
+    // moment somebody pressed "sign out". A row that is wrong for half an hour
+    // is worse than one written a moment later.
+    const impersonation = session.user.impersonation;
+    if (impersonation) {
+      const { closeImpersonation } = await import("@/lib/impersonation/manage");
+      await closeImpersonation(impersonation.id, "signout");
+    }
     await signOut({ redirectTo: "/" });
   }
 

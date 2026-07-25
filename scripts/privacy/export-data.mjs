@@ -135,6 +135,24 @@ try {
         from ai_usage where member_id = ${memberId} order by created_at`
     : [];
 
+  // --- Who signed in as this person --------------------------------------------
+  // Every time an operator used "sign in as this user" on this account. The
+  // operator's ADDRESS is included, not merely "an administrator": the person
+  // asking is entitled to know who was in their account, and in a business with
+  // more than one admin the generic answer is no answer.
+  //
+  // What it deliberately does not contain is what the operator DID while they
+  // were in there. That is not an omission from this export — the app records
+  // no such thing (db/schema-impersonation.ts). The changes that matter show up
+  // in the sections above: the ledger, the grants, the address change.
+  const impersonations = memberId
+    ? await sql`
+        select i.id, i.started_at, i.ended_at, i.ended_by, o.email as operator_email
+        from impersonations i
+        left join users o on o.id = i.operator_id
+        where i.member_id = ${memberId} order by i.started_at`
+    : [];
+
   // --- The raw webhooks --------------------------------------------------------
   // Held for 60 days for diagnosis and pruned after that
   // (lib/digistore/ipn-log.ts), so this is usually shorter than the order list.
@@ -175,6 +193,7 @@ try {
       ],
       alsoIncluded: [
         "`aiUsage[]` is what this person's use of the AI features consumed — task, provider, model, token counts, timestamps. It contains NO prompt and NO answer, because that table holds none. It is here because it records this person's activity, not because it records their words.",
+        "`impersonations[]` is every time an operator signed in as this person to look at their account — who, when, and for how long. It records ACCESS, not activity: what was done while inside is not captured anywhere, deliberately. A row with `ended_by: \"abandoned\"` was closed automatically when its 30 minutes ran out, which says when the session was due to end, not that the operator was present until then.",
       ],
       notHeldAtAll: [
         "No tracking, profiling or advertising data — this application collects none.",
@@ -195,6 +214,7 @@ try {
     grants,
     chatMessages,
     aiUsage,
+    impersonations,
     webhookEvents,
   };
 
@@ -210,7 +230,7 @@ try {
   console.error(
     found === 0
       ? `\nℹ Nothing found for ${email}. That is itself a valid answer to a subject access request — but check the spelling first.${where}`
-      : `\n✓ ${email}: account ${account ? "yes" : "no"}, ${orders.length} order(s), ${subscriptions.length} subscription(s), ${grants.length} grant(s), ${tokenLedger.length} ledger entr${tokenLedger.length === 1 ? "y" : "ies"}, ${chatMessages.length} chat message(s), ${aiUsage.length} AI call(s), ${webhookEvents.length} webhook event(s).${where}`,
+      : `\n✓ ${email}: account ${account ? "yes" : "no"}, ${orders.length} order(s), ${subscriptions.length} subscription(s), ${grants.length} grant(s), ${tokenLedger.length} ledger entr${tokenLedger.length === 1 ? "y" : "ies"}, ${chatMessages.length} chat message(s), ${aiUsage.length} AI call(s), ${impersonations.length} impersonation(s), ${webhookEvents.length} webhook event(s).${where}`,
   );
 } finally {
   await sql.end({ timeout: 5 });

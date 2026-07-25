@@ -10,6 +10,15 @@
       "enabled": true,
       "everyMinutes": 1440,
       "retentionDays": 60
+    },
+    "close-impersonations": {
+      "enabled": true,
+      "everyMinutes": 5
+    },
+    "prune-impersonations": {
+      "enabled": true,
+      "everyMinutes": 1440,
+      "retentionMonths": 12
     }
   }
 }

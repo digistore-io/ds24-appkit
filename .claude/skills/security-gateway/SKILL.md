@@ -64,6 +64,35 @@ template.
   - **No tool returns a secret** — no API key, no `passwordHash`, no other
     member's data.
 
+- **Signing in as a user, if it is switched on** (`config/impersonation.json`).
+  This feature deliberately rewrites the subject of a signed-in session, so it
+  WILL look like an auth bypass at first reading. It is a legitimate, bounded
+  support feature — see **Signing in as a user** in the `guardrails` skill. What
+  you are auditing is whether it is still bounded. A broken version looks like
+  this, and each of these IS a finding:
+  - **The `jwt` callback believes the update payload.** `/api/auth/session`
+    takes a POST from any signed-in user and its body reaches that callback.
+    `lib/impersonation/session.ts` must look the record row up by id and rewrite
+    the session only when `row.operatorId === token.sub`. A `token.sub =` fed
+    from anything in the payload is a full account takeover: any member becomes
+    any other, including an owner.
+  - **The record is written after the session changes**, or not at all. The row
+    IS the authorisation, not a log line. Reordering it removes the check.
+  - **An owner can be impersonated.** `canImpersonate()` must refuse
+    `target.role === "owner"`, in the rule and not merely by hiding the menu
+    entry. Otherwise a lesser admin borrows owner rights.
+  - **The exit action calls `requireOwner()`.** This one is inverted: during an
+    impersonation the session's role IS the member's, so an owner check there
+    locks the operator inside a customer's account. Its absence is correct.
+  - **The switch fails open.** A malformed `config/impersonation.json` must
+    count as off.
+  - **The banner is conditional on a route.** It belongs in the root layout, on
+    every page including the public ones.
+  - **Automatic top-up is not suppressed** during an impersonation
+    (`lib/tokens/spend.ts`) — a support click would charge a customer's card.
+  `lib/impersonation/guard.test.ts` asserts several of these on the source text;
+  if it has been deleted or weakened, treat that as the finding.
+
 ### 2. Digistore / payments
 - The IPN **SHA512 signature verification** is active and **fail-closed**
   (`lib/digistore/ipn.ts`), and is bypassed nowhere. Invalid signature → 403.

@@ -30,7 +30,8 @@
     "users": "Users",
     "groupOperator": "Operator",
     "purchases": "Purchases",
-    "aiCosts": "AI costs"
+    "aiCosts": "AI costs",
+    "impersonations": "Access log"
   },
   "shell": {
     "openNavigation": "Open navigation",
@@ -216,7 +217,11 @@
     "linkSent": "Sign-in link sent to {email}.",
     "blocked": "User blocked.",
     "unblocked": "Block lifted.",
-    "deleted": "User deleted."
+    "deleted": "User deleted.",
+    "impersonate": "Sign in as this user",
+    "impersonateTitle": "Sign in as {email}?",
+    "impersonateBody": "You will see the app exactly as this customer does and can act on their behalf. A banner will show whose account you are in, the session ends by itself after 30 minutes, and it is recorded.",
+    "impersonateConfirm": "Sign in as this user"
   },
   "memberBilling": {
     "title": "Billing state",
@@ -509,6 +514,11 @@
     "lastOwnerRole": "This is the last admin — their role cannot be changed.",
     "selfBlock": "You cannot block yourself — you would not get back in to lift it.",
     "lastOwnerBlock": "This is the last admin — they cannot be blocked.",
+    "selfImpersonate": "You are already signed in as yourself.",
+    "ownerImpersonate": "Admins cannot be signed in as — they hold the same rights you do.",
+    "alreadyImpersonating": "You are already signed in as somebody else. End that first.",
+    "impersonationDisabled": "Signing in as a user is switched off for this app (config/impersonation.json).",
+    "notImpersonating": "You are not signed in as anybody else.",
     "emptyReason": "Please give a reason — it is the only record of why the balance was changed by hand.",
     "invalidAmount": "Please enter a whole number, e.g. 100 or -50.",
     "zeroAmount": "0 is not a correction — please enter an amount other than zero.",
@@ -687,5 +697,27 @@
     "callsHeadingFocused": "Individual calls — {focus}",
     "callsShowAll": "Show all calls",
     "callsNoneInGroup": "No calls match this selection in the period. The link may be older than the data — “Show all calls” takes you back."
+  },
+  "impersonation": {
+    "signedInAs": "You are signed in as <strong>{member}</strong> — you are {operator}.",
+    "stop": "End",
+    "unknownMember": "this user",
+    "unknownOperator": "an admin",
+    "ended": "The session as another user has ended — you are yourself again.",
+    "title": "Signed in as user",
+    "description": "Every time an admin signed in as a customer. Access is recorded; what was done while inside is not.",
+    "columnOperator": "Admin",
+    "columnMember": "As user",
+    "columnStarted": "Started",
+    "columnDuration": "Duration",
+    "running": "running",
+    "endedBy_operator": "ended by the admin",
+    "endedBy_expired": "timed out",
+    "endedBy_signout": "signed out",
+    "endedBy_abandoned": "abandoned — closed automatically",
+    "emptyTitle": "Nobody has signed in as a user yet",
+    "emptyBody": "When an admin signs in as a customer from the user list, it is recorded here.",
+    "hint": "Rows closed automatically say when the session was due to end, not that the admin was present until that moment. Kept for 12 months.",
+    "minutes": "{count, plural, one {# minute} other {# minutes}}"
   }
 }
