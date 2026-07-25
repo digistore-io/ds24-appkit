@@ -17,7 +17,7 @@
 //   node scripts/ds24/request-approval.mjs --reseller US --apply
 //   node scripts/ds24/request-approval.mjs --siteowner <id> --apply  # any marketplace
 //   [--key pro] [--status <value>]   default status: pending (e.g. --status requested)
-// Env: DIGISTORE_API_KEY (writable), optionally DIGISTORE_URL, APP_LANG,
+// Env: DIGISTORE_API_KEY (writable), optionally APP_LANG,
 //      DIGISTORE_SITEOWNER_ID.
 import { ds24Call, requireApiKey, parseArgs } from "./_client.mjs";
 import { readProducts } from "./_products.mjs";

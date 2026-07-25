@@ -93,6 +93,21 @@ export function canChangePassword(state: { hasPassword: boolean }): Denial {
   return state.hasPassword ? null : "noPasswordSet";
 }
 
+/**
+ * The one way an address typed into a form is turned into the key that
+ * `users.email` is compared against.
+ *
+ * It exists as a named function rather than an inline `.trim().toLowerCase()`
+ * because it is now applied in two places that MUST agree: the step-1 lookup on
+ * /login, which decides whether a password field is shown, and
+ * `verifyPasswordLogin`, which then checks the password. Normalise differently
+ * in one of them and the dialog offers a password field and refuses the correct
+ * password — a bug that reproduces only for whoever capitalised their address.
+ */
+export function normaliseEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
 // --- Rate limiting -----------------------------------------------------------
 //
 // A magic link is protected by the attacker having to read somebody else's
@@ -160,3 +175,53 @@ export const SIGN_IN_ORIGIN_LIMIT: Limit = {
 
 /** The bucket for origin-keyed sign-in failures. */
 export const SIGN_IN_ORIGIN_BUCKET = "password-sign-in:origin";
+
+// --- The step-1 address lookup ------------------------------------------------
+//
+// The two-step sign-in dialog asks for an address and then decides what to ask
+// for next (lib/auth/sign-in-route.ts). That decision is VISIBLE: a password
+// field means this address has a password, a "link sent" message means it does
+// not. So the dialog answers a question about an address to somebody who has
+// proved nothing about it.
+//
+// That cost was accepted knowingly when the two-step flow was chosen, and it is
+// narrower than it first looks — an unknown address and a known passwordless one
+// take the same branch, so what leaks is "has a password", not "has an account".
+// These limits are the other half of that decision: they do not close the
+// oracle, they make it too slow to enumerate with.
+//
+// Counted on EVERY lookup, unlike the sign-in limits above, which count only
+// failures. A lookup has no failure — every one of them is an answer, and the
+// answer is the thing being metered.
+
+/**
+ * Per address. Bounds a script hammering one address and is far above anything
+ * a person retyping their own could reach.
+ */
+export const LOOKUP_LIMIT: Limit = {
+  max: 20,
+  windowMs: ATTEMPT_WINDOW_MS,
+};
+
+/** The bucket those hits are counted in. */
+export const LOOKUP_BUCKET = "sign-in-lookup";
+
+/**
+ * Per origin — this is the one that does the work.
+ *
+ * Enumeration means many DIFFERENT addresses from one place, which is exactly
+ * the shape a per-address counter cannot see; the reasoning is written out in
+ * full at SIGN_IN_ORIGIN_LIMIT above and applies here unchanged, including the
+ * part about it doing nothing against a distributed attempt.
+ *
+ * Higher than SIGN_IN_ORIGIN_LIMIT despite metering a cheaper action, because
+ * it counts hits rather than failures: an office behind one NAT signing in
+ * normally produces zero of those and sixty of these.
+ */
+export const LOOKUP_ORIGIN_LIMIT: Limit = {
+  max: 60,
+  windowMs: ATTEMPT_WINDOW_MS,
+};
+
+/** The bucket for origin-keyed lookups. */
+export const LOOKUP_ORIGIN_BUCKET = "sign-in-lookup:origin";

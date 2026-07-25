@@ -49,6 +49,19 @@ export type CustomValue =
       /** How the purchase was initiated: subscription, one-off top-up, or an
        *  unattended auto top-up. Undefined when the writer did not say. */
       origin: PurchaseOrigin | undefined;
+      /**
+       * The buyer ticked "keep my balance topped up" at checkout (`r:1`).
+       *
+       * It travels HERE rather than in a column because at checkout time there
+       * is nothing to store it against: the chargeable `purchase_id` does not
+       * exist until Digistore24 confirms the payment. The IPN reads it back
+       * beside the mandate it is arming — one round trip, no intent table, no
+       * migration. Exactly what AD-5 means by "a new id is a new pair".
+       *
+       * Absent or unrecognised → `false`. An older writer must never arm an
+       * unattended card charge by accident.
+       */
+      armAutoReload: boolean;
     }
   | { kind: "legacyToken"; productKey: string };
 
@@ -86,10 +99,15 @@ export function buildIdentity(input: {
   checkoutToken: string;
   productKey?: string;
   kind?: PurchaseOrigin;
+  /** The buyer asked for auto top-up while buying this package. */
+  armAutoReload?: boolean;
 }): string {
   const pairs = [`m:${input.memberId}`, `t:${input.checkoutToken}`];
   if (input.productKey) pairs.push(`p:${input.productKey}`);
   if (input.kind) pairs.push(`k:${input.kind}`);
+  // Only ever emitted when true — an absent pair and `r:0` mean the same thing,
+  // and not writing it keeps the value short and the intent unambiguous.
+  if (input.armAutoReload) pairs.push("r:1");
   return pairs.join(";");
 }
 
@@ -105,12 +123,19 @@ export function parseCustom(
   if (!value) return null;
 
   const pairs = new Map<string, string>();
+  // The same pairs with values EXACTLY as they arrived. Ids are forgiving about
+  // stray whitespace; the auto-top-up flag is not (see `armAutoReload` below).
+  const rawPairs = new Map<string, string>();
   for (const part of value.split(";")) {
     const at = part.indexOf(":");
     if (at <= 0) continue;
     const key = part.slice(0, at).trim();
-    const val = part.slice(at + 1).trim();
-    if (key && val && !pairs.has(key)) pairs.set(key, val);
+    const raw = part.slice(at + 1);
+    const val = raw.trim();
+    if (key && val && !pairs.has(key)) {
+      pairs.set(key, val);
+      rawPairs.set(key, raw);
+    }
   }
 
   const memberId = pairs.get("m");
@@ -132,6 +157,13 @@ export function parseCustom(
       productKey:
         productKey && PRODUCT_KEY_RE.test(productKey) ? productKey : undefined,
       origin,
+      // Strictly `"1"`, checked against the RAW pair rather than the trimmed
+      // one. The parser trims every value, so `r: 1` would otherwise arrive
+      // here as "1" and arm — and this flag authorises an unattended charge
+      // against a card, so "close enough" is the wrong direction. Our own
+      // writer emits exactly `r:1`; anything spaced differently came from
+      // somewhere else and is not trusted.
+      armAutoReload: rawPairs.get("r") === "1",
     };
   }
 

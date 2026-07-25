@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { chooseAttribution, shouldCreditTokens } from "./attribution";
+import {
+  chooseAttribution,
+  shouldArmAutoReload,
+  shouldCreditTokens,
+} from "./attribution";
 import { parseCustom, buildIdentity } from "./custom";
 
 const UUID = "9f3c1b7e-5d21-4a88-b0c4-2e6f7a1d9c30";
@@ -117,5 +121,70 @@ describe("shouldCreditTokens", () => {
     expect(shouldCreditTokens({ ...ok, status: "refunded" })).toBe(false);
     expect(shouldCreditTokens({ ...ok, status: null })).toBe(false);
     expect(shouldCreditTokens({ ...ok, orderId: undefined })).toBe(false);
+  });
+});
+
+describe("shouldArmAutoReload", () => {
+  const armed = {
+    armAutoReload: true,
+    reason: "identity" as const,
+    purchaseId: "PUR-1",
+    isTokenPackage: true,
+    creditWasBooked: true,
+  };
+
+  it("arms when the buyer asked and the identity resolved", () => {
+    expect(shouldArmAutoReload(armed)).toBe(true);
+  });
+
+  it("refuses when the buyer never asked", () => {
+    // Every purchase made before this shipped, and every anonymous one claimed
+    // later. Those buyers were never offered the choice.
+    expect(shouldArmAutoReload({ ...armed, armAutoReload: false })).toBe(false);
+  });
+
+  it("refuses when the payment was matched by EMAIL, not identity", () => {
+    // The one that matters most. A rotated token or a deleted member drops the
+    // payment to a unique buyer-email match — possibly a DIFFERENT Member.
+    // Arming them would charge a card belonging to somebody who never asked.
+    expect(shouldArmAutoReload({ ...armed, reason: "email" })).toBe(false);
+  });
+
+  it("refuses every non-identity attribution", () => {
+    for (const reason of ["email", "none", "ambiguous"] as const) {
+      expect(shouldArmAutoReload({ ...armed, reason }), reason).toBe(false);
+    }
+  });
+
+  it("refuses without a mandate to charge against", () => {
+    // setAutoReload would store null and autoReloadIfNeeded would answer
+    // "not-configured" for ever — silently, which is the worst kind.
+    expect(shouldArmAutoReload({ ...armed, purchaseId: null })).toBe(false);
+  });
+
+  it("refuses for a subscription — there is no balance to top up", () => {
+    expect(shouldArmAutoReload({ ...armed, isTokenPackage: false })).toBe(false);
+  });
+});
+
+describe("shouldArmAutoReload and redelivery", () => {
+  const base = {
+    armAutoReload: true,
+    reason: "identity" as const,
+    purchaseId: "PUR-1",
+    isTokenPackage: true,
+  };
+
+  it("arms on the delivery that booked the credit", () => {
+    expect(shouldArmAutoReload({ ...base, creditWasBooked: true })).toBe(true);
+  });
+
+  it("does NOT re-arm on a redelivery of an already-booked credit", () => {
+    // The credit block runs on every delivery — its idempotency lives in the
+    // ledger's unique index, not in an early return. Without this condition a
+    // Digistore24 retry would switch auto top-up back ON for a Member who had
+    // deliberately turned it off, re-arming an unattended card charge they
+    // revoked.
+    expect(shouldArmAutoReload({ ...base, creditWasBooked: false })).toBe(false);
   });
 });

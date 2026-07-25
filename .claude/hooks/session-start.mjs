@@ -11,9 +11,26 @@
 // Note: when a freshly cloned project is opened for the first time, Claude Code
 // asks whether it should trust the project folder. Only after that does this hook run.
 import { existsSync, readdirSync } from "node:fs";
+import { blockers, inspect } from "../../scripts/dev/doctor.mjs";
 
 const hasEnv = existsSync(".env");
 const hasBrief = existsSync("docs/product-brief.md");
+
+// Is this machine ready to work in? Only the cheap half of the checklist runs
+// here — file lookups and one TCP connect. The full `node run.mjs doctor` asks
+// the Docker daemon, which takes seconds, and this hook sits in front of EVERY
+// session. A slow greeting would be paid for on every single start, to answer a
+// question that is only interesting on the first few.
+//
+// Never fatal: a hook that throws greets the user with a stack trace, and the
+// one situation this exists for — a half-set-up project — is exactly where
+// something is most likely to be missing.
+let blocked = [];
+try {
+  blocked = blockers(await inspect({ quick: true }));
+} catch {
+  /* then we simply say nothing about the setup */
+}
 
 // Has an app of their own already been built? A rough, but reliable indicator:
 // own pages below app/dashboard/ beyond the ones that ship with the template.
@@ -44,9 +61,11 @@ if (customPages > 0 || hasBrief) {
   console.log('    "Build my app"');
   console.log("");
   console.log("No idea yet? Just say so, and we will find one together.");
-  if (!hasEnv) {
-    console.log("(I will take care of the setup — database, .env — along the way.)");
-  }
+}
+
+if (blocked.length > 0) {
+  console.log("");
+  console.log("(A couple of things still need setting up here — I will take care of that first.)");
 }
 
 console.log(line);
@@ -54,3 +73,11 @@ console.log(line);
 // Context for Claude (the user sees these lines as well, so keep them neutral
 // and terse):
 console.log(`[Project state: .env=${hasEnv}, product-brief=${hasBrief}, own pages=${customPages}]`);
+if (blocked.length > 0) {
+  console.log(
+    `[Setup: blocked — ${blocked.map((c) => c.id).join(", ")}. ` +
+      `Run the skill setup-machine BEFORE building anything.]`,
+  );
+} else {
+  console.log("[Setup: ok]");
+}

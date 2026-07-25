@@ -27,6 +27,11 @@ export const MAX_TOKEN_AMOUNT = 2_147_483_647;
  */
 export const TOKEN_ERROR_CODES = [
   "notOwner",
+  // Not a decision of decideAdjustment: this one is about the APP, not about
+  // the correction. `adjustTokens` throws it when the app sells no tokens
+  // (config -> "billingMode"), before any balance is read. The code lives here
+  // because this is where the Operator's language comes from.
+  "tokensNotSold",
   "emptyReason",
   "invalidReason",
   "invalidAmount",
@@ -36,6 +41,46 @@ export const TOKEN_ERROR_CODES = [
 ] as const;
 
 export type TokenErrorCode = (typeof TOKEN_ERROR_CODES)[number];
+
+/**
+ * The balance at which an armed account tops itself up, derived from the size
+ * of the package it tops up with.
+ *
+ * Derived rather than asked for: the checkout offers ONE checkbox, because a
+ * threshold field is a second decision at exactly the moment somebody is trying
+ * to buy something.
+ *
+ * **Deliberately not 0**, which is what the schema column defaults to. Zero
+ * means "top up once completely empty", and the credit arrives asynchronously
+ * by IPN — so the Member sits at a zero balance for however long Digistore24
+ * takes. The point of the feature is to refill *before* they run out.
+ *
+ * Roughly a tenth of the package, at least 1. A package of 1000 refills at 100;
+ * a package of 5 refills at 1.
+ */
+export function defaultReloadThreshold(credits: number): number {
+  if (!Number.isFinite(credits) || credits <= 0) return 1;
+  return clampThreshold(Math.max(1, Math.floor(credits / 10)), credits);
+}
+
+/**
+ * A threshold the account can actually climb back above.
+ *
+ * `shouldAutoReload` is `balance <= threshold`. So a threshold at or above the
+ * package's credits never stops being true: the top-up lands, the balance is
+ * still under the line, and the next spend fires another charge — a repeating
+ * card charge that only Digistore24's 10-per-day cap ends. `credits - 1` is the
+ * highest value that leaves the account satisfied after one successful top-up.
+ *
+ * A 1-credit package therefore clamps to 0: "top up when empty". That is the
+ * degenerate case, and 0 is the only honest answer for it — every positive
+ * threshold loops.
+ */
+export function clampThreshold(threshold: number, credits: number): number {
+  if (!Number.isFinite(threshold) || threshold < 0) return 0;
+  if (!Number.isFinite(credits) || credits <= 0) return 0;
+  return Math.min(Math.trunc(threshold), credits - 1);
+}
 
 /**
  * An error carrying a translatable reason. The server action catches it and

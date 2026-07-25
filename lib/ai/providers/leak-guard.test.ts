@@ -1,0 +1,144 @@
+// The guard that keeps the provider layer a layer.
+//
+// Two rules, and both are the kind that decay quietly: somebody in a hurry
+// imports a vendor SDK "just for this one thing", or reads an API key straight
+// from the environment, and nothing breaks — until the day an Operator switches
+// provider and one feature keeps calling the old one.
+//
+//   1. No vendor SDK is imported outside `lib/ai/providers/`.
+//   2. No provider API key is read outside `lib/ai/providers/`.
+//
+// This is the same shape as `scripts/portability.test.ts` (which greps for
+// non-portable shell tools) and `lib/entitlements/leak-guard.test.ts` (which
+// greps for the mailer on the wrong page): a rule nobody can remember, enforced
+// by something that reads the tree.
+import { describe, expect, it } from "vitest";
+import { readFileSync, readdirSync, statSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { join, sep } from "node:path";
+
+const ROOT = fileURLToPath(new URL("../../../", import.meta.url));
+
+/** Where provider-specific knowledge is allowed to live. */
+const PROVIDER_DIR = join("lib", "ai", "providers");
+
+/** Trees worth scanning. Everything a customer's app is built from. */
+const SCANNED = ["app", "lib", "components", "hooks", "db", "scripts", "i18n"];
+
+const SKIP_DIRS = new Set(["node_modules", ".next", ".dev", "dist"]);
+
+function* sourceFiles(dir: string): Generator<string> {
+  let entries: string[];
+  try {
+    entries = readdirSync(join(ROOT, dir));
+  } catch {
+    return;
+  }
+
+  for (const entry of entries) {
+    if (SKIP_DIRS.has(entry)) continue;
+    const rel = join(dir, entry);
+    const full = join(ROOT, rel);
+    if (statSync(full).isDirectory()) {
+      yield* sourceFiles(rel);
+    } else if (/\.(ts|tsx|mjs|js)$/.test(entry)) {
+      yield rel;
+    }
+  }
+}
+
+function allFiles(): string[] {
+  return SCANNED.flatMap((dir) => [...sourceFiles(dir)]);
+}
+
+/** Inside the provider directory — the one place these rules do not apply. */
+function isProviderFile(path: string): boolean {
+  return path.split(sep).join("/").startsWith(PROVIDER_DIR.split(sep).join("/"));
+}
+
+describe("no vendor SDK outside the provider layer", () => {
+  it("holds for every source file", () => {
+    // `@anthropic-ai/sdk` is the only vendor SDK in package.json, and the only
+    // one that may be. The other four providers are reached with `fetch` — see
+    // NFR-13, and `lib/ai/providers/openai-compat.ts` for what that costs.
+    const offenders: string[] = [];
+
+    for (const path of allFiles()) {
+      if (isProviderFile(path)) continue;
+      const source = readFileSync(join(ROOT, path), "utf8");
+      if (/from ["']@anthropic-ai\/sdk["']|require\(["']@anthropic-ai\/sdk["']\)/.test(source)) {
+        offenders.push(path);
+      }
+    }
+
+    expect(
+      offenders,
+      `these files import a vendor SDK directly. Call a task instead — ` +
+        `runTask()/streamTask() in lib/ai/run.ts. See docs/ai-providers.md.`,
+    ).toEqual([]);
+  });
+});
+
+describe("no provider key outside the provider layer", () => {
+  it("holds for every source file", () => {
+    // `registry.ts` is the one file that turns a provider id into a key. Reading
+    // one anywhere else means that file is no longer the single seam, and an
+    // OAuth path or a key rotation would have two places to change instead of
+    // one.
+    const keyPattern =
+      /process\.env\.(ANTHROPIC|OPENAI|GEMINI|MISTRAL|OPENROUTER)_API_KEY|process\.env\[["'](ANTHROPIC|OPENAI|GEMINI|MISTRAL|OPENROUTER)_API_KEY["']\]/;
+
+    const offenders: string[] = [];
+
+    for (const path of allFiles()) {
+      if (isProviderFile(path)) continue;
+      // The check command reports which keys are SET without ever using one,
+      // and it does that through the shared name table rather than by naming a
+      // variable itself — so it is not an exception, it simply does not match.
+      const source = readFileSync(join(ROOT, path), "utf8");
+      if (keyPattern.test(source)) offenders.push(path);
+    }
+
+    expect(
+      offenders,
+      `these files read a provider API key. Only lib/ai/providers/registry.ts may.`,
+    ).toEqual([]);
+  });
+});
+
+describe("the assistant is not an exception", () => {
+  const route = readFileSync(join(ROOT, "app", "api", "chat", "route.ts"), "utf8");
+
+  it("names no provider", () => {
+    // The point of the migration: the one feature that shipped with a model
+    // call is now the layer's first customer rather than its exception.
+    for (const provider of ["anthropic", "openai", "gemini", "mistral", "openrouter"]) {
+      expect(route.toLowerCase()).not.toContain(provider);
+    }
+  });
+
+  it("names no model", () => {
+    expect(route).not.toMatch(/claude-|gpt-|gemini-|mistral-/);
+  });
+
+  it("goes through a task", () => {
+    expect(route).toContain('streamTask("chat"');
+  });
+});
+
+describe("the scan itself", () => {
+  it("actually reads files, so an empty result means something", () => {
+    // Non-vacuity: a broken path would make every assertion above pass by
+    // scanning nothing at all.
+    const files = allFiles();
+    expect(files.length).toBeGreaterThan(50);
+    expect(files.some((f) => f.includes("chat"))).toBe(true);
+  });
+
+  it("would catch a violation if there were one", () => {
+    // The guard's own guard: prove the pattern matches what it claims to.
+    const pattern = /from ["']@anthropic-ai\/sdk["']/;
+    expect(pattern.test('import Anthropic from "@anthropic-ai/sdk";')).toBe(true);
+    expect(pattern.test('import { runTask } from "@/lib/ai/run";')).toBe(false);
+  });
+});

@@ -9,7 +9,6 @@ Digistore24** (`digistore24.com`) — there is exactly **one** set of products a
 |-----|-------------|--------------------|------|
 | `APP_URL` | `http://localhost:3000` | staging domain | live domain |
 | `DATABASE_URL` | local Postgres (Docker) | staging DB | prod DB |
-| `DIGISTORE_URL` | `https://www.digistore24.com` (live) | ditto | ditto |
 | Products / `productId` | **the same live products** | the same | the same |
 | IPN target | Cloudflare Quick Tunnel → localhost | staging domain | live domain |
 | Payments | **DS24 test purchases** | test purchases | real purchases |

@@ -162,6 +162,34 @@
       "when": 1784907994456,
       "tag": "0022_puzzling_firebrand",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1784927875474,
+      "tag": "0023_optimal_emma_frost",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1784930288437,
+      "tag": "0024_sleepy_iron_fist",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1784965027616,
+      "tag": "0025_nervous_zemo",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1784970391944,
+      "tag": "0026_nasty_madelyne_pryor",
+      "breakpoints": true
     }
   ]
 }

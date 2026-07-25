@@ -38,6 +38,14 @@ const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const MEMBER_SURFACES = [
   join("app", "dashboard", "account", "page.tsx"),
   join("app", "dashboard", "page.tsx"),
+  // The Member's own token journal (story 5.2) — the "future Member-facing
+  // history" this file's header warned about. It is built on `listOwnLedger`,
+  // which hands out a `label` (consume rows only) and has no `note` field at
+  // all, so these three satisfy the assertions below by construction rather
+  // than by remembering to.
+  join("app", "dashboard", "billing", "page.tsx"),
+  join("app", "dashboard", "billing", "billing-tabs.tsx"),
+  join("app", "dashboard", "billing", "tokens-tab.tsx"),
 ];
 
 /** The Operator's reads. Rich by design; forbidden on the surfaces above. */
@@ -187,5 +195,57 @@ describe("the Member's readers project no operator-written column", () => {
     // ...and it does carry the column story 3.5 added, asserted against the
     // SHIPPED projection rather than one the test wrote itself.
     expect(sql).toContain('"access_until"');
+  });
+});
+
+describe("the Member's token reader projects no operator-written column", () => {
+  // The assertion story 5.2 §D1 promised and did not deliver.
+  //
+  // The surface scan above is necessary and NOT sufficient, and this file
+  // already argues why for entitlements: widening regexes is a losing race.
+  // The specific hole here is a TypeScript one — excess-property checking does
+  // NOT apply to properties that arrive via a spread, so
+  //
+  //     rows.map(({ rawNote, ...row }) => ({ ...row, label: … }))
+  //
+  // keeps compiling against `Promise<OwnLedgerRow[]>` even after somebody adds
+  // `issuedBy: tokenLedger.issuedBy` to the select. The extra column then flows
+  // into the client component's props and into the RSC payload of
+  // /dashboard/billing whether or not anything renders it. Every other guard —
+  // the interface, the surface scan, the memberLedgerLabel tests — passes.
+  //
+  // So: guard the SELECT.
+  // Comments stripped first, via this file's own helper — the reader EXPLAINS
+  // that it does not select `issuedBy`, and that sentence contains the word.
+  // Scanning the raw source fails on the documentation of the rule, which is
+  // how you teach the next person to delete the explanation.
+  const source = code(join("lib", "tokens", "own-ledger.ts"));
+  const select = source.slice(source.indexOf(".select({"), source.indexOf(".from(tokenLedger)"));
+
+  it("never selects issuedBy", () => {
+    expect(
+      /issuedBy/.test(select),
+      "listOwnLedger selects `issuedBy`. That column names the OPERATOR who\n" +
+        "touched this customer's balance and is not the customer's to see.",
+    ).toBe(false);
+  });
+
+  it("takes the note only under a name that cannot be spread through", () => {
+    // `rawNote:` is the alias that makes the destructure-and-drop visible.
+    // A plain `note: tokenLedger.note` would land in OwnLedgerRow via the
+    // spread with nothing complaining.
+    expect(
+      /\bnote:\s*tokenLedger\.note/.test(select),
+      "listOwnLedger selects `note:` directly. Alias it (`rawNote:`) and drop it\n" +
+        "in the map, so the operator's text cannot reach the row shape.",
+    ).toBe(false);
+  });
+
+  it("declares no note or issuedBy on the row the Member receives", () => {
+    const shape = source.slice(
+      source.indexOf("export interface OwnLedgerRow"),
+      source.indexOf("export function shouldShowTokenTab"),
+    );
+    expect(/\b(note|issuedBy)\s*[?]?:/.test(shape)).toBe(false);
   });
 });

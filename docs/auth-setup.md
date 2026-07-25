@@ -5,6 +5,26 @@ their email, gets a sign-in link sent to them and is signed in after clicking
 it. For that the app needs **mail delivery**: either **Postmark** or **SMTP**.
 **Google sign-in is optional** on top of that.
 
+**`/login` asks for the address first, and only then for whatever that address
+actually needs to prove.** One dialog, two steps: an address with a password is
+asked for it, an address without one is mailed a link, and on a demo
+installation (see below) it is simply signed in. The branch is one pure
+function, `routeForSignIn` in `lib/auth/sign-in-route.ts`; the dialog around it
+is `app/login/{page,ui,actions}.tsx`.
+
+Two properties of that flow are decisions rather than accidents:
+
+- **It tells a stranger whether an address has a password.** A password field
+  appearing is the answer, and anyone can type any address. What it never
+  reveals is whether an *account* exists: an unknown address and a known one
+  without a password take the same branch. The lookup is rate-limited (below)
+  so the answer cannot be harvested at speed. If that trade is wrong for your
+  app, the place to change it is `routeForSignIn` — make step 2 always ask for
+  a password and offer the link beside it, for every address.
+- **Step 2 offers "send me a link instead".** That is not decoration: it is the
+  only way back in for somebody who has forgotten their password, because this
+  app has no reset flow (below).
+
 **A password is optional too — and it is the Member's choice, not yours.**
 Anyone signed in can set one on their own account page (`/dashboard/account`)
 and remove it again just as easily. It saves the round-trip through the inbox
@@ -16,10 +36,12 @@ that way.
 Two consequences worth knowing before you go looking for them:
 
 - **There is no "forgot password" flow, and none is missing.** Whoever forgets
-  theirs signs in with a magic link exactly as before and sets a new one. The
-  magic link *is* the recovery path, which is why mail delivery stays a hard
-  requirement even for accounts that have a password.
-- **Four things are rate-limited**, all in a sliding window (`lib/rate-limit.ts`):
+  theirs signs in with a magic link exactly as before and sets a new one — the
+  button for it sits on step 2 of the sign-in dialog, beside the password field.
+  The magic link *is* the recovery path, which is why mail delivery stays a hard
+  requirement even for accounts that have a password, and why removing that
+  button would lock people out rather than merely tidy the form.
+- **Five things are rate-limited**, all in a sliding window (`lib/rate-limit.ts`):
   failed password sign-ins, ten per quarter hour per address **and thirty per
   quarter hour per origin** — the second catches one password sprayed across
   many accounts from one source, which the per-address counter cannot see
@@ -31,6 +53,11 @@ Two consequences worth knowing before you go looking for them:
   address, so the same mailbox cannot be hit again from the next account; and
   address *lookups*, twenty per hour per account, which meters the "that address
   is already taken" answer so it cannot be used to enumerate accounts for free.
+  Finally the **sign-in dialog's step-1 lookup**, twenty per quarter hour per
+  address and sixty per origin — the counter that stops the "does this address
+  have a password?" answer above from being harvested in bulk. It counts every
+  hit rather than only failures, because a lookup has no failure: the answer is
+  the thing being metered.
   The counters live in memory, in one process — run several app instances
   behind a load balancer and each keeps its own, which multiplies every limit
   by the number of instances. That is a known limitation of the single-process

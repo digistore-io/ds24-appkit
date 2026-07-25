@@ -26,11 +26,14 @@
 //  2. `npm` needs `shell: true` — on Windows it is a .cmd shim, and Node has
 //     refused to spawn those without a shell since 18.20/20.12.
 // Both live in scripts/lib/proc.mjs; use the helpers, don't call spawn here.
-import { existsSync, statSync, utimesSync } from "node:fs";
 import * as app from "./scripts/dev/app.mjs";
 import { dbUp } from "./scripts/db/up.mjs";
+import { doctor } from "./scripts/dev/doctor.mjs";
+import { depsFresh, markDepsFresh } from "./scripts/dev/deps.mjs";
 import { ensureEnv } from "./scripts/dev/ensure-env.mjs";
-import { capture, hasCommand, isWindows, run, runNpm, runScript } from "./scripts/lib/proc.mjs";
+import { usesLocalPostgres } from "./scripts/db/driver.mjs";
+import { localDown, localNuke } from "./scripts/db/local.mjs";
+import { run, runNpm, runScript } from "./scripts/lib/proc.mjs";
 
 // ── little helpers ──────────────────────────────────────────────────────────
 
@@ -119,6 +122,33 @@ const TASKS = {
     run: (args, { port }) =>
       script("scripts/dev/smoke.mjs", [...args, "--url", `http://localhost:${port ?? app.appPort()}`]),
   },
+  errors: {
+    group: "Tests & quality",
+    help: "What went wrong in the running app's log — the errors a 200 hides",
+    // No `needs`: it only reads .dev/dev.log, and it has to work precisely when
+    // the app has fallen over and nothing else can run.
+    run: (args) => script("scripts/dev/log-errors.mjs", args),
+  },
+  "ai-check": {
+    group: "Tests & quality",
+    help: "Which task runs on which model, are the keys there, what does a call cost",
+    needs: ["env", "node_modules"],
+    run: (args) => script("scripts/ai/check.mjs", args),
+  },
+  "mcp-check": {
+    group: "Tests & quality",
+    help: "Check the MCP server (settings) — and with --live really call it once",
+    needs: ["env", "node_modules"],
+    run: (args) => script("scripts/mcp/check.mjs", args),
+  },
+  "kb-check": {
+    group: "Tests & quality",
+    help: "Check the assistant's handbook (content/knowledge/) — format, size, cost per answer",
+    // No `needs`: it reads Markdown and prints numbers. It has to work in a
+    // half-set-up project, because that is exactly when somebody is writing
+    // the handbook for the first time.
+    run: (args) => script("scripts/ai/kb-check.mjs", args),
+  },
   lint: {
     group: "Tests & quality",
     help: "Lint",
@@ -139,13 +169,13 @@ const TASKS = {
   // Details: docs/database.md
   "db-up": {
     group: "Database",
-    help: "Start Postgres (Docker) and wait until it is ready",
+    help: "Start Postgres and wait until it is ready",
     run: () => dbUp(),
   },
   "db-down": {
     group: "Database",
     help: "Stop Postgres (data is kept)",
-    run: () => docker("compose", "down"),
+    run: async () => ((await usesLocalPostgres()) ? localDown() : docker("compose", "down")),
   },
   "db-migrate": {
     group: "Database",
@@ -184,20 +214,37 @@ const TASKS = {
   },
   "db-nuke": {
     group: "Database",
-    help: "Stop everything (tunnel + app + DB) AND delete the Docker volume (all data gone)",
+    help: "Stop everything (tunnel + app + DB) AND delete the database (all data gone)",
     // `stop` first: a running app still holds connections to the database, and
-    // nuking the volume out from under it leaves both in a mess.
+    // nuking the data out from under it leaves both in a mess.
     needs: ["stop"],
     run: async () => {
-      await docker("compose", "down", "-v");
-      console.log("✓ Database volume deleted — all data gone.");
+      if (await usesLocalPostgres()) await localNuke();
+      else await docker("compose", "down", "-v");
+      console.log("✓ Database deleted — all data gone.");
     },
   },
+  // The scheduled jobs run by themselves while the app is up (docs/cron.md).
+  // This is for looking at them and for running one now.
+  cron: {
+    group: "Database",
+    help: "Scheduled jobs: run what is due, --list them, or --job <id> to force one",
+    needs: ["env", "node_modules"],
+    run: (args) => script("scripts/cron/run.mjs", args),
+  },
+  // The offline twins of two of those jobs: straight at the database, no
+  // running app needed, and a --dry-run the scheduled path does not have.
   "db-prune-ipn": {
     group: "Database",
-    help: "Delete IPN-log entries older than 60 days (--days 30)",
+    help: "Delete IPN-log entries older than 60 days (--days 30) — without the app running",
     needs: ["env", "node_modules"],
     run: (args) => script("scripts/db/prune-ipn-log.mjs", args),
+  },
+  "db-prune-ai": {
+    group: "Database",
+    help: "Delete AI-usage rows older than 365 days (--days 90) — they are the cost history",
+    needs: ["env", "node_modules"],
+    run: (args) => script("scripts/db/prune-ai-usage.mjs", args),
   },
 
   "data-export": {
@@ -270,8 +317,17 @@ const TASKS = {
   // ── Setup helpers ─────────────────────────────────────────────────────────
   doctor: {
     group: "Setup",
-    help: "What has to be installed — and what is missing on this machine",
-    run: () => doctor(),
+    help: "What has to be installed — and what is missing on this machine (--json)",
+    run: (args) => doctor(args),
+  },
+  setup: {
+    group: "Setup",
+    help: "Get this project ready to work in: .env, dependencies, database, migrations",
+    // The same prerequisites as `start`, without starting the app. One command
+    // for the whole preparation, so the setup-machine skill calls one and not
+    // five — and so a person has a single thing to type after a fresh clone.
+    needs: ["env", "node_modules", "db-up", "db-migrate"],
+    run: () => console.log("\n✓ Ready. Start it with: node run.mjs start"),
   },
   env: {
     group: "Setup",
@@ -288,89 +344,13 @@ const TASKS = {
   node_modules: {
     hidden: true,
     run: async () => {
-      // The Makefile expressed this as a file target: node_modules is stale when
-      // package-lock.json is newer. Same rule, spelled out.
-      const fresh =
-        existsSync("node_modules") &&
-        existsSync("package-lock.json") &&
-        statSync("node_modules").mtimeMs >= statSync("package-lock.json").mtimeMs;
-      if (fresh) return;
+      if (depsFresh()) return;
       const code = await runNpm(["install"]);
       if (code !== 0) process.exit(code);
-      const now = new Date();
-      utimesSync("node_modules", now, now);
+      markDepsFresh();
     },
   },
 };
-
-// ── doctor ──────────────────────────────────────────────────────────────────
-
-const INSTALL_HINTS = {
-  node: {
-    linux: "your package manager, or https://nodejs.org",
-    darwin: "brew install node",
-    win32: "winget install OpenJS.NodeJS",
-  },
-  git: {
-    linux: "your package manager",
-    darwin: "xcode-select --install",
-    win32: "winget install Git.Git  (Claude Code needs it anyway)",
-  },
-  docker: {
-    linux: "https://docs.docker.com/engine/install/",
-    darwin: "https://www.docker.com/products/docker-desktop/",
-    win32: "https://www.docker.com/products/docker-desktop/  (uses WSL2)",
-  },
-  cloudflared: {
-    linux: "https://pkg.cloudflare.com/  (cloudflared package)",
-    darwin: "brew install cloudflared",
-    win32: "winget install --id Cloudflare.cloudflared",
-  },
-};
-
-const hint = (tool) => INSTALL_HINTS[tool][process.platform] ?? INSTALL_HINTS[tool].linux;
-
-async function doctor() {
-  console.log(`This machine: ${process.platform} ${process.arch}, Node ${process.version}\n`);
-  let missing = 0;
-  // The install hint is only interesting when the thing is missing.
-  const report = (ok, label, detail) => {
-    console.log(`  ${ok ? "✓" : "✗"} ${label}${!ok && detail ? ` — ${detail}` : ""}`);
-    if (!ok) missing++;
-  };
-
-  const major = Number(process.versions.node.split(".")[0]);
-  report(major >= 20, `Node.js ${process.version}`, major >= 20 ? "" : `needs 20 or newer: ${hint("node")}`);
-  report(await hasCommand("npm"), "npm", "comes with Node.js");
-  report(await hasCommand("git"), "git", hint("git"));
-
-  const dockerThere = await hasCommand("docker");
-  if (!dockerThere) {
-    report(false, "Docker", hint("docker"));
-  } else {
-    // Installed is not the same as running — ask the daemon, don't assume.
-    const info = await capture("docker", ["info", "--format", "{{.ServerVersion}}"]);
-    report(info.code === 0, "Docker", info.code === 0 ? "" : "installed, but not running — start Docker Desktop");
-    const compose = await capture("docker", ["compose", "version"]);
-    report(compose.code === 0, "Docker Compose v2", compose.code === 0 ? "" : "update Docker");
-  }
-
-  // Optional — only needed to receive Digistore24 IPNs on this machine.
-  const tunnel = await hasCommand("cloudflared");
-  console.log(
-    `  ${tunnel ? "✓" : "·"} cloudflared (optional, only for local IPNs)${tunnel ? "" : ` — ${hint("cloudflared")}`}`,
-  );
-
-  if (isWindows) {
-    console.log("\n  On Windows the commands belong in Git Bash or WSL2, not in PowerShell.");
-  }
-  console.log(
-    missing === 0
-      ? "\n✓ Everything that is needed is there. Next: node run.mjs start"
-      : `\n✗ ${missing} thing(s) missing — install them, then run doctor again.`,
-  );
-  if (missing > 0) process.exit(1);
-}
 
 // ── help ────────────────────────────────────────────────────────────────────
 

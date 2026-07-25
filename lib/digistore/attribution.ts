@@ -102,3 +102,49 @@ export function shouldCreditTokens(input: {
       input.memberId,
   );
 }
+
+/**
+ * May this payment ARM an unattended top-up mandate?
+ *
+ * Pure, and for the same reason `shouldCreditTokens` is: this decides whether
+ * the app may start charging somebody's card without them present, and the rule
+ * must be assertable rather than living inside an `if` in the IPN handler.
+ *
+ * Every condition is a refusal somebody would otherwise reintroduce:
+ *
+ *  - **`armAutoReload`** — they ticked the box. A purchase made before this
+ *    shipped, or an anonymous one claimed later, carries no `r:` pair. Arming
+ *    those would start charging buyers who were never offered the choice.
+ *  - **`reason === "identity"`** — the same guard the reload-lock release uses.
+ *    When the identity does not resolve (rotated token, deleted member) the
+ *    payment falls back to a unique buyer-email match, which may be a
+ *    **different Member**. Arming them points a card charge at somebody who
+ *    never asked for one.
+ *  - **`purchaseId`** — no mandate without it. `setAutoReload` would store null
+ *    and `autoReloadIfNeeded` would answer "not-configured" for ever, silently.
+ *  - **`isTokenPackage`** — a subscription has no balance to top up.
+ *  - **`creditWasBooked`** — this delivery placed the credit, rather than being
+ *    a redelivery of one already booked. The credit block around this runs on
+ *    EVERY delivery (its idempotency lives in the ledger's unique index), so
+ *    without this the arming would re-run too: a Member who bought with the box
+ *    ticked, then turned auto top-up OFF, would have it switched back ON by a
+ *    Digistore24 retry — re-arming an unattended card charge they had
+ *    explicitly revoked. Tying it to the booking makes arming as idempotent as
+ *    the credit it belongs to.
+ */
+export function shouldArmAutoReload(input: {
+  armAutoReload: boolean;
+  reason: AttributionReason;
+  purchaseId: string | null;
+  isTokenPackage: boolean;
+  /** Did THIS delivery actually book the credit? See below — load-bearing. */
+  creditWasBooked: boolean;
+}): boolean {
+  return Boolean(
+    input.armAutoReload &&
+      input.reason === "identity" &&
+      input.purchaseId &&
+      input.isTokenPackage &&
+      input.creditWasBooked,
+  );
+}

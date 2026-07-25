@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   decideAdjustment,
+  clampThreshold,
+  defaultReloadThreshold,
   MAX_TOKEN_AMOUNT,
   TOKEN_ERROR_CODES,
   TokenError,
@@ -276,6 +278,8 @@ describe("TOKEN_ERROR_CODES", () => {
   it("is the single list the translation test walks", () => {
     expect([...TOKEN_ERROR_CODES]).toEqual([
       "notOwner",
+      // Thrown by adjustTokens, not by decideAdjustment — see the list itself.
+      "tokensNotSold",
       "emptyReason",
       "invalidReason",
       "invalidAmount",
@@ -344,5 +348,72 @@ describe("decideAdjustment — the reason must be readable", () => {
       code: "invalidReason",
     });
     expect(decideAdjustment({ ...base, reason: "x".repeat(500) }).ok).toBe(true);
+  });
+});
+
+describe("defaultReloadThreshold", () => {
+  it("is roughly a tenth of the package", () => {
+    expect(defaultReloadThreshold(1000)).toBe(100);
+    expect(defaultReloadThreshold(500)).toBe(50);
+  });
+
+  it("refills before empty for any package big enough to allow it", () => {
+    // 0 means "top up once completely empty", and the credit arrives
+    // asynchronously by IPN, so it strands the Member at zero for as long as
+    // Digistore24 takes. Anything above 1 credit can do better than that.
+    for (const credits of [2, 5, 9, 10]) {
+      expect(defaultReloadThreshold(credits), String(credits)).toBeGreaterThan(0);
+    }
+  });
+
+  it("gives up and waits for empty on a 1-credit package", () => {
+    // The degenerate case, and 0 is the only honest answer: `shouldAutoReload`
+    // is `balance <= threshold`, so ANY positive threshold on a 1-credit
+    // package is still satisfied right after the top-up lands — one card
+    // charge per token consumed until the DS24 daily cap intervenes.
+    expect(defaultReloadThreshold(1)).toBe(0);
+  });
+
+  it("survives a package with a nonsense credits figure", () => {
+    // A registry edit can produce these; a NaN threshold would make
+    // shouldAutoReload() answer false for ever, silently.
+    for (const bad of [0, -100, NaN, Infinity]) {
+      expect(defaultReloadThreshold(bad), String(bad)).toBe(1);
+    }
+  });
+
+  it("NEVER returns a threshold a top-up cannot climb back above", () => {
+    // The invariant that matters, and the one the previous version of this test
+    // failed to state: it asserted `t < Math.max(2, credits)`, which is
+    // trivially true for credits <= 2 — exactly the sizes that loop. Stated
+    // properly: after a successful top-up the balance is `credits`, and
+    // `shouldAutoReload` must then be false, i.e. threshold < credits.
+    for (const credits of [1, 2, 3, 5, 50, 1000, 25_000]) {
+      const t = defaultReloadThreshold(credits);
+      expect(t, `credits=${credits}`).toBeLessThan(credits);
+      expect(t, `credits=${credits}`).toBeGreaterThanOrEqual(0);
+    }
+  });
+});
+
+describe("clampThreshold", () => {
+  it("caps at one below the package size", () => {
+    expect(clampThreshold(500, 100)).toBe(99);
+    expect(clampThreshold(100, 100)).toBe(99);
+    expect(clampThreshold(50, 100)).toBe(50);
+  });
+
+  it("closes the documented misconfiguration", () => {
+    // docs/digistore-billing-modes.md shows setAutoReload({ threshold: 500,
+    // packageKey: "pro" }) with nothing checking that "pro" holds more than
+    // 500. A later registry edit shrinking `credits` reaches the same state on
+    // an already-armed account.
+    expect(clampThreshold(500, 200)).toBe(199);
+  });
+
+  it("refuses nonsense rather than trusting it", () => {
+    for (const [t, c] of [[NaN, 100], [-5, 100], [10, 0], [10, NaN]] as const) {
+      expect(clampThreshold(t, c), `${t}/${c}`).toBe(0);
+    }
   });
 });

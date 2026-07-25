@@ -14,6 +14,12 @@
 // belongs there, not here. Entries with `ownerOnly: true` are only visible to
 // the "owner" role — that is pure cosmetics, the page itself MUST still start
 // with `requireOwner()`, otherwise it remains reachable via the address bar.
+//
+// `featureKey` hides an entry whose feature is switched off on this
+// installation. Same caveat, twice over: hiding a link is not protecting a
+// page. The page still renders its own notice, and the route handler behind it
+// still refuses — see `app/api/chat/route.ts`. What the flag prevents is a menu
+// entry leading somewhere that only ever says "not configured".
 
 import * as React from "react";
 import Link from "next/link";
@@ -24,9 +30,11 @@ import {
   CircleUser,
   CreditCard,
   FileText,
+  MessageCircle,
   ShieldCheck,
   Users,
   Receipt,
+  Coins,
   LogOut,
   Menu,
   type LucideIcon,
@@ -54,6 +62,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
+/** Optional features, resolved on the server and passed in as booleans. */
+export interface ShellFeatures {
+  /** The in-app assistant — `lib/ai/chat-config.ts` → `isChatEnabled()`. */
+  chat?: boolean;
+}
+
 export interface NavItem {
   href: string;
   /** Key in the `nav` namespace of the message files. */
@@ -61,6 +75,8 @@ export interface NavItem {
   icon: LucideIcon;
   /** Visible to the "owner" role only. */
   ownerOnly?: boolean;
+  /** Hidden unless this feature is switched on. */
+  featureKey?: keyof ShellFeatures;
   /** Key of a section heading rendered before this entry. */
   groupKey?: string;
 }
@@ -74,6 +90,14 @@ export const NAVIGATION: NavItem[] = [
   // The Member's purchases, invoices and subscription self-service — visible to
   // every signed-in member (NOT ownerOnly). Scoped to them by the page itself.
   { href: "/dashboard/billing", labelKey: "billing", icon: FileText },
+  // The assistant. Optional — an app without an ANTHROPIC_API_KEY, or with
+  // `"enabled": false` in config/ai-chat.json, does not show this at all.
+  {
+    href: "/dashboard/chat",
+    labelKey: "chat",
+    icon: MessageCircle,
+    featureKey: "chat",
+  },
   { href: "/plans", labelKey: "plans", icon: CreditCard },
   {
     href: "/dashboard/admin",
@@ -92,6 +116,15 @@ export const NAVIGATION: NavItem[] = [
     href: "/dashboard/admin/purchases",
     labelKey: "purchases",
     icon: Receipt,
+    ownerOnly: true,
+  },
+  // What the AI layer costs. NOT behind `featureKey: "chat"` — the assistant is
+  // one task among however many the Operator adds, and a page that vanishes
+  // when she is switched off would hide the bill for all the others.
+  {
+    href: "/dashboard/admin/ai-costs",
+    labelKey: "aiCosts",
+    icon: Coins,
     ownerOnly: true,
   },
 ];
@@ -208,6 +241,10 @@ function UserMenu({
   signOutAction: () => Promise<void>;
 }) {
   const t = useTranslations("shell");
+  // The account entry reads the SIDEBAR's label, not one of its own. Two names
+  // for one page is how somebody ends up looking for their password behind both
+  // and finding it behind neither.
+  const tNav = useTranslations("nav");
 
   return (
     <DropdownMenu>
@@ -242,8 +279,21 @@ function UserMenu({
           </span>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
+        {/* Where a Member changes their email address and their password. It is
+            in the sidebar too, and that was not enough: the entry is named
+            after what the page GRANTS ("Mein Zugang" / "My access"), so nobody
+            looking for their sign-in details recognised it. The name changed
+            with this entry; this menu is simply where people look for it. */}
+        <DropdownMenuItem asChild>
+          <Link href="/dashboard/account">
+            <CircleUser aria-hidden className="size-4" />
+            {tNav("account")}
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
         {/* Signing out is a server action — hence a real form and not an
-            onClick. */}
+            onClick. Last, and separated: it is the destructive item, and a
+            settings link placed under it is one people mis-click past. */}
         <form action={signOutAction}>
           <DropdownMenuItem asChild variant="destructive">
             <button type="submit" className="w-full">
@@ -260,12 +310,19 @@ function UserMenu({
 export function AppShell({
   appName,
   user,
+  features,
   signOutAction,
   children,
 }: {
   /** Name in the top left (lib/app.ts). */
   appName: string;
   user: ShellUser;
+  /**
+   * Which optional features are on. Resolved on the SERVER and handed down as
+   * booleans — the modules that answer this read config files carrying prices
+   * and product ids, which have no business in a browser bundle.
+   */
+  features?: ShellFeatures;
   /** Server action that signs out (see app/dashboard/layout.tsx). */
   signOutAction: () => Promise<void>;
   children: React.ReactNode;
@@ -276,7 +333,9 @@ export function AppShell({
   const pathname = usePathname();
 
   const items = NAVIGATION.filter(
-    (item) => !item.ownerOnly || user.role === "owner",
+    (item) =>
+      (!item.ownerOnly || user.role === "owner") &&
+      (!item.featureKey || features?.[item.featureKey] === true),
   );
   const current = items.find((item) => isActive(pathname, item.href, items));
 

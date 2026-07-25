@@ -21,7 +21,7 @@ template.
   route added since the last audit is either in the matcher or genuinely
   public — a page absent from both lists is public by accident, not by design.
   Public are only the home page, `/login`, `/plans`, `/optin/*`,
-  `/account/confirm-email` and `/api/ipn`. Add new protected areas to the
+  `/account/confirm-email`, `/api/ipn` and `/api/mcp`. Add new protected areas to the
   matcher — and when a route is public on purpose, add it to this list in the
   same change, or the next audit reads it as an accident. The confirmation
   route is authenticated by a single-use token because the mail carrying it is
@@ -45,6 +45,24 @@ template.
 - No cached access booleans (a flag on the user row, a claim in the session).
   Entitlement is derived per request; a stored yes survives the chargeback that
   should have revoked it.
+- **The MCP server, if it is switched on** (`config/mcp.json` → `"enabled"`;
+  see `docs/mcp.md`). It has no session, so none of the checks above apply to it
+  automatically — go through `lib/mcp/tools.ts` tool by tool:
+  - **No tool takes a member/user/account id as an argument.** The account is
+    `ctx.memberId`, proven by the key. Arguments are written by a model reading
+    text somebody else may have authored, so an id among them is an IDOR with a
+    language model holding the pen. `lib/mcp/tools.test.ts` checks the obvious
+    spellings; read the schemas yourself for the ones it cannot guess.
+  - **`readOnly: true` is a lie on anything that writes, charges, mails or calls
+    a paid API.** It is the boundary a `read`-scope key is measured against, so
+    a wrongly-flagged tool is a read-only key that can spend somebody's balance.
+  - **Every argument is re-validated in the handler.** `inputSchema` is a hint
+    to a model, not a check — treat `args` exactly like a `FormData`.
+  - **No operator capability is exposed.** No tool blocks a user, adjusts a
+    balance, grants a plan, deletes a record, sends mail or places an order.
+    Anything a `requireOwner()` function does belongs nowhere in that file.
+  - **No tool returns a secret** — no API key, no `passwordHash`, no other
+    member's data.
 
 ### 2. Digistore / payments
 - The IPN **SHA512 signature verification** is active and **fail-closed**

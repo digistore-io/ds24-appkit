@@ -31,6 +31,10 @@ export async function startCheckoutAction(formData: FormData): Promise<void> {
   if (!memberId) redirect("/login");
 
   const productKey = String(formData.get("planKey") ?? "");
+  // The checkbox on a token card. Only meaningful for a package — a
+  // subscription has no balance to keep topped up — so the product decides
+  // below, not the form.
+  const wantsAutoReload = formData.get("autoReload") === "on";
   let url: string | null = null;
 
   try {
@@ -50,6 +54,11 @@ export async function startCheckoutAction(formData: FormData): Promise<void> {
         // Subscriptions and one-off token packages are told apart in the
         // ledger by this. Auto top-ups carry "auto" (set in autoReloadIfNeeded).
         kind: def.kind === "subscription" ? "sub" : "topup",
+        // Travels as one more pair in tracking[custom] (AD-5) rather than a
+        // column, because the thing it will be attached to does not exist yet:
+        // the chargeable purchase_id is created when Digistore24 confirms this
+        // payment. The IPN reads the pair back and arms the mandate then.
+        armAutoReload: wantsAutoReload && def.kind === "token",
       }),
     });
     url = link.url;

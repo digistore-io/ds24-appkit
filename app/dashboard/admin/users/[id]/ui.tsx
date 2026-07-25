@@ -498,6 +498,8 @@ export function MemberBilling({
   memberLabel,
   balance,
   hasAccount,
+  showTokens,
+  canAdjust,
   ledger,
   ledgerLimit,
   ledgerTruncated,
@@ -510,6 +512,13 @@ export function MemberBilling({
   /** false = the Member never bought tokens, so there is no account row at
    *  all. Different from a balance of 0, and the Operator should see which. */
   hasAccount: boolean;
+  /** Show the balance and the ledger at all — false only in an app that sells
+   *  no tokens AND for a Member who holds none. Resolved on the server from
+   *  `billingMode`; see page.tsx. */
+  showTokens: boolean;
+  /** May a correction be booked? Follows the mode ALONE, because a correction
+   *  mints tokens. The action re-checks it — this only removes the form. */
+  canAdjust: boolean;
   ledger: LedgerRow[];
   ledgerLimit: number;
   /** True only when MORE rows exist than were fetched — see page.tsx. */
@@ -527,6 +536,7 @@ export function MemberBilling({
 
   return (
     <div className="flex flex-col gap-8">
+      {showTokens && (
       <Card>
         <CardContent className="flex flex-col gap-4">
           <div className="flex flex-col gap-1">
@@ -540,11 +550,16 @@ export function MemberBilling({
           </div>
           {/* Rendered even without an account row: the first correction
               creates the account, which is exactly what an Operator crediting
-              a Member who never bought tokens needs. */}
-          <AdjustBalance memberId={memberId} memberLabel={memberLabel} />
+              a Member who never bought tokens needs. Gone entirely in an app
+              that sells no tokens — see `canAdjust` above. */}
+          {canAdjust && (
+            <AdjustBalance memberId={memberId} memberLabel={memberLabel} />
+          )}
         </CardContent>
       </Card>
+      )}
 
+      {showTokens && (
       <section className="flex flex-col gap-3">
         <h2 className="text-lg font-semibold">{t("ledgerTitle")}</h2>
         {ledger.length === 0 ? (
@@ -633,10 +648,20 @@ export function MemberBilling({
           </>
         )}
       </section>
+      )}
 
+      {/* The mirror of `showTokens`: nothing to hand out and nothing ever
+          handed out means there is nothing to say. Derived from the registry,
+          not from the mode — in a tokens-only app `grantableProducts()` is
+          empty by construction, so the flag is not consulted here at all. A
+          Member who HOLDS a grant keeps it on screen either way. */}
+      {(grantableProducts.length > 0 || grants.length > 0) && (
       <section className="flex flex-col gap-3">
         <h2 className="text-lg font-semibold">{t("grantsTitle")}</h2>
-        <GrantPlan memberId={memberId} products={grantableProducts} />
+        {/* No dropdown without something to put in it. */}
+        {grantableProducts.length > 0 && (
+          <GrantPlan memberId={memberId} products={grantableProducts} />
+        )}
         {grants.length === 0 ? (
           <EmptyState
             icon={KeyRound}
@@ -796,6 +821,7 @@ export function MemberBilling({
           onClose={() => setToRevoke(null)}
         />
       </section>
+      )}
     </div>
   );
 }

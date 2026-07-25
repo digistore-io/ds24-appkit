@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-// Calls every page of the app once and reports which ones throw a server
-// error. Catches exactly what tests and `npm run build` do NOT catch: errors
-// that only show up when rendering with a real database and a real .env — the
-// classic "Internal Server Error" on a page nobody has ever opened.
+// Calls every page of the app once and reports which ones are broken. Catches
+// exactly what tests and `npm run build` do NOT catch: errors that only show up
+// when rendering with a real database and a real .env — the classic "Internal
+// Server Error" on a page nobody has ever opened.
 //
 // Usage (the app has to be running — `node run.mjs start`):
 //   node scripts/dev/smoke.mjs          (or: node run.mjs smoke)
@@ -10,10 +10,18 @@
 //
 // Verdict:
 //   5xx          → FAILURE, exit code 1
-//   2xx/3xx/4xx  → fine. A redirect to /login is the expected behaviour on
+//   2xx/3xx/4xx  → answered. A redirect to /login is the expected behaviour on
 //                  protected pages, not a defect.
+//   an error in the log → FAILURE, even when the page answered 200.
+//
+// That last line is the one worth understanding. A status code says the server
+// answered, not that the page rendered: next-intl catches a bad date, writes
+// the error to stderr and renders the raw value into the cell. The page is 200
+// and visibly wrong. So the log is read around the sweep, and anything that
+// appeared in it counts (scripts/dev/log-errors.mjs).
 import { readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { findErrors, markLog } from "./log-errors.mjs";
 
 const args = process.argv.slice(2);
 const baseUrl = (
@@ -65,6 +73,13 @@ if (routes.length === 0) {
 
 console.log(`Checking ${routes.length} page(s) on ${baseUrl}\n`);
 
+// The log only exists for a dev server on this machine. `node run.mjs smoke`
+// always passes --url (so that it cannot green-light another project answering
+// on 3000), which is why the test is "is this host local", not "was --url given".
+const isLocal = /^https?:\/\/(?:localhost|127\.0\.0\.1)(?::|\/|$)/.test(baseUrl);
+// Taken before the first request: everything after this mark was caused by us.
+const logMark = isLocal ? markLog() : 0;
+
 let failures = 0;
 for (const route of routes) {
   const url = `${baseUrl}${route}`;
@@ -101,3 +116,22 @@ if (failures > 0) {
 }
 
 console.log(`\n✓ All ${routes.length} page(s) answer without a server error.`);
+
+// A page can answer 200 and still be broken. Whatever the requests above wrote
+// into the log is exactly that case.
+if (isLocal) {
+  const logged = findErrors(logMark);
+  if (logged.length > 0) {
+    console.error(
+      `\n✗ …but the log picked up ${logged.length} error(s) while they were being called:\n`,
+    );
+    for (const { message, location, frame, count } of logged) {
+      console.error(`  ${message}${count > 1 ? `  (${count}×)` : ""}`);
+      if (location) console.error(`    ${location}`);
+      if (frame) console.error(`    ${frame}`);
+    }
+    console.error("\n  In full, with the hints: node run.mjs errors");
+    process.exit(1);
+  }
+  console.log("✓ Nothing in the log either.");
+}

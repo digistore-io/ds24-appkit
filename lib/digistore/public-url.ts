@@ -19,9 +19,10 @@
 //
 // The script-side twin of this file is scripts/ds24/_public-url.mjs — same
 // rules, for `node run.mjs ds24-sync`. Change one, change the other.
-
-/** The redirect page that ships with the template. */
-export const DEFAULT_REDIR_URL = "https://ds24-appkit.com/redir/";
+//
+// The address itself is not a setting: it is the same for every installation
+// and therefore lives in lib/digistore/config.mjs, not in the .env.
+import { DIGISTORE_REDIR_URL } from "./config.mjs";
 
 // http://localhost and http://127.0.0.1 are the same machine; ::1 is its IPv6
 // spelling and 0.0.0.0 is what a server that listens everywhere prints.
@@ -36,14 +37,6 @@ function parse(url: string | undefined): URL | null {
   } catch {
     return null;
   }
-}
-
-/** The public redirect endpoint, always with a trailing slash. */
-export function redirUrl(
-  env: Record<string, string | undefined> = process.env,
-): string {
-  const configured = (env.DIGISTORE_REDIR_URL || DEFAULT_REDIR_URL).trim();
-  return `${configured.replace(/\/+$/, "")}/`;
 }
 
 /**
@@ -72,7 +65,7 @@ export function isLocalhostUrl(url: string | undefined): boolean {
  */
 export function publicUrlFor(
   url: string | undefined,
-  redir: string = redirUrl(),
+  redir: string = DIGISTORE_REDIR_URL,
 ): string | undefined {
   if (!url) return undefined;
   if (!isLocalhostUrl(url)) return url;

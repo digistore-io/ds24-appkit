@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
-import { Users, Receipt, ArrowRight } from "lucide-react";
+import { Users, Receipt, Coins, ArrowRight } from "lucide-react";
 
 import { requireOwner } from "@/lib/authz";
 import { PageHeader } from "@/components/page-header";
@@ -63,6 +63,24 @@ export default async function AdminPage() {
             <Button asChild>
               <Link href="/dashboard/admin/purchases">
                 {t("purchasesCta")}
+                <ArrowRight aria-hidden />
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <div className="bg-primary/10 text-primary mb-2 grid size-9 place-items-center rounded-lg">
+              <Coins aria-hidden className="size-4.5" />
+            </div>
+            <CardTitle>{t("aiCostsTitle")}</CardTitle>
+            <CardDescription>{t("aiCostsBody")}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button asChild>
+              <Link href="/dashboard/admin/ai-costs">
+                {t("aiCostsCta")}
                 <ArrowRight aria-hidden />
               </Link>
             </Button>

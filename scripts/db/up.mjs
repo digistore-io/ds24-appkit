@@ -6,10 +6,17 @@
 // Migrations would end up over there. We check for that up front.
 //
 // Called by `node run.mjs db-up`, and as a prerequisite of start/dev/db-migrate.
+//
+// On a machine without Docker (DB_DRIVER=local) the whole file below is skipped
+// and scripts/db/local.mjs takes over. The branch sits at the very top, in one
+// place, because everything after it is about containers and none of it has an
+// equivalent there.
 import { existsSync } from "node:fs";
 import { freePort, portInUse, urlPort, urlSetPort } from "../dev/ports.mjs";
 import { readEnvValue, setEnvValue } from "../lib/env-write.mjs";
 import { capture, run } from "../lib/proc.mjs";
+import { usesLocalPostgres } from "./driver.mjs";
+import { localUp } from "./local.mjs";
 
 const DEFAULT_DB_PORT = 15432; // as in docker-compose.yml
 
@@ -27,6 +34,8 @@ function hintPortInUse(dbPort, free) {
 }
 
 export async function dbUp() {
+  if (await usesLocalPostgres()) return localUp();
+
   // DB_PORT from the environment or from .env; default as in docker-compose.yml.
   let dbPort = Number(process.env.DB_PORT || readEnvValue(".env", "DB_PORT")) || DEFAULT_DB_PORT;
   let dbUrl = process.env.DATABASE_URL || readEnvValue(".env", "DATABASE_URL");

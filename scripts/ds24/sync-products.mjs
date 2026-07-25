@@ -28,13 +28,20 @@
 //   node scripts/ds24/sync-products.mjs --key pro --apply
 //   node scripts/ds24/sync-products.mjs --dry-run       # never writes, beats --apply
 //   [--thankyou "https://app.example.de/optin/[ORDER_ID]"]  # otherwise from APP_URL
-// Env: DIGISTORE_API_KEY (writable), optionally DIGISTORE_URL, APP_URL.
+// Env: DIGISTORE_API_KEY (writable), optionally APP_URL.
 //
 // `node run.mjs ds24-sync` adds --apply by itself — the preview there is
 // `node run.mjs ds24-sync --dry-run`.
 import { ds24Call, requireApiKey, parseArgs } from "./_client.mjs";
-import { readProducts, writeProducts, extractProducts, idOf } from "./_products.mjs";
-import { publicUrlFor, redirUrl } from "./_public-url.mjs";
+import {
+  readProducts,
+  writeProducts,
+  extractProducts,
+  idOf,
+  contradictingProducts,
+} from "./_products.mjs";
+import { publicUrlFor } from "./_public-url.mjs";
+import { DIGISTORE_REDIR_URL } from "../../lib/digistore/config.mjs";
 
 const args = parseArgs(process.argv.slice(2));
 // --dry-run wins over --apply: run.mjs hands --apply in by default, and
@@ -92,13 +99,34 @@ function checkDefinition(key, def) {
 
 // Say it out loud — otherwise the address at Digistore24 looks wrong to anyone
 // who checks it in the UI.
-if (appUrl && appUrl.startsWith(redirUrl())) {
+if (appUrl && appUrl.startsWith(DIGISTORE_REDIR_URL)) {
   console.log(`• Thank-you page runs through the redirect: ${appUrl}`);
   console.log("  Digistore24 stores no localhost URL; the redirect leads back to your app.");
 }
 
-const apiKey = requireApiKey();
+// The config is read and checked BEFORE the API key is demanded: a
+// contradiction in the registry is a mistake in a file that is right here, and
+// answering "no API key" to somebody whose actual problem is a product they
+// have to delete sends them off to fix the wrong thing.
 const config = readProducts();
+
+// Before anything is created: does the registry contradict what this app says
+// it sells? A token package in a "subscriptions" app would be published here
+// and buyable at Digistore24, while the app renders nothing that credits the
+// buyer. Refused rather than warned — a dry run does not show it either,
+// because the mismatch is not in the diff, it is in the app.
+const contradicting = contradictingProducts(config);
+if (contradicting.length > 0) {
+  console.error(
+    `"billingMode": "${config.billingMode}" in config/digistore-products.json does not match these products:\n` +
+      contradicting.map((key) => `  - ${key}`).join("\n") +
+      `\n\nEither set "billingMode" to "both", or delete those products from the config.` +
+      `\n(If one of them already exists at Digistore24, deactivate it THERE — removing it here does not unpublish it.)`,
+  );
+  process.exit(2);
+}
+
+const apiKey = requireApiKey();
 const entries = Object.entries(config.products).filter(
   ([key]) => !onlyKey || key === onlyKey,
 );

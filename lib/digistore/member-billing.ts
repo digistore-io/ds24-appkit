@@ -15,9 +15,11 @@
 // one customer read another's invoices.
 import { db } from "@/db";
 import { orders, invoices } from "@/db/schema";
-import { desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 
 import type { IpnParams } from "./ipn";
+import { findProduct } from "./products";
+import { purchaseNotice, type PurchaseNotice } from "./purchase-notice";
 
 export interface InvoiceInsert {
   ds24OrderId: string;
@@ -132,4 +134,33 @@ export async function listBillingForMember(
     ...o,
     invoices: byOrder.get(o.ds24OrderId) ?? [],
   }));
+}
+
+/**
+ * What to tell this member about one purchase of theirs — the confirmation
+ * shown after they come back from checkout (`/optin/[orderId]` →
+ * `/dashboard?purchase=…`). `null` when there is nothing to say.
+ *
+ * `ds24OrderId` COMES FROM THE REQUEST, which is exactly the case the header of
+ * this file warns about. It is safe here for one reason only: the query filters
+ * on `member_id` as well, so an order belonging to somebody else — or to nobody
+ * yet — matches nothing and the caller says nothing. `memberId` comes from the
+ * session and must never be taken from the URL beside it.
+ *
+ * The decision itself is a pure, tested rule (./purchase-notice.ts); this
+ * function only fetches what that rule reads.
+ */
+export async function purchaseNoticeFor(
+  memberId: string,
+  ds24OrderId: string,
+): Promise<PurchaseNotice | null> {
+  const order = await db.query.orders.findFirst({
+    columns: { status: true, productKey: true, credits: true },
+    where: and(
+      eq(orders.ds24OrderId, ds24OrderId),
+      eq(orders.memberId, memberId),
+    ),
+  });
+
+  return purchaseNotice(order, findProduct);
 }

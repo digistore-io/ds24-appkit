@@ -50,5 +50,6 @@ const url = await getOrCreateBuyUrl({
 - Price as a euro string with a dot (`"9.00"`), not in cents, not with a comma.
 - `number_of_installments = 0` means an **unlimited subscription** (not "no payment").
 - The thank-you URL must be **HTTPS**, otherwise Digistore rejects it.
-- API base via `DIGISTORE_URL` (`https://www.digistore24.com`).
+- API base from `lib/digistore/config.mjs` (`https://www.digistore24.com`) —
+  the same for every installation, so not a `.env` value.
 - On an invalid affiliate code it is retried once **without** the affiliate.

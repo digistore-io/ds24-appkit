@@ -32,4 +32,23 @@ export async function register() {
   }
 
   console.log(`✓ Environment: ${environment.toUpperCase()}`);
+
+  // The scheduled jobs (docs/cron.md). AFTER the environment check, so an
+  // installation that is refusing to start does not begin deleting rows on its
+  // way out.
+  //
+  // Not during `next build`. Measured: this Next.js version does not run the
+  // hook at build time at all, so today the guard changes nothing — it is here
+  // because the cost of being wrong is a build machine pruning a production
+  // table, possibly without even having the database. `NEXT_PHASE` is Next.js's
+  // own variable and the documented way to tell the two apart.
+  if (process.env.NEXT_PHASE === "phase-production-build") return;
+
+  const { schedulerEnabled } = await import("@/lib/cron/config");
+  if (!schedulerEnabled()) {
+    console.log("• Scheduler: off (config/cron.json) — /api/cron still works");
+    return;
+  }
+  const { startScheduler } = await import("@/lib/cron/scheduler");
+  startScheduler();
 }

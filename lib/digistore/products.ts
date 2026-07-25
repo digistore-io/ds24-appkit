@@ -90,8 +90,16 @@ export function allProducts(): ProductDef[] {
   return Object.entries(raw.products).map(([key, def]) => ({ key, ...def }));
 }
 
-/** Product definition, or throws on an unknown key. */
-export function getProduct(key: string): ProductDef {
+/**
+ * Product definition, or `null` for a key the registry does not hold.
+ *
+ * The forgiving twin of `getProduct()`, for the callers that must survive a key
+ * going missing. That is not a theoretical case: the registry is a file the
+ * app-builder edits, so a key recorded on an old order can be renamed or
+ * deleted afterwards — and `orders.productKey` is deliberately never
+ * reconstructed. A purchase confirmation must not throw over that.
+ */
+export function findProduct(key: string): ProductDef | null {
   // Object.hasOwn, not a bare index: the registry is a plain JSON object,
 
   // so "constructor", "__proto__", "toString" and "valueOf" all resolve
@@ -101,8 +109,14 @@ export function getProduct(key: string): ProductDef {
   // including by hasPlan(), which would then answer true for them.
 
   const def = Object.hasOwn(raw.products, key) ? raw.products[key] : undefined;
+  return def ? { key, ...def } : null;
+}
+
+/** Product definition, or throws on an unknown key. */
+export function getProduct(key: string): ProductDef {
+  const def = findProduct(key);
   if (!def) throw new Error(`Unbekanntes Produkt: ${key}`);
-  return { key, ...def };
+  return def;
 }
 
 /** Products of one kind (e.g. all token packages). */

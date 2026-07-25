@@ -18,7 +18,6 @@ anything technical by heart.
   All of them listed in `.env.example`. Plus `DIGISTORE_API_KEY` and
   `DIGISTORE_IPN_PASSPHRASE` — written into the `.env` locally by
   `node run.mjs ds24-connect`, for PROD stored as secrets at the host.
-  (`DIGISTORE_DEVELOPER_KEY` is optional — the connect flow works without it.)
 - **Migrations ready:** `drizzle/` up to date (`npm run db:generate` after schema changes).
 
 ## 2. Hosting

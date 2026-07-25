@@ -6,10 +6,12 @@
 // Important: errors throw an exception — NO silent mock fallback.
 // (Money-relevant: a failed checkout call must not count as a success.)
 import crypto from "crypto";
+import { DIGISTORE_API_URL } from "./config.mjs";
 
-// API base configurable via DIGISTORE_URL (default: https://www.digistore24.com).
+// The API base is the same for every installation and is therefore not a
+// setting — it lives in lib/digistore/config.mjs, not in the .env.
 export function ds24BaseUrl(): string {
-  return process.env.DIGISTORE_URL || "https://www.digistore24.com";
+  return DIGISTORE_API_URL;
 }
 
 /**

@@ -89,6 +89,10 @@ export const orders = pgTable("orders", {
   // was already refunded before creating a grant (lib/entitlements/manage.ts).
   // Without this the IPN seq-scans `orders` on every payment.
   index("orders_purchase").on(t.ds24PurchaseId),
+  // The Operator's purchase list: `createdAt DESC, ds24OrderId DESC`, one page
+  // at a time (`listOrders`). Unfiltered, that is the whole table sorted to
+  // show twenty rows — this makes it read twenty.
+  index("orders_created").on(t.createdAt),
 ]);
 
 // Every IPN Digistore24 delivers, recorded at the edge for the Operator's

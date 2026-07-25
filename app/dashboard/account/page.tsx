@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getFormatter, getTranslations } from "next-intl/server";
 import { Coins, CreditCard, KeyRound } from "lucide-react";
@@ -8,11 +9,16 @@ import { entitlementsFor, suspendedKeysFor } from "@/lib/entitlements/manage";
 import { pausedKeys } from "@/lib/entitlements/rules";
 import { getProduct } from "@/lib/digistore/products";
 import { getTokenAccount } from "@/lib/tokens/account";
+import { sellsPlans, sellsTokens } from "@/lib/billing-mode";
 import { signInState } from "@/lib/credentials/manage";
 import { MIN_PASSWORD_LENGTH } from "@/lib/credentials/rules";
 import { pendingChangeFor } from "@/lib/email-change/manage";
 import { isEmailLoginEnabled } from "@/lib/email";
+import { mcpConfig, mcpOffReason } from "@/lib/mcp/config";
+import { countLiveKeys, listKeys } from "@/lib/mcp/keys";
+import { MAX_LIVE_KEYS } from "@/lib/mcp/rules";
 import { SignInCard } from "./ui";
+import { McpCard } from "./mcp-ui";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
@@ -81,6 +87,27 @@ function planName(productKey: string): string {
   }
 }
 
+/**
+ * The absolute URL a client is told to connect to.
+ *
+ * `APP_URL` first because it is the deliberate answer — it is what the operator
+ * configured and what every other outbound URL in this app uses. The request's
+ * own origin is the fallback for a local machine where the app moved to another
+ * port before `.env` caught up. Same shape as `appOrigin()` in actions.ts.
+ *
+ * This string is copied into a config file on somebody's laptop, so getting it
+ * wrong costs them a debugging session rather than a page refresh.
+ */
+async function mcpEndpoint(): Promise<string> {
+  const configured = process.env.APP_URL?.trim();
+  if (configured) return `${configured.replace(/\/+$/, "")}/api/mcp`;
+
+  const h = await headers();
+  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
+  const proto = h.get("x-forwarded-proto") ?? "http";
+  return `${proto}://${host}/api/mcp`;
+}
+
 // The Member's own account page: what they may use, until when, and what
 // balance they hold. The counterpart of the Operator's
 // /dashboard/admin/users/[id] — and deliberately NOT built from its readers.
@@ -129,11 +156,35 @@ export default async function AccountPage() {
     pendingChangeFor(memberId),
   ]);
 
+  // The MCP keys. Read unconditionally — a Member who holds keys from before
+  // the Operator switched the interface off still has to be able to see and
+  // revoke them, which is the same rule the balance card follows: a display
+  // switch may hide an EMPTY thing, never a non-empty one.
+  const mcpOff = mcpOffReason();
+  const [mcpKeyRows, liveKeyCount] = await Promise.all([
+    listKeys(memberId),
+    countLiveKeys(memberId),
+  ]);
+
   // Suspended AND not covered by something else the Member can still use. A key
   // held through a failed subscription plus an Operator's comp is not paused,
   // and saying so beside the same plan listed as available is a contradiction
   // the Member cannot resolve. Pure, and tested — lib/entitlements/rules.ts.
   const paused = pausedKeys(entitlements, suspended);
+
+  // The balance card, unless this app sells no tokens AND this Member holds
+  // none. The second half is not belt-and-braces: `billingMode` is a display
+  // setting somebody flips on a live app, and hiding a balance that was paid
+  // for turns a layout change into a support case. See lib/billing-mode.ts.
+  const balance = account?.balance ?? 0;
+  const showBalance = sellsTokens() || balance !== 0;
+
+  // Same shape for the other half: a token-only app has no plans to list, and
+  // "nothing unlocked yet — buy a plan" is the wrong sentence to put in front
+  // of somebody whose app sells credit. A Member who DOES hold something (or
+  // whose plan is paused) sees it either way.
+  const showAccess =
+    sellsPlans() || entitlements.length > 0 || paused.length > 0;
 
   const t = await getTranslations("account");
   const format = await getFormatter();
@@ -155,20 +206,21 @@ export default async function AccountPage() {
           </Callout>
         )}
 
-        <Card>
-          <CardContent className="flex flex-col gap-1">
-            <CardDescription>{t("balanceTitle")}</CardDescription>
-            <CardTitle className="text-3xl">
-              {format.number(account?.balance ?? 0)}
-            </CardTitle>
-            <p className="text-muted-foreground text-sm">
-              {/* AC 1: whatever the Operator's correction left behind is what
-                  stands here on the next load. No cache sits in between. */}
-              {account ? t("balanceHint") : t("balanceEmpty")}
-            </p>
-          </CardContent>
-        </Card>
+        {showBalance && (
+          <Card>
+            <CardContent className="flex flex-col gap-1">
+              <CardDescription>{t("balanceTitle")}</CardDescription>
+              <CardTitle className="text-3xl">{format.number(balance)}</CardTitle>
+              <p className="text-muted-foreground text-sm">
+                {/* AC 1: whatever the Operator's correction left behind is what
+                    stands here on the next load. No cache sits in between. */}
+                {account ? t("balanceHint") : t("balanceEmpty")}
+              </p>
+            </CardContent>
+          </Card>
+        )}
 
+        {showAccess && (
         <section className="flex flex-col gap-3">
           <h2 className="text-lg font-semibold">{t("accessTitle")}</h2>
 
@@ -270,6 +322,33 @@ export default async function AccountPage() {
             </>
           )}
         </section>
+        )}
+
+        {/* Connecting an AI client to this app. Hidden entirely when the
+            interface is off AND this Member holds no keys — there is no point
+            showing somebody a feature their app does not offer. But a Member
+            who DOES hold keys sees the section either way, so they can still
+            revoke them: a switch may hide an empty thing, never a non-empty
+            one (the same rule the balance card above follows). */}
+        {(!mcpOff || mcpKeyRows.length > 0) && (
+          <McpCard
+            keys={mcpKeyRows.map((key) => ({
+              id: key.id,
+              name: key.name,
+              prefix: key.prefix,
+              scope: key.scope,
+              state: key.state,
+              createdAt: key.createdAt,
+              lastUsedAt: key.lastUsedAt,
+              expiresAt: key.expiresAt,
+            }))}
+            endpoint={await mcpEndpoint()}
+            serverName={mcpConfig().serverName}
+            maxLiveKeys={MAX_LIVE_KEYS}
+            liveKeys={liveKeyCount}
+            offReason={mcpOff}
+          />
+        )}
 
         {/* How this person gets in. Last on the page on purpose: a Member opens
             their account to see what they have, not to administer a login — and

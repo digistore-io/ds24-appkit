@@ -10,9 +10,14 @@ template supports two further models, on their own or **combined**:
 A typical cut: **base subscription (fixed) + usage-based tokens for the AI
 usage**. Both run through the same DS24 account, IPN and checkout.
 
+Which of the two an app uses is **declared, not guessed** — see
+[Which model this app uses](#which-model-this-app-uses-billingmode) below.
+
 Code:
 - `config/digistore-products.json` — **product registry** (source of truth): one
   DS24 product per offer; `productId` written back by `sync-products.mjs`.
+  Also holds `billingMode` — which of the two models this app sells.
+- `lib/billing-mode.ts` — reads it: `sellsPlans()`, `sellsTokens()`.
 - `lib/digistore/products.ts` — registry access (price, interval, features).
 - `lib/digistore/checkout.ts` — **registry entry → checkout link**
   (`checkoutLinksFor`), on top of `createBuyUrl`.
@@ -27,6 +32,67 @@ Code:
 - IPN: `app/api/ipn/route.ts` (credit + subscription upsert).
 - Scripts: `scripts/ds24/sync-products.mjs` (create/update),
   `scripts/ds24/request-approval.mjs` (approval at go-live).
+
+## Which model this app uses (`billingMode`)
+
+Most apps sell one of the two, not both. That is a line in the registry:
+
+```json
+{
+  "billingMode": "subscriptions",
+  "products": { … }
+}
+```
+
+| Value | The app sells | What disappears from the interface |
+|---|---|---|
+| `"subscriptions"` | plans (`kind` `subscription` / `one_time`) | token balance on `/dashboard/account`; balance, ledger and the correction form on `/dashboard/admin/users/<id>` |
+| `"tokens"` | prepaid credit (`kind: "token"`) | the entitlement list on `/dashboard/account`; the "next payment" card on `/dashboard`; the grant-by-hand form |
+| `"both"` | both — the default | nothing |
+
+Read it through `lib/billing-mode.ts`, in a **server** component or a server
+action:
+
+```ts
+import { sellsPlans, sellsTokens } from "@/lib/billing-mode";
+
+// Not `!sellsTokens()` on its own — see the rule below.
+const showBalance = sellsTokens() || balance !== 0;
+```
+
+Never in a client component: the module imports the registry, and that JSON
+carries prices and Digistore24 product ids that have no business in a browser
+bundle. Resolve it on the server and pass the boolean down as a prop.
+
+### The four rules
+
+1. **It is cosmetic. It never decides access.** `hasPlan()`,
+   `entitlementsFor()`, `consumeTokens()` and the IPN behave identically in
+   every mode. The mode is a setting somebody flips while a customer holds a
+   paid balance; a display setting that revokes what was paid for is a refund
+   request, not a layout change.
+2. **A mode may hide an empty thing, never a non-empty one.** Every call site
+   is written as `!sellsTokens() && balance === 0`. So an app switched from
+   tokens to subscriptions still shows the customers who bought tokens what
+   they still hold — and a wrongly set flag costs nothing but a card the vendor
+   did not want anyway.
+3. **One exception: the manual balance correction.** `adjustTokens()` throws
+   `TokenError("tokensNotSold")` when the app sells no tokens, before any
+   balance is read — it *mints* tokens. The refusal is in the function, not in
+   the form, because a server action is an HTTP endpoint of its own. A legacy
+   balance stays visible, consumable and creditable by IPN; only creating
+   tokens out of nothing stops. To correct one, set the mode back.
+4. **Mode and registry must agree.** `lib/billing-mode.test.ts` fails the build
+   on a token package declared in a `"subscriptions"` app: `ds24-sync` would
+   create it at Digistore24 and it would be buyable there, while the app renders
+   nothing that credits the buyer — a money hole no dry run shows. The check is
+   one-directional: an enabled mode with no products yet is fine, and is the
+   normal state while the app is still being built.
+
+Deleting the products you do not sell is part of setting the mode — but note
+that removing one from the JSON does **not** unpublish it. A product
+`ds24-sync` has already created stays at Digistore24 until you deactivate it
+there.
 
 ## Products: registry + checkout via createBuyUrl
 
@@ -131,35 +197,101 @@ account (`linkPurchaseId`) — the basis for the later auto-reload.
 
 ### Auto-reload
 
-Configure the account and then trigger it when needed:
+**It is wired end to end — application code calls nothing.**
 
-```ts
-import { setAutoReload, consumeTokens, autoReloadIfNeeded } from "@/lib/tokens/account";
-
-// Once (e.g. in the customer dashboard):
-await setAutoReload({
-  memberId,                           // the signed-in customer
-  enabled: true, threshold: 500,      // reload as soon as ≤ 500 tokens
-  packageKey: "pro", ds24PurchaseId,  // which package, which purchase_id
-});
-
-// On every use:
-await consumeTokens({ memberId, amount: 42 });
-await autoReloadIfNeeded({ memberId, apiKey });
-```
+1. The buyer ticks a checkbox on the token card at `/plans`. The wish travels to
+   Digistore24 as one more pair in `tracking[custom]` (`r:1`), because at
+   checkout time the chargeable `purchase_id` does not exist yet.
+2. The **IPN arms it** once the payment confirms and the mandate exists —
+   `shouldArmAutoReload` (`lib/digistore/attribution.ts`). Only on a resolved
+   identity, and only on the delivery that actually booked the credit, so a
+   Digistore24 retry cannot re-arm what a Member turned off.
+3. **`spendTokens` triggers it** after every debit — including a debit that
+   FAILED for lack of funds, which is the strongest signal a top-up is due. The
+   call runs after the response (`after()`), so an outbound payment call never
+   sits in the Member's request.
+4. The Member sees the state on the **Tokens** tab of `/dashboard/billing` and
+   can switch it off — and back on, as long as a mandate is stored.
 
 `autoReloadIfNeeded` checks the threshold, takes **a lock atomically**
 (`claimReloadSlot` → prevents a double charge on parallel requests) and calls
 `createBillingOnDemand`. Credit + lock release happen in the IPN. If the charge
-fails, the lock is released immediately. Alternatively iterate **via cron** over
-all accounts with a low balance (more robust than the inline call).
+fails, the lock is released immediately.
+
+**Do not add a second trigger.** Calling `autoReloadIfNeeded` yourself after
+`spendTokens` charges twice as often for no benefit. A **cron** sweep across
+accounts with a low balance is the one legitimate addition, and it replaces
+nothing — it catches the Member who stops using the app mid-drain.
+
+**Do not build a dashboard control that calls `setAutoReload({ enabled: true })`
+with a `purchaseId` you chose.** Arming belongs to the IPN, which is the only
+place that knows a mandate is real. The Member-facing switch is
+`setAutoReloadEnabled`, which flips the flag and refuses when no mandate is
+stored.
+
+The threshold is **clamped below the package's credits** (`clampThreshold`).
+A threshold at or above them is satisfied again the instant the top-up lands, so
+the next spend charges the card again, and the next — a loop only Digistore24's
+10-per-day cap ends.
+
+Auto top-up is **disarmed automatically** when the purchase behind the mandate
+is refunded or charged back, and when the account is blocked.
 
 ### Billing consumption
 
-`consumeTokens` runs in a transaction with a row lock (`FOR UPDATE`) and throws
-`InsufficientTokensError` when the balance is not enough — check with
-`hasSufficientBalance` beforehand and, if needed, guide the customer to buy more.
-Every booking lands in the `tokenLedger` (audit).
+**The call your feature makes is `spendTokens` (`lib/tokens/spend.ts`).** It
+charges the signed-in Member for what they just used and returns the balance
+left over:
+
+```ts
+import { spendTokens } from "@/lib/tokens/spend";
+import { TokenError } from "@/lib/tokens/rules";
+
+try {
+  const left = await spendTokens({ amount: 5, note: "report generation" });
+} catch (err) {
+  if (err instanceof TokenError) { /* t(err.code) — "insufficientBalance" */ }
+  throw err;
+}
+```
+
+**It takes no member id, and must never grow one.** The account charged is
+always the session's own (`requireActiveUser()`, which also turns away blocked
+accounts). A Server Action is an HTTP endpoint in its own right, so a
+`memberId` read out of a `FormData` is an IDOR that drains another customer's
+balance — and an optional parameter defaulting to the session does not fix
+that, it just makes the bad call compile again. If you ever genuinely need to
+charge somebody else (a team seat billed to the owner), write a separate
+`spendTokensFor({ actor, memberId })` that opens with `requireOwner()` — the
+same deal `adjustTokens` already makes.
+
+Three more rules:
+
+- **Check → work → charge, in that order.** Charging first bills for work that
+  then fails; doing the work with no check in front gives the result away free,
+  because by the time `spendTokens` throws, the expensive part has already run.
+  Gate on `hasSufficientBalance` before starting. The remaining gap is bounded
+  at one operation, and the row lock still stops a negative balance.
+- **`amount` is your price, computed in code.** Taking it from the request lets
+  the customer set it to 0 and use the app for free.
+- **`note` is personal data.** It appears in `node run.mjs data-export`
+  (`docs/data-protection.md`). Use a short label for what was charged, never the
+  content the Member submitted.
+
+Underneath, `consumeTokens` runs in a transaction with a row lock (`FOR UPDATE`),
+so two requests racing on the same balance are serialised and neither can drive
+it below zero. It throws `InsufficientTokensError`; `spendTokens` turns that into
+the translatable `TokenError("insufficientBalance")` and writes nothing. Check
+with `hasSufficientBalance` beforehand where you would rather offer a top-up
+than show a failure. Every booking lands in the `tokenLedger` (audit).
+
+`consumeTokens({ memberId, … })` stays exported as the primitive — it is what
+the IPN and the Operator pages use, where the caller legitimately names somebody
+else. Features do not call it.
+
+**A spend is never gated on `billingMode`.** That switch is cosmetic
+(`lib/billing-mode.ts`); refusing to spend in a subscriptions-only app would
+strand customers who still hold a paid balance.
 
 ---
 

@@ -24,6 +24,18 @@ a page under `app/` — without step 0, without `market-research`, without askin
 about the product. Only once it runs, offer in one sentence whether it should
 turn into something sellable. Offer it, don't push.
 
+## Step 0a — Does the machine work?
+
+Before anything else, check the session-start line: `[Setup: ok]` means carry on
+straight away. `[Setup: blocked — …]` means run the skill **`setup-machine`**
+first — it installs what is missing and prepares the project.
+
+Two sentences on it, no more, and only when it applies. Somebody who came here
+to build an app does not want a lecture about Docker; they want the thing to
+work. And an app built on a machine that cannot start it ends in the failure
+this template warns about most loudly: a confident report and a page that never
+loads.
+
 ## Step 0 — The switch: is the idea already there?
 
 This is the **single entrance** of the template. The user doesn't have to know a
@@ -59,7 +71,7 @@ Ask the user (or work out) what the app is at its core:
 | The app should…                                 | Archetype           | What to do |
 |-------------------------------------------------|---------------------|----------------|
 | Unlock digital content/courses after purchase   | **Content-Access**  | One table per "product"; gate it with `hasPlan(memberId, productKey)` |
-| Send recurring messages after purchase          | **Drip/Automation** | Schedule table + cron/route, start at `on_payment` |
+| Send recurring messages after purchase          | **Drip/Automation** | Schedule table + a job in `lib/cron/jobs.ts` (`docs/cron.md`), start at `on_payment` |
 | Provide a tool/feature for buyers only          | **Gated-Tool**      | Feature pages behind `hasPlan(...)` |
 | Manage membership/subscription                  | **Membership**      | `hasPlan(...)` decides access — a cancellation keeps it to the end of the paid period; self-service via `billing-modes` |
 | Bill by usage (e.g. AI usage)                   | **Usage/Tokens**    | Prepaid tokens with auto top-up — skill `billing-modes` |
@@ -68,6 +80,28 @@ All archetypes use the same base: **auth (`auth.ts`)** for who is signed in, and
 the **entitlement API** (`lib/entitlements/manage.ts`) for what they may use.
 The Digistore IPN feeds both — it records the payment and maintains the grant
 behind it. Reference: `docs/entitlements.md`.
+
+**The archetype answers one more question, so answer it now:** does this app
+sell **plans**, **tokens**, or **both**? The last four rows above are plans, the
+**Usage/Tokens** row is tokens, and an AI tool with a base subscription is both.
+Write it into `config/digistore-products.json` — one line, and you can set it
+before a single product exists:
+
+```json
+{ "billingMode": "subscriptions" | "tokens" | "both", "products": { … } }
+```
+
+The template ships with `"both"`, which shows the surfaces of both models. Leave
+it there and a subscription app carries a token balance stuck at 0 on the
+customer's account page, and a token app an empty "next payment" card — half an
+interface that never fills up, on the pages the vendor looks at first.
+
+It is a **display** setting: `hasPlan()`, `consumeTokens()` and the IPN do not
+change, and a mode only ever hides an *empty* card, so nobody loses sight of
+something they paid for. Delete the sample products you do not sell from the
+same file; `lib/billing-mode.test.ts` fails the build if the two contradict each
+other. Reference: `lib/billing-mode.ts`. Everything else about billing is the
+`billing-modes` skill.
 
 ## Step 2 — Extend the data model
 
@@ -104,11 +138,59 @@ behind it. Reference: `docs/entitlements.md`.
   table: a cancelled subscription still has access to the end of the paid
   period, so reading the status as "blocked" takes away time somebody paid for.
   Details and failure modes: `docs/entitlements.md`.
+- **Usage-metered content charges tokens** — a different question from the one
+  above, and a different call. `hasPlan()` asks *may they*, `spendTokens()` asks
+  *can they afford this one*:
+
+  ```ts
+  import { getTokenAccount, hasSufficientBalance } from "@/lib/tokens/account";
+  import { spendTokens } from "@/lib/tokens/spend";
+  import { TokenError } from "@/lib/tokens/rules";
+
+  const COST = 5;
+
+  // 1. CHECK — before anything expensive runs.
+  const account = await getTokenAccount(session.user.id);
+  if (!hasSufficientBalance(account?.balance ?? 0, COST)) {
+    return { error: t("insufficientBalance") };
+  }
+
+  // 2. WORK
+  const report = await buildReport();
+
+  // 3. CHARGE
+  try {
+    await spendTokens({ amount: COST, note: "report generation" });
+  } catch (err) {
+    if (err instanceof TokenError) return { error: t(err.code) };
+    throw err;
+  }
+  ```
+
+  **Check → work → charge, in that order.** Charging first bills for work that
+  then fails. Doing the work with no check in front gives the result away for
+  free — by the time `spendTokens` throws, the expensive part has already run.
+  That second one is the mistake that actually gets made.
+
+  **Never pass it a member id and never let one exist in its signature** — it
+  charges the signed-in Member by construction, and a `memberId` out of a form
+  would drain somebody else's balance. The `amount` is your price, computed in
+  code: read it from the request and the customer sets it to 0. Never
+  hand-write `balance = balance - n`; the ledger and the row lock are the point.
+  Details: `CLAUDE.md` → **Charging tokens**.
 - UI with shadcn/ui: `npx shadcn@latest add <component>`. Colors only via tokens
   from `app/globals.css`, nothing hard-coded.
 - Messages (notice/success/warning/error) always via `Callout`
   (`components/ui/callout.tsx`, variants `info` | `success` | `warning` |
   `danger`) — no hand-picked color classes. Details in `CLAUDE.md`.
+- **Every action reports back, and there are exactly three ways to do it** —
+  use them, do not build a fourth: `<Callout>` for what has to stay on screen,
+  `useActionToast(state)` for a server action on the same page, and
+  `<FlashToast>` (`components/flash-toast.tsx`) for a result that arrives after
+  a `redirect()`. That last one is the one that gets forgotten, and it is
+  exactly where a purchase or a sign-up ends up. Pass `<FlashToast>` a *reference*
+  in the URL and resolve the text on the receiving page — never put the message
+  itself in the address. The table is in `CLAUDE.md`, under **UI**.
 - Every page has to be readable in light **and** dark; the app has a toggle
   (default: system). With tokens this follows by itself.
 

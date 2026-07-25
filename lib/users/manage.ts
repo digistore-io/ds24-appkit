@@ -127,6 +127,23 @@ export async function setUserBlocked(
     .update(users)
     .set({ blockedAt: blocked ? new Date() : null })
     .where(eq(users.id, targetId));
+
+  // Blocking stops unattended card charges too.
+  //
+  // A blocked Member is redirected out of /dashboard by `requireActiveUser()`,
+  // so the auto top-up off switch on their billing page becomes unreachable —
+  // and the Operator has no control of their own. Leaving the account armed
+  // would keep charging the card of somebody who has just been locked out, with
+  // nobody able to stop it. The MANDATE is kept: blocking is reversible, and an
+  // unblocked Member should not have to buy again to get back what they had.
+  if (blocked) {
+    const { disarmAutoReload } = await import("@/lib/tokens/account");
+    await disarmAutoReload({ memberId: targetId }).catch((err) => {
+      // Never fail the block over this — locking the account out is the more
+      // important half and must not be undone by a token-table error.
+      console.error("[users] could not disarm auto top-up on block:", err);
+    });
+  }
 }
 
 /**

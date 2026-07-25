@@ -36,6 +36,7 @@ import { parseCustom, type CustomValue } from "./custom";
 import { nextPaymentUpdate, type NextPaymentUpdate } from "./next-payment";
 import {
   chooseAttribution,
+  shouldArmAutoReload,
   shouldCreditTokens,
   type AttributionReason,
 } from "./attribution";
@@ -43,7 +44,13 @@ import { getProduct, productByDs24Id, type ProductKind } from "./products";
 import { chooseGrantTransition } from "@/lib/entitlements/rules";
 import { applyGrantTransition, openPurchaseGrantByPurchase, purchaseGrant } from "@/lib/entitlements/manage";
 import { getTokenPackage } from "@/lib/tokens/packages";
-import { creditTokens } from "@/lib/tokens/account";
+import {
+  creditTokens,
+  disarmAutoReload,
+  getTokenAccount,
+  setAutoReload,
+} from "@/lib/tokens/account";
+import { defaultReloadThreshold } from "@/lib/tokens/rules";
 import { normalizeEmail } from "@/lib/users/rules";
 import { invoiceRowFromIpn } from "./member-billing";
 
@@ -185,8 +192,42 @@ export async function onPaymentEvent(body: IpnParams): Promise<void> {
   const pkg = packageKey ? safeTokenPackage(packageKey) : null;
   const creditable = Boolean(pkg && pkg.credits > 0);
 
+  // --- 2c. Money went BACK → stop charging that card -------------------------
+  // A refund or a chargeback reverses the very payment whose stored details the
+  // auto top-up charges against. Continuing to bill it is the worst thing this
+  // feature can do, and until now nothing in the app stopped it: the only
+  // writer of `autoReloadEnabled: false` was the Member's own switch.
+  //
+  // Scoped to the purchase that IS the mandate (`onlyForPurchaseId`), so
+  // reversing an unrelated older order leaves a valid arrangement alone. The
+  // mandate is cleared as well — a reversed purchase must not be re-armable.
+  if ((status === "refunded" || status === "chargeback") && memberId && purchaseId) {
+    try {
+      const disarmed = await disarmAutoReload({
+        memberId,
+        onlyForPurchaseId: purchaseId,
+        clearMandate: true,
+      });
+      if (disarmed) {
+        console.warn(
+          `[ipn] auto top-up disarmed for member ${memberId}: purchase ${purchaseId} was ${status}`,
+        );
+      }
+    } catch (err) {
+      // Never fail the event over this. The order write and the grant
+      // transition matter more, and DS24 retries the whole delivery.
+      console.error("[ipn] could not disarm auto top-up:", err);
+    }
+  }
+
   if (shouldCreditTokens({ packageKey, status, orderId, memberId }) && creditable) {
-    await creditTokens({
+    // The lock as it stands BEFORE the credit — the one an outstanding auto
+    // charge set. See `releaseLockedAt` below.
+    const lockedAtBeforeCredit =
+      origin === "auto" && reason === "identity"
+        ? ((await getTokenAccount(memberId!))?.reloadLockedAt ?? null)
+        : undefined;
+    const credit = await creditTokens({
       memberId: memberId!,
       credits: pkg!.credits,
       ds24OrderId: orderId,
@@ -202,8 +243,60 @@ export async function onPaymentEvent(body: IpnParams): Promise<void> {
       // back to a unique buyer-email match — a DIFFERENT Member. Clearing
       // their lock lets their next consumption fire a second card charge.
       releaseReloadLock: origin === "auto" && reason === "identity",
+      // WHICH lock this credit may clear. Without it a late IPN clears whatever
+      // lock it finds — including a successor's, after its own went stale and
+      // was taken over — and the next spend fires a third charge. Read outside
+      // the credit's transaction, which is fine: a mismatch fails closed by
+      // leaving the lock in place, and the 6h stale timeout is the backstop.
+      releaseLockedAt: lockedAtBeforeCredit,
       linkPurchaseId: purchaseId ?? undefined,
     });
+
+    // --- 3b. The buyer asked for auto top-up while buying (story 5.3) --------
+    // Armed HERE and nowhere earlier, because this is the first moment the
+    // mandate exists: `purchase_id` comes into being when Digistore24 confirms
+    // the payment, so at checkout time there was nothing to charge against.
+    //
+    // Three conditions, and each one is load-bearing:
+    //
+    //  • `armAutoReload` — they ticked the box. A purchase made before this
+    //    shipped, or an anonymous one claimed later, carries no `r:` pair and
+    //    must never be armed: nobody offered those buyers the choice.
+    //  • `reason === "identity"` — the SAME guard the lock release above uses,
+    //    for the same reason. When the identity does not resolve (token
+    //    rotated, member deleted) the purchase falls back to a unique
+    //    buyer-email match, which may be a DIFFERENT Member. Arming them would
+    //    point an unattended card charge at somebody who never asked for one.
+    //  • `purchaseId` — there is no mandate without it, and `setAutoReload`
+    //    would otherwise store null and answer "not-configured" for ever.
+    //
+    // Not fatal on failure: the credit already happened and the money is the
+    // customer's. Throwing here would make Digistore24 retry an event whose
+    // financial half is complete, and the retry would credit nothing (the
+    // ledger is idempotent) while still failing on this line.
+    if (
+      shouldArmAutoReload({
+        armAutoReload: parsed?.kind === "identity" && parsed.armAutoReload,
+        reason,
+        purchaseId,
+        isTokenPackage: Boolean(packageKey),
+        // Only on the delivery that actually booked. A redelivery must not
+        // re-arm what the Member has since turned off.
+        creditWasBooked: credit.credited,
+      })
+    ) {
+      try {
+        await setAutoReload({
+          memberId: memberId!,
+          enabled: true,
+          threshold: defaultReloadThreshold(pkg!.credits),
+          packageKey: pkg!.key,
+          ds24PurchaseId: purchaseId!,
+        });
+      } catch (err) {
+        console.error("[ipn] could not arm auto top-up:", err);
+      }
+    }
   } else if (status === "paid" && orderId && (packageKey || parsed?.kind === "legacyToken")) {
     // Money was taken and NOT credited. Strictly louder than "unattributed":
     // Digistore24 does not redeliver an event it already got a 200 for, so

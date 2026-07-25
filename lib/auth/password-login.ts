@@ -31,8 +31,13 @@ import type { Provider } from "next-auth/providers";
  * The failure mode if an operator does put this app on the open internet
  * without a proxy: the limit becomes forgeable and stops helping. It never
  * becomes a way IN — no decision here grants anything, it only withholds.
+ *
+ * Exported so the sign-in dialog's step-1 lookup (app/login/actions.ts) reads
+ * the header through THIS function rather than through a second, subtly
+ * different one. It takes `unknown` because its two callers hand it different
+ * things — an Auth.js request here, a `Headers` object there.
  */
-function originOf(request: unknown): string | null {
+export function originOf(request: unknown): string | null {
   const headers = (request as { headers?: Headers } | undefined)?.headers;
   if (!headers || typeof headers.get !== "function") return null;
   const forwarded = headers.get("x-forwarded-for");

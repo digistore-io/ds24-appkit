@@ -18,6 +18,33 @@ export function readProducts() {
   return json;
 }
 
+/**
+ * Products whose kind the configured `billingMode` switched off — the check
+ * `lib/billing-mode.test.ts` makes, repeated at the moment it actually costs
+ * money.
+ *
+ * The test only runs on `node run.mjs test`; THIS runs on the command that
+ * publishes. Creating a token package for an app whose mode is
+ * "subscriptions" puts a product on sale at Digistore24 that the app renders
+ * nothing for — the buyer pays and is credited nothing. So the sync refuses
+ * instead of asking.
+ *
+ * A duplicate of the logic in lib/billing-mode.ts on purpose: the scripts are
+ * plain `.mjs` and do not import the app's TypeScript. Change one, change the
+ * other — the same twin rule `_public-url.mjs` carries.
+ */
+export function contradictingProducts(json) {
+  const mode = json.billingMode;
+  // Unknown or missing behaves like "both" — the app's fallback, and the
+  // harmless direction: a typo must not block a sync.
+  if (mode !== "subscriptions" && mode !== "tokens") return [];
+  return Object.entries(json.products)
+    .filter(([, p]) =>
+      p.kind === "token" ? mode === "subscriptions" : mode === "tokens",
+    )
+    .map(([key]) => key);
+}
+
 /** Writes the config back, formatted (2 spaces, trailing newline). */
 export function writeProducts(json) {
   writeFileSync(CONFIG_PATH, JSON.stringify(json, null, 2) + "\n");

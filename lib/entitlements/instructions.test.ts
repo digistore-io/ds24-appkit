@@ -339,3 +339,65 @@ describe("INSTRUCTION_FILES", () => {
     }
   });
 });
+
+// ── The token-debit API (epic 5) ───────────────────────────────────────────
+//
+// Same rule as above, applied to the second API this layer teaches. `hasPlan`
+// answers "may they"; `spendTokens` answers "can they afford this one". A
+// balance is not an entitlement, so neither substitutes for the other, and an
+// agent that finds only the first meters usage by hand.
+//
+// POSITIVE by design: without this, deleting the sections added in story 5.1
+// fails nothing, and AD-9 makes them part of the contract.
+const SPEND_API = /\bspendTokens\s*\(/;
+
+/** Files that must keep naming the debit API. */
+const MUST_TEACH_THE_SPEND_API = [
+  "CLAUDE.md",
+  join(".claude", "skills", "build-app", "SKILL.md"),
+  join(".claude", "skills", "billing-modes", "SKILL.md"),
+  join("docs", "digistore-billing-modes.md"),
+  join("docs", "entitlements.md"),
+];
+
+/**
+ * The ordering rule. Work-before-check is the mistake that costs money.
+ *
+ * The NAME, not a call: the docs name it in prose ("gate on
+ * `hasSufficientBalance` before starting") as well as in code, and both are
+ * legitimate ways to teach it. What must not happen is a file that shows
+ * `spendTokens` and never mentions the check at all.
+ */
+const CHECK_BEFORE_WORK = /hasSufficientBalance/;
+
+describe("the instruction layer teaches the token debit", () => {
+  for (const relPath of MUST_TEACH_THE_SPEND_API) {
+    it(`${relPath}: names spendTokens`, () => {
+      expect(
+        SPEND_API.test(read(relPath)),
+        `${relPath} no longer names spendTokens(). An agent metering usage will\n` +
+          `then reach for consumeTokens({ memberId }) — which takes an id, and an\n` +
+          `id out of a FormData drains another customer's balance — or write\n` +
+          `balance arithmetic by hand.`,
+      ).toBe(true);
+    });
+
+    it(`${relPath}: shows the balance check that must come first`, () => {
+      expect(
+        CHECK_BEFORE_WORK.test(read(relPath)),
+        `${relPath} teaches spendTokens() without hasSufficientBalance(). Order\n` +
+          `is check -> work -> charge: doing the work with no check in front hands\n` +
+          `the result to somebody who cannot pay, because by the time spendTokens\n` +
+          `throws the expensive part has already run.`,
+      ).toBe(true);
+    });
+  }
+
+  // Deliberately NOT asserted here: "no file shows a hand-written balance
+  // decrement". Every regex for it also matches `const balance = …` and, worse,
+  // matches build-app's own sentence FORBIDDING `balance = balance - n` — so
+  // the test would fail on the instruction that states the rule, and the way to
+  // make it pass would be to delete that instruction. The positive assertions
+  // above cover the same ground the right way round: name the API that replaces
+  // it, in every file that has cause to.
+});

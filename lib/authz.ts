@@ -12,6 +12,7 @@
 // loads auth() at runtime (dynamic import); `redirect` stays static —
 // next/navigation is lightweight and gives us the `never` type narrowing.
 import { redirect } from "next/navigation";
+import type { Session } from "next-auth";
 
 // Role definitions and predicates live in lib/roles.ts (free of server
 // dependencies, so client components can import them too) and are passed
@@ -28,6 +29,42 @@ import { isOwner } from "./roles";
  */
 export const ACCESS_DENIED = "AccessDenied";
 
+/** Who is asking — and if nobody, why not. */
+export type ActiveUser =
+  | { state: "active"; session: Session }
+  | { state: "anonymous" }
+  | { state: "blocked" };
+
+/**
+ * The same two checks `requireActiveUser()` makes, WITHOUT the redirect.
+ *
+ * For route handlers. A `redirect()` inside one produces a redirect response to
+ * an HTML page, which is a nonsensical answer to `fetch("/api/…")` — the
+ * browser follows it, the caller parses the sign-in page as JSON and reports a
+ * syntax error instead of "you are signed out". A route handler answers 401 and
+ * says so.
+ *
+ * Route handlers need this at all because **`proxy.ts` does not guard them**:
+ * its matcher covers `/dashboard/:path*` and nothing else, so everything under
+ * `app/api/` is public until it protects itself. See CLAUDE.md, "Sign-in is not
+ * optional for app pages — but it is not automatic either".
+ *
+ * The distinction between anonymous and blocked is kept because the page path
+ * needs it (two different messages). A route handler is free to answer both
+ * with 401, and should — a signed-out caller has no business learning which of
+ * the two they are.
+ */
+export async function currentActiveUser(): Promise<ActiveUser> {
+  const { auth } = await import("@/auth");
+  const session = await auth();
+  if (!session?.user) return { state: "anonymous" };
+
+  const { isUserBlocked } = await import("@/lib/users/blocked");
+  if (await isUserBlocked(session.user.id as string)) return { state: "blocked" };
+
+  return { state: "active", session };
+}
+
 /**
  * Guard for EVERY signed-in page.
  * - not signed in → redirect to /login
@@ -40,16 +77,11 @@ export const ACCESS_DENIED = "AccessDenied";
  * why this is necessary.
  */
 export async function requireActiveUser() {
-  const { auth } = await import("@/auth");
-  const session = await auth();
-  if (!session?.user) redirect("/login");
+  const current = await currentActiveUser();
+  if (current.state === "anonymous") redirect("/login");
+  if (current.state === "blocked") redirect(`/login?error=${ACCESS_DENIED}`);
 
-  const { isUserBlocked } = await import("@/lib/users/blocked");
-  if (await isUserBlocked(session.user.id as string)) {
-    redirect(`/login?error=${ACCESS_DENIED}`);
-  }
-
-  return session;
+  return current.session;
 }
 
 /**

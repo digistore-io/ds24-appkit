@@ -216,6 +216,12 @@ export const tokenLedger = pgTable(
     uniqueIndex("token_ledger_topup_order_global")
       .on(t.ds24OrderId)
       .where(sql`${t.ds24OrderId} is not null and ${t.type} = 'topup'`),
-    index("token_ledger_account").on(t.accountId),
+    // The read path is always "this account, newest first" — the Tokens tab
+    // (`listLedgerFor`) and the Operator's member page both order by
+    // `createdAt DESC` and take a page. With `accountId` alone Postgres finds
+    // the account's rows and then sorts them; carrying `createdAt` means it
+    // reads them already in order and stops at the page size. Journals are the
+    // one kind of table where that difference grows for ever.
+    index("token_ledger_account_created").on(t.accountId, t.createdAt),
   ],
 );

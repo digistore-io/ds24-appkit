@@ -13,6 +13,10 @@ import { readEnvValue, setEnvValue } from "../lib/env-write.mjs";
 
 export const DEV_DIR = ".dev";
 export const PORT_FILE = `${DEV_DIR}/port`;
+// The dev server's combined stdout+stderr. Lives here rather than in app.mjs
+// because log-errors.mjs and smoke.mjs need the path too, and app.mjs pulls in
+// the database drivers — too much to import just for a filename.
+export const LOG_FILE = `${DEV_DIR}/dev.log`;
 
 /** The port remembered by an earlier start, or null. */
 export function rememberedPort() {

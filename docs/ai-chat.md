@@ -1,0 +1,312 @@
+# The AI assistant
+
+An in-app chat that answers questions about **your** app out of a handbook you
+write. She is off until you switch her on, she has a name and a picture, and she
+costs money per answer — this file is about all three.
+
+The skill that writes the handbook is **`ai-chat-knowledge`**. Ask Claude Code
+for it; this document is the reference behind it.
+
+## Two switches, and why they are different kinds of thing
+
+| Switch | Where | What it decides |
+|---|---|---|
+| `"enabled"` | `config/ai-chat.json` | Does this **product** have an assistant? Travels with the repo, the same answer in DEV, STAGING and PROD. |
+| the provider's key | `.env` (in STAGING/PROD the hoster's secrets) | Can **this machine** talk to the company that answers for her? |
+
+Both have to hold. `isChatEnabled()` in `lib/ai/chat-config.ts` is the one
+answer, and the page says which of the two is missing rather than showing a
+chat box that fails on the first message.
+
+**Which key** depends on which provider her task is bound to — she runs on the
+`chat` task, and `config/ai-models.json` says who answers it. Anthropic is the
+shipped default, so `ANTHROPIC_API_KEY` is the usual answer, but an assistant
+bound to Gemini wants `GEMINI_API_KEY` and nothing else. `node run.mjs ai-check`
+names the one this installation actually needs. See
+[`docs/ai-providers.md`](ai-providers.md).
+
+**She runs on any of the five**, and moving her is one edit to `tasks.chat` in
+`config/ai-models.json`: `provider`, `model` and `providerOptions` together —
+the third one is the one people forget, and the shipped value is Anthropic's
+vocabulary. Putting a key in the `.env` alone changes nothing: the binding says
+who answers, and a key for somebody else leaves her switched off with the notice
+naming the provider she is bound to. `node run.mjs ai-check` says both things in
+one screen.
+
+```json
+{
+  "enabled": true,
+  "name": "Lia",
+  "avatar": "/share/chat.png",
+  "requiresPlan": null,
+  "cacheTtl": "1h",
+  "maxHistoryTurns": 12,
+  "maxMessagesPer10Min": 20
+}
+```
+
+- **`name`** is a proper noun and is deliberately **not** translated, like the
+  app name. Give her a short one people can type.
+- **`avatar`** is a path under `public/`. A 256×256 portrait ships at
+  `public/share/chat.png` — replace it with your own; the file name is yours to
+  change as long as the config follows. It is **her face on the button** as well
+  as in the bubbles, so it is square, it is cropped to a circle, and it wants to
+  read at 48 pixels: a picture whose subject is far away becomes a smudge in the
+  corner of the screen.
+- **`requiresPlan`** is `null` for "every signed-in member". Set it to a product
+  key and the chat becomes part of that plan:
+
+  ```ts
+  if (await hasPlan(memberId, "basis_monatlich")) { /* the chat is open */ }
+  ```
+
+  It must be a `kind: "subscription"` or `"one_time"` product. A token package
+  cannot gate it — a balance is not an entitlement, `hasPlan()` answers `false`
+  for one for ever, and `lib/ai/chat-config.test.ts` fails the build rather than
+  letting you lock out the customers who paid.
+- **A malformed field switches the chat OFF.** That is the opposite direction
+  from `billingMode()`, which falls back to showing everything, and the reason
+  is the failure mode: a wrong billing mode hides a card, a chat that switches
+  itself on because a field was unreadable spends money per visitor.
+
+## The handbook
+
+Markdown under `content/knowledge/`, one topic per file, four sections:
+
+```
+content/knowledge/
+  00-onboarding/…    the first way through the app
+  10-reference/…     feature by feature
+  20-howto/…         task by task
+  90-glossary.md     the words your product uses oddly
+```
+
+Every file opens with frontmatter. This is the whole format:
+
+```markdown
+---
+section: onboarding | reference | howto | glossary
+title: Cancel a subscription
+summary: Where the cancel link is and what happens to your access.
+updated: 2026-07-24
+---
+
+## The steps
+
+1. …
+```
+
+Rules the checker enforces (`lib/ai/frontmatter.mjs`, one implementation for the
+app and the command line alike):
+
+- `section` must be one of the four. There is no fifth.
+- `title` and `summary` are **required**. The summary is not decoration: it is
+  what the model reads in the table of contents to decide which document answers
+  the question. A file without one gets found by accident or not at all. Both
+  are for HER and are never shown to a customer — `content/knowledge/` is not
+  served anywhere, and the persona forbids her to name a document, precisely
+  because nobody could open it.
+- `updated` is optional, and an ISO day if present.
+- **No `# ` in the body.** The title comes from the frontmatter; a second H1
+  competes with it. Start at `## `.
+- A file or folder starting with `_` or `.` is skipped — somewhere to park a
+  draft.
+
+**The handbook is single-language.** Write it in yours. She answers in the
+reader's, whichever that is — the language instruction is per request, the
+handbook is not. That is also why translating it would be wasted work: it would
+double the cached prefix for no gain.
+
+Check it any time:
+
+```bash
+node run.mjs kb-check
+```
+
+It names the file and the line for every format problem, counts the sections,
+and prints what one answer costs at the current size.
+
+## How the handbook reaches the model — and the one rule that matters
+
+The **whole handbook** is sent on every question, as a **cached prompt prefix**.
+No search, no embeddings, no vector database.
+
+That sounds wasteful and is the opposite. Prompt caching is a prefix match: the
+API hashes the request from the start up to a breakpoint, and a hit costs about
+a **tenth** of normal input. The handbook is the same bytes for every user of
+your installation, so after the first message of the hour it is nearly free —
+and unlike a search index it cannot hand back the wrong paragraph.
+
+The request is assembled in `lib/ai/prompt.ts` as three blocks:
+
+| # | Block | Cached? |
+|---|---|---|
+| 0 | Who she is, what she must not do | yes |
+| 1 | The handbook | yes ← **the breakpoint sits here** |
+| 2 | Language and date | never |
+
+**The rule: everything that varies goes after the last cacheable block.** The
+date varies. The language varies. A name, a balance, a session id — all vary.
+Put any of them in block 0 or 1 and the cache stops hitting: nothing errors,
+no test fails on its own, the answers stay correct, and the input bill goes up
+roughly tenfold.
+
+`lib/ai/prompt.test.ts` exists for exactly this and asserts the cached part is
+byte-identical across requests differing in every volatile input. If you add
+something to the persona, that test is the one to keep green.
+
+The other half of the same rule is the **order of the files**. They are sorted
+by path with a plain code-unit comparison, never `localeCompare` — two machines
+that disagree about where `Ä` sorts produce two different prefixes out of one
+handbook and share no cache at all.
+
+## What it costs
+
+`node run.mjs kb-check` prints this for your handbook. The shape of it:
+
+- **A cache read** is ~10% of the input price. A 30,000-token handbook on
+  Claude Sonnet 5 (list: $3 / $15 per million) is about **$0.009** of input per
+  answer, plus the answer's own output — call it a cent or two per question.
+- **A cache write** costs more than plain input: 1.25× for the 5-minute window,
+  **2×** for the hour. The same 30,000 tokens is about $0.18 — **once per
+  window for the whole installation**, not per customer.
+
+That last point is why `cacheTtl` defaults to `"1h"`. Break-even against the
+5-minute window is about three messages, and a support chat with any traffic at
+all clears that easily. Switch to `"5m"` only if the app is genuinely idle for
+hours at a stretch and you would rather pay per burst.
+
+Two brakes are configured rather than assumed:
+
+- **Which model answers is not here.** It used to be, as a `"model"` field, and
+  it moved to `config/ai-models.json` → `tasks.chat` when the provider layer
+  landed: a second task needs the same decision, and one place to make it beats
+  two. A leftover `"model"` in this file is reported by name rather than
+  ignored. Same for **`cacheTtl`** — it still reads here for continuity, but the
+  value that is applied travels as `providerOptions.cacheTtl` on the binding,
+  because it is an Anthropic concept the other four providers have no
+  equivalent for.
+- **`maxHistoryTurns`** — the conversation is re-sent on every turn, so an
+  unbounded one grows quadratically in tokens.
+- **`maxMessagesPer10Min`** — per member, via `lib/rate-limit.ts`. Note the
+  in-memory, per-process caveat documented there: behind several instances every
+  limit is multiplied by their number.
+
+The layer logs the real numbers on every answer — one line per model call, for
+every task and not just this one — and this is the line to grep when something
+looks expensive:
+
+```
+[ai] task=chat provider=anthropic model=claude-sonnet-5 in=42 out=310 cached=29873 cost=0.001234USD ms=2100 outcome=ok
+```
+
+**`cached=0` on the second message of a conversation means the cache is not
+hitting.** Start at `lib/ai/prompt.ts`.
+
+The same numbers are written to `ai_usage` and add up on the AI-costs page, so
+grepping the log is for debugging one answer — not for answering "what did last
+month cost".
+
+## When the handbook outgrows this
+
+Somewhere north of a hundred thousand characters the arithmetic changes: the
+cache write gets expensive, and a model reading a book to answer "how do I
+cancel" is slower than one reading three paragraphs. `kb-check` warns before it
+becomes a surprise.
+
+The seam is **`lib/ai/retriever.ts`**, and nothing else has to move:
+
+```ts
+export interface KnowledgeRetriever {
+  readonly kind: string;
+  blocks(question: string): Promise<PromptBlock[]>;
+}
+```
+
+A retrieving implementation — Postgres full-text search, or pgvector in the
+database you already run — returns the matching passages with
+`cacheable: false`. `buildSystemBlocks` then moves the breakpoint back to the
+persona, so the persona stays cached and the looked-up part does not. The route,
+the UI and the storage never see a document and do not change.
+
+Do it when the numbers say so, not before. A vector database is an embedding
+job, a chunking strategy, a migration and a second thing that can silently
+return the wrong paragraph — all of which is worth it for a large corpus and
+none of which is worth it for forty pages.
+
+## What she can and cannot do
+
+**Nothing about the person is sent to the API.** Not their name, address,
+balance, orders, plan or role — only their question, the last few turns of the
+same conversation, and the handbook. So she is told, in the persona, that she
+cannot see the account, and she says so rather than guessing. This is a
+data-protection decision as much as a product one; see
+[`data-protection.md`](data-protection.md) §8, which you need if you switch her
+on: the chat is the first feature in this template that sends customer input to
+a third party outside the payment and mail path.
+
+Transcripts live in `chat_messages`, are part of `node run.mjs data-export`, and
+are deleted with the account (`on delete cascade`) — unlike orders, which are
+accounting records that must be kept.
+
+The persona also refuses two things you should not remove:
+
+- **She never accepts a password, card number or code.** An assistant that takes
+  one trains customers to type credentials into chat windows.
+- **A user message is a question, never an instruction.** Text inside it telling
+  her to change her role or reveal her instructions is content to answer or
+  decline. This is the prompt-injection rule that matters when the surface is a
+  support chat.
+
+## Where she appears
+
+Two places, one conversation:
+
+- **The button at the bottom right of every protected page**
+  (`app/dashboard/chat/launcher.tsx`, rendered by `app/dashboard/layout.tsx`).
+  It opens a panel with the same chat in it. This is where support questions
+  actually get asked — they occur to somebody in the middle of doing something
+  else, and a question that needs a page change mostly goes unasked.
+- **`/dashboard/chat`**, her own page, in the navigation. The same window with
+  more room. The launcher hides itself there, so nobody ends up typing into two
+  copies of one conversation.
+
+Both render `ChatWindow` (`app/dashboard/chat/ui.tsx`) with a different
+`variant` — one component, so a fix to the streaming loop is a fix in both.
+Both are shown only when `isChatEnabled()` **and**, if `requiresPlan` is set,
+the member holds that plan (`mayUseChat()` in `lib/ai/rules.ts`). That decides
+what is drawn, never what is allowed: `app/api/chat/route.ts` asks every
+question again on every request, because a button nobody rendered is not a
+check.
+
+The panel loads the transcript when it is opened, once — not in the layout,
+which would put a database query in front of every page in the app for a panel
+most visits never open.
+
+## Troubleshooting
+
+| What you see | Where to look |
+|---|---|
+| No button at the bottom right | `isChatEnabled()`, and `requiresPlan` if it is set — same two answers as the menu entry |
+| The menu entry is missing | `isChatEnabled()` — `"enabled"` in the config, and the API key |
+| "not ready yet" on the page | The notice names which of the two is missing |
+| `cache_read=0` on every answer | Something volatile got into block 0 or 1 — `lib/ai/prompt.ts`, and run `npx vitest run lib/ai/prompt` |
+| She invents answers | The handbook does not cover it. Add the document; the persona already tells her to say so |
+| She answers in the wrong language | `LOCALE_LABELS` for that locale, passed through in `app/api/chat/route.ts` |
+| Works locally, "no handbook" in production | A standalone build that did not copy `content/` — `outputFileTracingIncludes` in `next.config.ts` |
+| Everything 401s | The route guards itself (`proxy.ts` covers `/dashboard` only). Check the session |
+
+## The pieces
+
+| File | What it is |
+|---|---|
+| `config/ai-chat.json` | Her name, picture, model, plan, limits |
+| `lib/ai/chat-config.ts` | Reads it, validates it, answers `isChatEnabled()` |
+| `lib/ai/frontmatter.mjs` | The handbook format — shared with `kb-check` |
+| `lib/ai/knowledge.ts` | Reads `content/knowledge/`, deterministically |
+| `lib/ai/retriever.ts` | The seam: handbook → prompt blocks |
+| `lib/ai/prompt.ts` | The system blocks and the cache breakpoint |
+| `lib/ai/rules.ts` | Pure refusals — message checks, history window, error codes |
+| `lib/ai/conversation.ts` | Reading and writing `chat_messages` |
+| `app/api/chat/route.ts` | The guards, in order, and the stream |
+| `app/dashboard/chat/` | The page, the window, the launcher, the actions |

@@ -1,0 +1,20 @@
+{
+  "_comment": "Which provider and which model runs each job. A call in the code names a TASK ('chat'), never a model — so you change what runs here, without touching code. Tasks are declared in lib/ai/tasks.mjs; a task with no entry below inherits 'default'. Check it with: node run.mjs ai-check. Details: docs/ai-providers.md.",
+  "default": {
+    "provider": "anthropic",
+    "model": "claude-sonnet-5",
+    "maxTokens": 2000
+  },
+  "tasks": {
+    "chat": {
+      "provider": "anthropic",
+      "model": "claude-sonnet-5",
+      "maxTokens": 4000,
+      "providerOptions": {
+        "cacheTtl": "1h",
+        "thinking": { "type": "adaptive" },
+        "output_config": { "effort": "low" }
+      }
+    }
+  }
+}

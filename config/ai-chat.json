@@ -1,0 +1,8 @@
+{
+  "enabled": true,
+  "name": "Lia",
+  "avatar": "/share/chat.png",
+  "requiresPlan": null,
+  "maxHistoryTurns": 12,
+  "maxMessagesPer10Min": 20
+}

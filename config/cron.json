@@ -1,0 +1,15 @@
+{
+  "enabled": true,
+  "jobs": {
+    "prune-ai-usage": {
+      "enabled": true,
+      "everyMinutes": 1440,
+      "retentionMonths": 12
+    },
+    "prune-ipn-log": {
+      "enabled": true,
+      "everyMinutes": 1440,
+      "retentionDays": 60
+    }
+  }
+}

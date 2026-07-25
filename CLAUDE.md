@@ -64,13 +64,29 @@ a product idea already exists (otherwise it hands over to `market-research`).
 In short: when in doubt, `build-app`. The user doesn't have to know any skill name —
 "Build my app" is enough, and even less than that will do.
 
+**One thing comes before all of that: does the machine work?** The greeting at
+the session start ends with a line `[Setup: ok]` or `[Setup: blocked — …]`. On
+`blocked`, run the skill **`setup-machine`** first — it installs what is missing
+and prepares the project. Building on a machine that cannot start the app
+produces a confident report and a page that never loads. The same applies when a
+command fails with "docker: not found", "npm not found" or "the database does
+not answer": that is a setup problem, not a bug in the app.
+
 There are guided skills in `.claude/skills/` — use them in this order:
+- **`setup-machine`** — before everything: install what is missing (Node, git)
+  and prepare the project (`.env`, dependencies, database, migrations).
 - **`market-research`** — when there is no clear idea yet: interview + research
   → target audience, challenges and a concrete product proposal (product brief).
 - **`build-app`** — entry point: choose an archetype, create the data model + pages.
 - **`setup-digistore`** — set up billing (API key, IPN, checkout).
 - **`billing-modes`** — *(optional)* set up subscriptions (monthly/yearly) and/or prepaid
   tokens with auto top-up + subscription self-service (cancel/payment details/invoices).
+- **`ai-chat-knowledge`** — *(optional)* switch the in-app assistant on and write
+  the handbook she answers from (`content/knowledge/`).
+- **`ai-providers`** — *(optional)* choose which AI company the app pays, get the
+  key in, bind each task to a model and set the prices the cost page reports.
+- **`mcp-server`** — *(optional)* let customers connect Claude to the app: decide
+  which capabilities become tools, then switch the MCP interface on.
 - **`security-gateway`** — before the launch: scan for security holes and fix them.
 - **`performance-gateway`** — make sure ~100 parallel users run smoothly.
 - **`compliance-check`** — legal pages (imprint/privacy/terms/withdrawal) & GDPR.
@@ -82,8 +98,11 @@ There are guided skills in `.claude/skills/` — use them in this order:
 The complete path (as simple as possible for the user, every step hands over to the
 next one):
 
+**(Setup) Machine** `setup-machine` *(only when something is missing)* →
 **(0) Idea** `market-research` → **(1) Build** `build-app` → **(2) Payment**
-`setup-digistore` *(→ optional `billing-modes` for subscriptions/prepaid tokens)* →
+`setup-digistore` *(→ optional `billing-modes` for subscriptions/prepaid tokens,
+optional `ai-chat-knowledge` for the in-app assistant, optional `ai-providers`
+to choose the AI company, optional `mcp-server` for the AI interface)* →
 **(3) Security** `security-gateway` → **(4) Scaling** `performance-gateway` →
 **(5) Legal** `compliance-check` → **(6) Live** `go-live` → **(7) Marketing**
 `go-to-market`. Alongside all of it: `guardrails`.
@@ -96,8 +115,9 @@ next one):
   true for every other path. **Any new route outside `/dashboard` is public
   until you add it to the matcher.**
   Public by design: the home page, `/login`, `/plans`, `/optin/*`,
-  `/account/confirm-email` and the IPN endpoint `/api/ipn` (secured via the
-  SHA512 signature).
+  `/account/confirm-email`, the IPN endpoint `/api/ipn` (secured via the
+  SHA512 signature) and the MCP endpoint `/api/mcp` (secured by a per-member
+  bearer key — it has no session and cannot have one).
   **`/account/confirm-email` is public deliberately and must stay that way** —
   it is authenticated by its single-use token, and the mail carrying it is read
   on whichever device holds the inbox, which is routinely not the one signed in.
@@ -119,6 +139,12 @@ next one):
   then `node run.mjs db-generate` → `node run.mjs db-migrate`; the file in `drizzle/` is
   checked in and never edited again after it has been applied. `db:push` only against an
   empty local DB, never against staging/production. See `docs/database.md`.
+- **A type on a query is a claim, and raw SQL does not keep it.** Drizzle
+  converts a *column* (`grants.createdAt` arrives as a `Date`); a raw
+  ``sql`…` `` expression is handed on exactly as the driver returned it, so
+  ``sql<Date>`min(created_at)` `` is a string wearing a `Date`'s clothes.
+  `db/sql-cast.test.ts` fails on it. The full trap, including why
+  `new Date(value)` is the wrong way out, is in **Dates and raw SQL** below.
 - **Environments are binding: DEV / STAGING / PROD** (`APP_ENV`). In
   STAGING and PROD, mail delivery is **mandatory** — if it is missing, the app
   does not start (`instrumentation.ts` → `lib/env-guard.ts`). The development
@@ -148,8 +174,10 @@ next one):
   ```
 
   For the short feedback *after* an action ("saved", "deleted")
-  there are toasts instead — see **UI**. Rule of thumb: what has to stay
-  on screen is a `Callout`; what may drift past is a toast.
+  there are toasts instead — see **UI**, where all three feedback mechanisms
+  are laid out side by side. Rule of thumb: what has to stay on screen is a
+  `Callout`; what may drift past is a toast — including across a `redirect()`,
+  which is the case people forget.
 - **Light and dark both count.** The app ships with a toggle
   (system/light/dark, `components/theme-toggle.tsx`); `System` is the
   default. Every new piece of UI has to be readable in both modes — that follows
@@ -160,8 +188,10 @@ next one):
   before anything moves on. They run **locally** — `node run.mjs test` does both
   in one go. Nothing runs them for you after a push, so a red test that gets
   committed stays red until somebody looks.
-- **Call up the app yourself before you say "done".** See below — green
-  tests are no proof that the page loads.
+- **Call up the app yourself before you say "done", then ask the log.** See
+  below — green tests are no proof that the page loads, and a page that loads is
+  no proof that it rendered. `node run.mjs errors` is the second half of that
+  sentence.
 - **Linux, macOS and Windows all count.** This app is built with Claude Code,
   and Claude Code runs on all three — so every command in `run.mjs` and every
   script under `scripts/` has to work on all three. Not "mostly": a developer on
@@ -194,10 +224,32 @@ different again two pages later.
 
 **The four rules that count:**
 
-1. **Every action reports back.** Server Actions return
-   `{ error, ok }`; the page calls `useActionToast(state)`
-   (`hooks/use-action-toast.ts`) and gets success in green, errors in red. An
-   action without feedback feels like an error to the user.
+1. **Every action reports back — a `redirect()` is not an excuse.** An action
+   without feedback feels like an error to the user, and the place feedback
+   silently goes missing is the page boundary: the code that knows something
+   succeeded ends by sending the person somewhere else, and the page they land
+   on says nothing. There are **three** mechanisms, and between them they cover
+   every case — pick by *where the result has to appear*, never invent a fourth:
+
+   | The result… | Use | Where |
+   |---|---|---|
+   | has to **stay** on screen (a state, a warning, a prerequisite) | `<Callout variant=…>` | `components/ui/callout.tsx` |
+   | comes from a **server action on the same page** | `useActionToast(state)` | `hooks/use-action-toast.ts` |
+   | belongs to something that ended in a **`redirect()`** | `<FlashToast>` | `components/flash-toast.tsx` |
+
+   Server Actions return `{ error, ok }`; the page calls `useActionToast(state)`
+   and gets success in green, errors in red.
+
+   `<FlashToast>` fires once and then strips its query parameter, so a reload
+   does not repeat the message. **The message never travels in the URL** — the
+   parameter carries a *reference* (an id), and the receiving page looks it up
+   and decides what to say, scoped to whoever is signed in. A URL carrying the
+   sentence itself is a URL anybody can hand somebody else to make your app say
+   whatever they typed. The worked example is the purchase:
+   `app/optin/[orderId]/page.tsx` redirects to `/dashboard?purchase=<id>`, and
+   `app/dashboard/page.tsx` resolves it through
+   `purchaseNoticeFor(memberId, id)` before naming the plan that was unlocked or
+   the tokens that were credited.
 2. **Everything destructive asks first.** Deleting, cancelling, resetting run
    through `<AlertDialog>` and name *what* gets hit while doing so
    ("delete customer@example.com?"). The confirm button is red
@@ -298,6 +350,7 @@ The routine once you have built or changed a page:
 ```bash
 node run.mjs start                # DB + migrations + app
 node run.mjs smoke                # calls EVERY page and reports server errors
+node run.mjs errors               # what the log picked up — including on a 200
 ```
 
 `node run.mjs smoke` (`scripts/dev/smoke.mjs`) finds the pages by itself under `app/`
@@ -311,11 +364,30 @@ and rates them like this:
 On an error the cause is in the log: `node run.mjs logs`. That's where the real
 stack trace is; the page in the browser often shows only the meaningless sentence.
 
-Two things `node run.mjs smoke` cannot do:
+**A 200 is not proof that the page rendered.** This is the trap behind the
+routine, and it is worth a paragraph of its own. When `format.dateTime()` gets
+something that is not a date, `Intl` throws — but next-intl **catches** it,
+writes the error to stderr and renders `String(value)` in its place. The request
+answers **200**. The table cell reads `2026-07-25 11:29:17.552095`. The status
+code is clean, the build is clean, `vitest` is clean, `smoke` is clean, and the
+page is visibly broken. The same goes for a missing translation, a hydration
+mismatch, and a promise that rejected with nobody awaiting it.
+
+That is what `node run.mjs errors` is for: it reads `.dev/dev.log`, groups what
+it finds by cause, names the file and line, and tells you where the fix belongs.
+It exits non-zero when it finds something, so it can gate a "done". `smoke` runs
+it around its own sweep; after clicking through the app yourself, run it by hand.
+
+Three things `node run.mjs smoke` cannot do:
 
 - **Dynamic pages** (`app/…/[id]/page.tsx`) are skipped — without a real ID
   the request is pointless. You call such pages up by hand once with a
   real record.
+- **It is not signed in.** Every page under `/dashboard` answers it with a 307 to
+  `/login`, which is the correct answer and tells you nothing about the page. So
+  the Operator and Member pages — the ones with the real queries in them — are
+  only ever exercised when *you* open them. Do that, then run
+  `node run.mjs errors`; the log does not care who made the request.
 - **A green smoke test means "loads", not "is correct".** Whether the content is
   right is something it does not tell you. For everything to do with money, roles
   and customer data, a look at the page itself is part of the job.
@@ -335,8 +407,58 @@ Two things `node run.mjs smoke` cannot do:
    `i18n/messages.test.ts` fails. See **Languages**.
 5. **Write tests** (`vitest`) for the new logic/rules.
 6. `npm run typecheck && npm run test` (green) before the deploy.
-7. **`node run.mjs start && node run.mjs smoke`** — call the new page up yourself. Only then
-   is it done (see "Never ship a broken page").
+7. **`node run.mjs start && node run.mjs smoke && node run.mjs errors`** — call the
+   new page up yourself, signed in, and then ask the log. Only then is it done
+   (see "Never ship a broken page").
+
+### Dates and raw SQL
+
+The single sharpest trap in this project, because every part of it looks right.
+
+**Drizzle converts a column. It does not convert raw SQL.** A column reference
+runs through the column's own mapper; a ``sql`…` `` expression has no mapper at
+all (`noopDecoder`), so the driver's value is passed straight through and the
+type parameter is only a note to the compiler. Measured against this database:
+
+```ts
+db.select({
+  raw: grants.createdAt,                       // → Date                    ✅
+  agg: sql<Date>`min(${grants.createdAt})`,     // → "2026-07-25 11:29:17.5" ❌ a string
+})
+```
+
+Then the string reaches a table cell, `Intl` throws `Invalid time value`,
+next-intl catches it and renders the raw string — **200, no test red, page
+broken**. `db/sql-cast.test.ts` fails on `sql<…Date…>` so it cannot be committed;
+a line that genuinely has to say it is exempted with `sql-cast-ok`.
+
+**Do not "fix" it with `new Date(value)`.** Postgres hands over
+`2026-07-25 11:29:17.552095` with no zone marker, so V8 reads it in the *host's*
+zone and the timestamp silently moves by the host's offset — the very bug
+`db/index.ts` exists to prevent. Instead, one of:
+
+```ts
+sql`min(${grants.createdAt})`.mapWith(grants.createdAt)   // borrow the column's mapper
+sql<string>`to_char(min(${grants.createdAt}), 'YYYY-MM-DD"T"HH24:MI:SS"Z"')`
+// or: select the column and do the min() in JS
+```
+
+Two more ways a `Date` stops being one, both of which keep their type:
+
+- **Through JSON.** `Response.json({ rows })` turns every `Date` into an ISO
+  string while the TypeScript type still says `Date`. Anything fetched from
+  `app/api/…` needs converting back on arrival — `lib/mcp/tools.ts` calls
+  `.toISOString()` on purpose, which is the honest version of the same thing.
+- **A nullable column.** `format.dateTime(null)` and `format.dateTime(undefined)`
+  do **not** throw and log **nothing**: they render *1 January 1970* and *today*
+  respectively. No log check can catch those. Every nullable date needs its
+  guard at the call site, the way the rest of the app does it:
+
+  ```tsx
+  {row.accessUntil
+    ? format.dateTime(row.accessUntil, { dateStyle: "medium", timeZone: "UTC" })
+    : tCommon("none")}
+  ```
 
 ## Users & roles
 
@@ -477,8 +599,10 @@ endpoint of its own:
   under **Access**. Because ending is terminal, the remedy for a revocation made
   in error is a *new* manual grant; that is why two identical ones are legal.
 
-`node run.mjs smoke` cannot see this page — it skips `[id]` routes. Open it by hand with
-a real Member id after changing anything there.
+`node run.mjs smoke` cannot see this page — it skips `[id]` routes, and it is not
+signed in either. Open it by hand with a real Member id after changing anything
+there, then `node run.mjs errors`: this page renders dates and grant states, which
+is exactly the material that breaks without changing the status code.
 
 **Blocking** (`users.blockedAt`) takes effect in two places — both are needed, see
 `lib/users/blocked.ts`:
@@ -502,6 +626,22 @@ through the inbox, it works on a machine where their mail is not open, and it is
 theirs to add or remove at any time. Nobody is required to have one, and an
 account without one behaves exactly as it always did.
 
+**`/login` is ONE dialog with two steps** — the address first, then whatever
+that address needs to prove. The branch is a pure function,
+`routeForSignIn()` in `lib/auth/sign-in-route.ts`: a password if the address has
+one, otherwise a mailed link, otherwise (demo mode only) straight in. Two things
+about it are load-bearing:
+
+- **The password is asked for FIRST, before demo mode is considered.** Leading
+  with `if (demoLogin)` reads better and silently makes every password set on a
+  demo machine unusable. Demo mode is a property of the installation; a password
+  is a thing its owner set on themselves.
+- **The dialog answers "does this address have a password?" to anyone who
+  types one.** That is an accepted cost, not an oversight, and it is metered
+  (`LOOKUP_LIMIT` in `lib/credentials/rules.ts`). It never answers whether an
+  *account* exists — an unknown address takes the same branch as a passwordless
+  one, and it has to keep doing so.
+
 The pieces, if you touch this:
 
 | | |
@@ -522,6 +662,11 @@ Three rules that are load-bearing rather than stylistic:
   The Operator's menu entry **send sign-in link** is the same thing from the
   other side — it runs through `signIn()` from Auth.js, so the same token
   mechanism applies as with a normal sign-in.
+  ⚠️ Since `/login` became a two-step dialog, that recovery path hangs on ONE
+  button: **"send me a link instead"**, on step 2 beside the password field
+  (`app/login/ui.tsx`). An address with a password is routed to the password
+  field and nowhere else, so deleting that button as redundant would leave
+  everybody who forgot theirs with no way in at all.
 - **Failed password attempts are rate-limited** (`lib/rate-limit.ts`), and that
   limit is not optional. A magic link is protected by the attacker having to
   read somebody else's mail; a password is protected by nothing but the number
@@ -634,11 +779,291 @@ decides anything. Say "your access is paused", never nothing at all.
 
 Failure modes, the token balance and worked examples: **`docs/entitlements.md`**.
 
+### Charging tokens — `spendTokens`
+
+A balance is **not** an entitlement. `hasPlan()` answers `false` for a token
+package for ever, and that is correct: a plan is a right, a balance is a
+quantity. Metering usage is the other question, and it has one answer:
+
+```ts
+import { getTokenAccount, hasSufficientBalance } from "@/lib/tokens/account";
+import { spendTokens } from "@/lib/tokens/spend";
+import { TokenError } from "@/lib/tokens/rules";
+
+const COST = 5;
+
+// 1. CHECK — before doing anything expensive.
+const account = await getTokenAccount(memberId);
+if (!hasSufficientBalance(account?.balance ?? 0, COST)) {
+  return { error: t("insufficientBalance") };
+}
+
+// 2. WORK
+const report = await buildReport();
+
+// 3. CHARGE
+try {
+  await spendTokens({ amount: COST, note: "report generation" });
+} catch (err) {
+  if (err instanceof TokenError) return { error: t(err.code) };  // AD-10
+  throw err;
+}
+```
+
+**Check → work → charge, in that order.** Charging first bills for work that
+then fails. Doing the work with no check in front gives the result away for
+free, because by the time `spendTokens` throws, the expensive part has already
+run — and that is the mistake that actually gets made. The gap between the check
+and the charge is real but bounded at one operation, and the row lock still
+stops a balance going negative; closing it properly means reserving up front,
+which this template deliberately does not do.
+
+Four more rules, and the first is the one this function exists for:
+
+- **It takes no member id — never give it one.** The account charged is always
+  the session's own (`requireActiveUser()`, which also turns away blocked
+  accounts). `consumeTokens({ memberId, … })` is the primitive underneath and
+  belongs to the IPN and the Operator pages, where naming somebody else is the
+  job. A Server Action is an HTTP endpoint of its own, so `memberId` taken from
+  a `FormData` is an IDOR that drains another customer's balance — and an
+  optional parameter defaulting to the session does not close it, it only makes
+  the bad call compile again. Charging on behalf of somebody else needs its own
+  function, opening with `requireOwner()`, exactly as `adjustTokens` does.
+- **The price is yours, computed in code.** Read `amount` from the request and
+  the customer sets it to 0.
+- **`note` is a label, not content.** It reaches a subject access request
+  (`node run.mjs data-export`, `docs/data-protection.md`). "report generation",
+  never what the Member typed.
+- **It is not idempotent.** Two submissions charge twice — there is no key to
+  deduplicate on. Keep a double-click off with `disabled={isPending}`, and never
+  build a blind retry around it.
+
+A shortfall throws `TokenError("insufficientBalance")` and writes **nothing** —
+no balance change, no ledger row. Concurrency is already handled: `consumeTokens`
+holds a row lock, so racing requests cannot drive a balance below zero.
+
+Spending is never gated on `billingMode` — that switch is cosmetic, and refusing
+to spend would strand customers still holding a paid balance.
+
+## The AI assistant
+
+Optional, off until switched on, and it has its own guide:
+**[`docs/ai-chat.md`](docs/ai-chat.md)**. The skill that writes her handbook is
+`ai-chat-knowledge`. Four things are worth knowing before you touch any of it:
+
+- **Two switches, both required.** `"enabled"` in `config/ai-chat.json` (a
+  property of the PRODUCT) and a key for **whichever provider her task is bound
+  to** (a property of the MACHINE) — Anthropic by default, but she runs on the
+  `chat` task and `config/ai-models.json` decides who answers it. Read them
+  through `isChatEnabled()` in `lib/ai/chat-config.ts`, never by re-reading the
+  JSON, and never by asking about one company by name. A malformed config
+  switches her OFF — the opposite direction from `billingMode()`, because the
+  failure mode here is a bill.
+- **Which model answers is NOT in `config/ai-chat.json`.** That file holds what
+  she IS — her name, her handbook, her history window. Which company and which
+  model is a property of the TASK, because a second task needs the same
+  decision. A leftover `"model"` field there is reported by name rather than
+  ignored.
+- **She sits on every protected page**, as the button at the bottom right
+  (`app/dashboard/chat/launcher.tsx`, rendered by the dashboard layout), and
+  once more as her own page under `/dashboard/chat`. Both use the same
+  `ChatWindow` with a different `variant` — do not build a second chat
+  component for a second place to put her.
+- **She answers only from `content/knowledge/`.** No database, no account data,
+  no web. Nothing about the signed-in person is sent to the API — which is why
+  she is told she cannot see the account, and why `docs/data-protection.md` §8
+  exists. Gate her per plan with `hasPlan(memberId, productKey)` if you want to;
+  `requiresPlan: null` means every signed-in member.
+- **The whole handbook is sent on every question, as a cached prompt prefix.**
+  That is the cheap way round, and it hangs on one rule: *everything that varies
+  goes after the last cacheable block* (`lib/ai/prompt.ts`). Put a date, a name
+  or an id into the persona and nothing breaks — the cache simply stops hitting
+  and the input bill goes up roughly tenfold. `lib/ai/prompt.test.ts` is the
+  guard; keep it green.
+- **`app/api/chat/route.ts` guards itself.** `proxy.ts` matches `/dashboard`
+  only, so everything under `app/api/` is public until it protects itself. It
+  uses `currentActiveUser()` from `lib/authz.ts` — the same two checks as
+  `requireActiveUser()` without the redirect, because a redirect is a nonsensical
+  answer to a `fetch()`.
+
+`node run.mjs kb-check` checks the handbook's format and prints what one answer
+costs.
+
+## Talking to a language model
+
+Every model call in this app goes through **one entry point**, and it names a
+TASK rather than a model:
+
+```ts
+import { runTask, streamTask } from "@/lib/ai/run";
+
+const answer = await runTask("chat", { system, messages, memberId });
+```
+
+Which of five companies answers — OpenAI, Anthropic, Gemini, Mistral,
+OpenRouter — is `config/ai-models.json`, so the Operator changes it without
+touching code. The full guide is **[`docs/ai-providers.md`](docs/ai-providers.md)**
+and the skill that sets it up is `ai-providers`. Six things are worth knowing
+before you write a model call:
+
+- **No call site names a provider, constructs a vendor client or reads an API
+  key.** `lib/ai/providers/` is the only place that does, and
+  `lib/ai/providers/leak-guard.test.ts` fails the build if that stops being
+  true. Reaching for `@anthropic-ai/sdk` directly is the one mistake this whole
+  layer exists to prevent — it silently makes one feature ignore the Operator's
+  choice of provider.
+- **A task is declared in code and bound in configuration.** Add its id to
+  `lib/ai/task-rules.mjs` AND to the union in `lib/ai/tasks.ts`; binding it in
+  `config/ai-models.json` is optional, because a declared task with no entry
+  inherits `default` and works. Adding is cheap; misspelling is a build error.
+- **`system` is a LIST of blocks, and everything stable goes first**, marked
+  `cacheable: true`. This is the same rule `lib/ai/prompt.ts` already
+  documents, now applying to every task: on three of the five providers a stable
+  prefix is worth roughly a tenfold difference in the input bill, and getting it
+  wrong produces no error at all. A prompt with a cacheable block *after* a
+  varying one is refused outright rather than quietly costing money.
+- **Every call is recorded** in `ai_usage` — task, provider, model, tokens,
+  latency, outcome, member — and the provider and model are named even on a call
+  that never reached a provider. **No prompt and no completion is ever stored
+  there**; it is a numbers table, which is what keeps the cost page free of any
+  privacy question (`docs/data-protection.md` §10).
+- **Recording never fails a call.** It happens after the response, through
+  `after()`, and swallows its errors into a log line — the same shape
+  `lib/tokens/spend.ts` uses for the auto top-up.
+- **What it cost is one page: `/dashboard/admin/ai-costs`** ("KI-Kosten",
+  owners only). Spend by task, by model and by day/week/month, always **per
+  currency and never summed across two**. It also names what it cannot account
+  for — calls with no price on file, failed calls, tokens a provider billed
+  without itemising — beside the total rather than inside it. Reads only; the
+  aggregations live in `lib/ai/report.ts`, and days are the Operator's days
+  (`APP_TIME_ZONE`), not UTC.
+- **There is no spend ceiling, deliberately.** A ceiling protects against a
+  runaway by taking the app's AI offline for real customers, which for this
+  template's operators is the worse failure. A hard stop belongs on the provider
+  account. Do not build one here without reading `docs/ai-providers.md` first.
+
+`node run.mjs ai-check` shows which task runs on which model, whether the keys
+are there, and what one call costs.
+
+## Scheduled jobs — work with no request behind it
+
+Deleting data that has aged out, a nightly reminder, an overnight
+reconciliation. It has its own guide: **[`docs/cron.md`](docs/cron.md)**. Five
+things are worth knowing before you add one:
+
+- **A job is an entry in `lib/cron/jobs.ts`.** Nothing else. The schedule is
+  `config/cron.json` (`everyMinutes`), the app runs it by itself while it is up
+  (`instrumentation.ts` → `lib/cron/scheduler.ts`), and `cron_runs` records what
+  happened. There is no second list of jobs and no per-job endpoint to write.
+- **It must be safe to run twice.** The lock is a conditional `UPDATE` so two
+  app instances cannot both take a job — but a stale lock, a redeploy or an
+  Operator pressing the button will still get you a second run. Deleting rows
+  older than a cutoff is idempotent; sending a mail is not, unless the job
+  records that it sent one.
+- **It returns one line of NUMBERS and throws on failure.** That line lands in
+  `cron_runs.lastDetail` and is what somebody reads to find out whether the job
+  works — so no address, no member id, no text anybody typed. Swallowing an
+  error makes a broken job look like a healthy one.
+- **The schedule is an interval, not a cron expression.** No parser, no
+  dependency. If you need a wall-clock hour, switch the in-app scheduler off and
+  point the host's cron at `POST /api/cron` — same registry, and crontab is good
+  at exactly the thing this file deliberately is not.
+- **A retention window is a number a person edits**, so read it with
+  `configuredNumber()` from `lib/cron/rules.mjs` and never `Number()`:
+  `Number(null)` is `0`, and zero months of retention means *delete everything*.
+
+`node run.mjs cron --list` says what exists, when it last ran and what it said.
+`node run.mjs cron --job <id>` runs one now.
+
+## The MCP server — the app as a tool for AI clients
+
+Optional, off until switched on, and it has its own guide:
+**[`docs/mcp.md`](docs/mcp.md)**. The skill that decides what to expose is
+`mcp-server`. A customer creates a key on `/dashboard/account`, pastes it into
+Claude Code or claude.ai, and the model can then use this app **as that
+customer**. Five things are worth knowing before you touch any of it:
+
+- **One switch, and it ships OFF.** `"enabled"` in `config/mcp.json`, read
+  through `isMcpEnabled()` in `lib/mcp/config.ts` — never by re-reading the JSON.
+  Unlike every other optional feature here, off is the shipped state, because an
+  unconfigured MCP server does not do nothing: it exposes whatever is in
+  `lib/mcp/tools.ts`, and what ships there are EXAMPLES meant to be replaced.
+- **`app/api/mcp/route.ts` guards itself.** `proxy.ts` matches `/dashboard`
+  only, so everything under `app/api/` is public until it protects itself. There
+  is no session on this path at all — the caller proves itself with
+  `Authorization: Bearer ds24mcp_…`, and `authenticate()` in `lib/mcp/keys.ts` is
+  the ONLY thing that turns that into a member id. It also re-checks
+  `users.blockedAt`, because `requireActiveUser()` never runs here.
+- **`readOnly` on a tool is a security boundary, not documentation.** A key with
+  the `read` scope may run read-only tools and nothing else, and that refusal
+  lives in the call path — `tools/list` hiding a tool is cosmetics. Anything that
+  writes, charges, mails or costs money is not read-only; `lib/mcp/tools.test.ts`
+  fails the build on a tool that says otherwise while charging tokens.
+- **No tool ever takes a member id.** The account is `ctx.memberId`, bound to the
+  key before the handler runs — the same guarantee `spendTokens` gives a Server
+  Action, which is why charging here goes through `spendForKey`
+  (`lib/mcp/spend.ts`) and not through `spendTokens` (there is no session to
+  authenticate). Every tool argument is written by a MODEL reading text somebody
+  else may have authored, so an id among them is an IDOR with a language model
+  holding the pen.
+- **Keys are shown once and hashed with SHA-256, not scrypt.** Deliberate, and
+  the opposite trade from `lib/credentials/hash.ts`: a password is human-chosen
+  and needs a memory-hard KDF to make guessing expensive; an MCP key is 32 random
+  bytes this app generated, has nothing to guess, and is checked on every single
+  tool call — 16 MB of RAM per call would be a denial of service somebody else
+  pays for.
+
+`node run.mjs mcp-check` checks the settings; `--live` mints a temporary key and
+really calls the endpoint, which is the only check that covers the whole path.
+
 ## Plans & Digistore products
 
 The plan list in `config/digistore-products.json` is the **single source** —
 it feeds the plans page (`app/plans/page.tsx`) *and* the sync script. Don't create
 a second price list in the code.
+
+**What this app sells is one line in that same file**, and it is the first thing
+to set when the vendor tells you which of the two models they want:
+
+```json
+{ "billingMode": "subscriptions" | "tokens" | "both", "products": { … } }
+```
+
+`"both"` ships as the default and shows everything. The other two turn off the
+surfaces of the model that is not used — the token balance on
+`/dashboard/account`, the balance/ledger/correction on
+`/dashboard/admin/users/<id>`, the "next payment" card on `/dashboard`. Without
+it a subscription-only app shows its customers a balance stuck at 0 for ever,
+and a token-only app an empty payment card. Read it through
+**`lib/billing-mode.ts`** (`sellsPlans()` / `sellsTokens()`), never by
+re-reading the JSON.
+
+Four rules go with it, and they are the reason it is safe to flip on a live app:
+
+- **It is COSMETIC. It never decides access.** `hasPlan()`, `entitlementsFor()`,
+  `consumeTokens()` and the IPN behave identically in every mode. A display
+  setting that revokes what somebody paid for is a refund request, not a layout
+  change.
+- **A mode may hide an empty thing, never a non-empty one.** Every call site is
+  written `!sellsTokens() && balance === 0`, never `!sellsTokens()` alone — so
+  an app switched away from tokens still shows the customers who hold some what
+  they hold. Write new ones the same way; that is what makes a wrongly set flag
+  harmless.
+- **The one exception is the manual balance correction.** `adjustTokens()`
+  refuses outright in a subscriptions-only app (`TokenError("tokensNotSold")`)
+  — it *mints* tokens, and an app that does not sell them carries no endpoint
+  that hands them out. The refusal is in the function, not in the form: a server
+  action is an HTTP endpoint of its own. To correct a legacy balance, set the
+  mode back.
+- **Mode and registry must agree.** `lib/billing-mode.test.ts` fails the build
+  on a token package declared in a `"subscriptions"` app: `ds24-sync` would
+  create it at Digistore24 and it would be buyable, while the app renders
+  nothing that credits the buyer. One-directional on purpose — an enabled mode
+  with no products yet is the normal state while you are still building.
+
+Deleting the sample products you do not sell is part of setting the mode. Note
+that removing one from the JSON does **not** unpublish it: a product `ds24-sync`
+has already created stays at Digistore24 until you deactivate it there.
 
 - `node run.mjs ds24-connect` — fetch the API key (browser) and write it into `.env`
 - `node run.mjs ds24-sync` — create/update products **and** the IPN
@@ -719,6 +1144,10 @@ overview). Arguments go straight through — there is no `ARGS="…"` wrapping.
 
 - `node run.mjs doctor` — what has to be installed, and what is missing here.
   The first command for anyone whose machine is new to this project.
+  `--json` gives the same as data, including the install command for the system
+  you are on — that is what the skill `setup-machine` reads.
+- `node run.mjs setup` — get the project ready without starting it: `.env`,
+  dependencies, database, pending migrations. The one command after a fresh clone.
 - `node run.mjs start` — database + migrations + app (http://localhost:3000). Occupied
   ports resolve themselves: the app moves to the next free one (remembered in
   `.dev/port`, all further commands use it), the database likewise — there
@@ -728,8 +1157,15 @@ overview). Arguments go straight through — there is no `ARGS="…"` wrapping.
 - `node run.mjs stop` — stop app + database · `node run.mjs restart` · `node run.mjs logs` · `node run.mjs status`
 - `node run.mjs test` — TypeScript check + tests (including the IPN signature verification)
 - `node run.mjs smoke` — call every page once; finds "Internal Server Error"
+- `node run.mjs errors` — what the log picked up: the errors that leave the status
+  code at 200 (a bad date, a missing text, a hydration mismatch). Run it after
+  clicking through the app; non-zero exit when it finds something
+- `node run.mjs ai-check` — which task runs on which model, are the keys there, what does a call cost
+- `node run.mjs mcp-check` — check the MCP server's settings; `--live` really calls it once
 - `node run.mjs db-generate` / `node run.mjs db-migrate` — create / apply a migration
 - `node run.mjs db-reset` — clear the local DB, migrate, seed (**locally only**)
+- `node run.mjs cron` — the scheduled jobs: run what is due, `--list` them, `--job <id>` to force one
+- `node run.mjs db-prune-ai` — delete AI-usage rows older than a year (`--dry-run` first)
 - `node run.mjs user-create --email … --role owner --apply` — create an operator/admin account
 - `node run.mjs data-export --email …` — everything held about one person, as JSON (subject access request)
 - `node run.mjs mail-setup` — set up mail delivery (Postmark or SMTP) + test mail
@@ -752,22 +1188,58 @@ three, so all three are places where somebody builds their product on this
 template. That is a property of the app, not a nice-to-have: a developer on
 Windows who cannot start it has no way around it.
 
-**What has to be installed** — the list is deliberately short, and
-`node run.mjs doctor` checks it for you and names the install command for the
-system you are on:
+**What has to be installed** — the list is deliberately short: **Node.js ≥ 20**
+(with npm) and **git**. That is all. **Docker** is used for Postgres where it
+exists and is not required where it does not (see below), and **cloudflared** is
+only for receiving Digistore24 IPNs on your own machine.
 
-| | Linux | macOS | Windows |
-|---|---|---|---|
-| **Node.js ≥ 20** (with npm) | package manager / nodejs.org | `brew install node` | `winget install OpenJS.NodeJS` |
-| **git** | usually present | with the Xcode Command Line Tools | Git for Windows (Claude Code needs it) |
-| **Docker** (Postgres) | Docker Engine | Docker Desktop | Docker Desktop (uses WSL2) |
-| **cloudflared** *(optional, only for local IPNs)* | pkg.cloudflare.com | `brew install cloudflared` | `winget install Cloudflare.cloudflared` |
+**The per-system install commands are not written down here, and that is on
+purpose.** They live in exactly one place — the table in
+`scripts/dev/doctor.mjs` — because a list repeated in three documents drifts,
+and the copy that drifts is always the one for the system nobody here runs.
+`node run.mjs doctor` renders it for the machine you are on; `--json` hands the
+same thing to the skill `setup-machine`, which installs it after asking. So:
+
+- somebody asks what they need → `node run.mjs doctor`
+- something is missing → the skill `setup-machine`
+- a command needs adding or changing → `FIXES` in `scripts/dev/doctor.mjs`,
+  and nowhere else. `scripts/setup.test.ts` fails if an entry loses one of the
+  three systems, or if the skill starts carrying install commands of its own.
 
 Nothing else. In particular **no `make`** — it is missing on Windows entirely
 and on macOS until someone installs the Xcode CLT, which is why the commands
 run through `node run.mjs <command>` (see **Local commands**). A `Makefile` is
 still in the project, but only as an alias for whoever has make; never point the
 user at it.
+
+**Docker is used where it is, and replaced where it is not — nobody is asked.**
+On Windows Docker means Docker Desktop plus WSL2 plus a restart, and for a
+non-developer that is where the product used to end. So the first start looks at
+the machine (`scripts/db/driver.mjs`): a Docker that *answers* — the daemon, not
+the PATH — gives `DB_DRIVER=docker`, anything else gives `DB_DRIVER=local`, and
+then Postgres comes from an npm package (`scripts/db/local.mjs`). Real Postgres
+16, same wire protocol, so `DATABASE_URL`, `db/index.ts`, `drizzle/` and every
+script stay untouched; what differs is that DEV then deviates from PROD, and
+that about 60 MB is downloaded once.
+
+Three properties of that decision are load-bearing:
+
+- **It happens once and is written into `.env`.** "Is there a Docker?" is a
+  question whose answer changes between two mornings — a Docker Desktop that did
+  not start with the session looks exactly like a machine that never had one.
+  Deciding afresh every time would point an existing project at a second, empty
+  database, and to the user that reads as "the app forgot everything".
+- **Existing data outranks the machine.** A `.dev/pgdata` means this project
+  already runs without Docker and keeps doing so, even once Docker turns up.
+- **A written-down value is obeyed and never overwritten**, and an unknown one
+  throws instead of falling back — `scripts/db/driver.mjs` refuses rather than
+  quietly starting the wrong database. `scripts/db/driver.test.ts` holds all of
+  this in place.
+
+What follows for you: **never present Docker as a prerequisite**, and never
+change `DB_DRIVER` on a project that already holds data. Whoever explicitly
+wants the other way round changes the line by hand while the database is still
+empty.
 
 **Windows in practice means Git Bash or WSL2.** Git Bash is the narrower of the
 two — write for it and both work. Docker Desktop needs WSL2 for the Postgres

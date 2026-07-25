@@ -8,6 +8,7 @@ import {
   GRANT_ERROR_CODES,
   normalizeGrantReason,
 } from "./grant-rules";
+import { allProducts } from "@/lib/digistore/products";
 import type { Actor } from "@/lib/users/rules";
 
 const OWNER: Actor = { id: "op-1", role: "owner" };
@@ -203,10 +204,18 @@ describe("grantableProducts", () => {
     expect(grantableProducts().some((p) => p.kind === "token")).toBe(false);
   });
 
-  it("contains the subscription plans the registry declares", () => {
+  it("contains every non-token product the registry declares", () => {
+    // Derived from the registry, not from the two plans the template ships
+    // with: an app that sells only tokens deletes them, and a test naming them
+    // would go red over a supported configuration
+    // (config/digistore-products.json -> "billingMode"). What must hold is the
+    // complement of the test above — everything that is not a token IS
+    // grantable, so nothing can quietly fall out of the dropdown.
     const keys = grantableProducts().map((p) => p.key);
-    expect(keys).toContain("basis_monatlich");
-    expect(keys).toContain("basis_jaehrlich");
+    for (const product of allProducts()) {
+      if (product.kind === "token") continue;
+      expect(keys, product.key).toContain(product.key);
+    }
   });
 
   it("agrees with canGrantByHand — every listed product is grantable", () => {

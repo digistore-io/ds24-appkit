@@ -1,0 +1,326 @@
+"use client";
+
+// The chat window.
+//
+// ── Reading the stream ─────────────────────────────────────────────────────
+// `/api/chat` answers with newline-delimited JSON: one object per line, the
+// answer arriving as `delta` pieces. The loop below is the reason the reply
+// appears word by word instead of after a ten-second spinner — and the buffer
+// around it is the part that is easy to get wrong: a chunk from the network
+// does NOT respect line boundaries, so the tail of a chunk is routinely half a
+// JSON object. It is kept until the rest of it arrives.
+//
+// ── Errors ────────────────────────────────────────────────────────────────
+// The endpoint answers with a CODE, never a sentence — the rules layer has no
+// language (AD-10). Translation happens here, through the `errors` namespace,
+// which is also why the same code reads correctly whether it arrived as an
+// HTTP status or mid-stream.
+import { useActionState, useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
+import { Send, Trash2 } from "lucide-react";
+
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import { Callout } from "@/components/ui/callout";
+import { Card, CardContent } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { useActionToast } from "@/hooks/use-action-toast";
+import { MAX_MESSAGE_CHARS } from "@/lib/ai/rules";
+import { clearChatAction } from "./actions";
+
+const EMPTY = { error: null, ok: null };
+
+export interface ChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+}
+
+/** The id the answer being streamed right now carries until it is stored. */
+const STREAMING_ID = "streaming";
+
+/**
+ * Where this window is being shown.
+ *
+ * `page` is `/dashboard/chat` — its own card on its own page. `panel` is the
+ * floating launcher (`launcher.tsx`), which brings its own frame and has far
+ * less room, so the card would be a second border around the first and the
+ * transcript has to be shorter. Two skins, ONE conversation: same state, same
+ * endpoint, same history. A second implementation for the panel would be two
+ * places to fix every streaming bug found in the first.
+ */
+export type ChatVariant = "page" | "panel";
+
+export function ChatWindow({
+  assistantName,
+  avatar,
+  initial,
+  variant = "page",
+}: {
+  assistantName: string;
+  avatar: string;
+  initial: ChatMessage[];
+  variant?: ChatVariant;
+}) {
+  const t = useTranslations("chat");
+  const tCommon = useTranslations("common");
+  const tErrors = useTranslations("errors");
+
+  const [messages, setMessages] = useState<ChatMessage[]>(initial);
+  const [draft, setDraft] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
+
+  const [clearState, clearAction, clearing] = useActionState(
+    clearChatAction,
+    EMPTY,
+  );
+  useActionToast(clearState);
+
+  // The server re-renders the page after the history is deleted; mirror that
+  // into local state, or the transcript stays on screen until a reload.
+  useEffect(() => {
+    if (clearState.ok) setMessages([]);
+  }, [clearState.ok]);
+
+  const bottom = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    bottom.current?.scrollIntoView({ block: "end" });
+  }, [messages]);
+
+  async function ask() {
+    const question = draft.trim();
+    if (question === "" || busy) return;
+
+    setErrorCode(null);
+    setBusy(true);
+    setDraft("");
+    setMessages((current) => [
+      ...current,
+      { id: `local-${current.length}`, role: "user", content: question },
+      { id: STREAMING_ID, role: "assistant", content: "" },
+    ]);
+
+    const appendDelta = (text: string) =>
+      setMessages((current) =>
+        current.map((message) =>
+          message.id === STREAMING_ID
+            ? { ...message, content: message.content + text }
+            : message,
+        ),
+      );
+
+    /** Drops the empty placeholder — an error must not leave a blank bubble. */
+    const dropPlaceholder = () =>
+      setMessages((current) =>
+        current.filter(
+          (message) => !(message.id === STREAMING_ID && message.content === ""),
+        ),
+      );
+
+    try {
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ message: question }),
+      });
+
+      if (!response.ok || !response.body) {
+        const payload = await response.json().catch(() => null);
+        setErrorCode(payload?.code ?? "chatFailed");
+        dropPlaceholder();
+        return;
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        // The last piece is whatever came after the final newline — half an
+        // object more often than not. Keep it for the next chunk.
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          if (line.trim() === "") continue;
+          let event: { type?: string; text?: string; code?: string };
+          try {
+            event = JSON.parse(line);
+          } catch {
+            continue;
+          }
+          if (event.type === "delta" && event.text) appendDelta(event.text);
+          if (event.type === "error") setErrorCode(event.code ?? "chatFailed");
+        }
+      }
+
+      dropPlaceholder();
+    } catch {
+      // A dropped connection, a closed laptop lid. The answer may have been
+      // stored server-side; a reload shows it.
+      setErrorCode("chatFailed");
+      dropPlaceholder();
+    } finally {
+      setBusy(false);
+      setMessages((current) =>
+        current.map((message) =>
+          message.id === STREAMING_ID
+            ? { ...message, id: `answered-${current.length}` }
+            : message,
+        ),
+      );
+    }
+  }
+
+  const panel = variant === "panel";
+
+  const conversation = (
+    <div className="space-y-4">
+          <div
+            className={
+              panel
+                ? "h-[min(20rem,45vh)] space-y-4 overflow-y-auto pr-1"
+                : "max-h-[55vh] min-h-56 space-y-4 overflow-y-auto pr-1"
+            }
+          >
+            {messages.length === 0 ? (
+              <div className="text-muted-foreground space-y-2 py-8 text-center text-sm">
+                <p className="text-foreground font-medium">{t("emptyTitle")}</p>
+                <p className="mx-auto max-w-md">
+                  {t("emptyBody", { name: assistantName })}
+                </p>
+              </div>
+            ) : (
+              messages.map((message) =>
+                message.role === "assistant" ? (
+                  <div key={message.id} className="flex items-start gap-3">
+                    <Avatar className="mt-0.5 shrink-0">
+                      {/* Falls back to the initial when no picture is present —
+                          an app that never dropped its own chat.png in still
+                          looks finished. */}
+                      <AvatarImage src={avatar} alt="" />
+                      <AvatarFallback>
+                        {assistantName.slice(0, 1).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="bg-muted min-w-0 rounded-lg px-3 py-2 text-sm whitespace-pre-wrap">
+                      {message.content || (
+                        <span className="text-muted-foreground">
+                          {t("sending", { name: assistantName })}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div key={message.id} className="flex justify-end">
+                    <div className="bg-primary/10 text-foreground max-w-[85%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap">
+                      {message.content}
+                    </div>
+                  </div>
+                ),
+              )
+            )}
+            <div ref={bottom} />
+          </div>
+
+          <div className="flex items-end gap-2 border-t pt-4">
+            <Textarea
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              onKeyDown={(event) => {
+                // Enter sends, Shift+Enter breaks the line — what people expect
+                // from a chat box. Without this the primary action of the page
+                // needs a mouse.
+                if (event.key === "Enter" && !event.shiftKey) {
+                  event.preventDefault();
+                  void ask();
+                }
+              }}
+              maxLength={MAX_MESSAGE_CHARS}
+              rows={2}
+              placeholder={t("placeholder")}
+              aria-label={t("placeholder")}
+              disabled={busy}
+              className="resize-none"
+            />
+            <Button
+              type="button"
+              onClick={() => void ask()}
+              // Not merely tidy: the endpoint is not idempotent and every call
+              // costs the operator money. A double-click must not buy two
+              // answers to one question.
+              disabled={busy || draft.trim() === ""}
+              aria-label={t("send")}
+            >
+              <Send aria-hidden className="size-4" />
+              <span className={panel ? "sr-only" : "hidden sm:inline"}>{t("send")}</span>
+            </Button>
+          </div>
+    </div>
+  );
+
+  return (
+    <div className="space-y-4">
+      {errorCode && (
+        <Callout variant="danger">{tErrors(errorCode)}</Callout>
+      )}
+
+      {/* In the panel the frame is the launcher's; a card inside it would be a
+          second border around the first. */}
+      {panel ? (
+        conversation
+      ) : (
+        <Card>
+          <CardContent className="space-y-4">{conversation}</CardContent>
+        </Card>
+      )}
+
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-muted-foreground text-xs">
+          {t("disclaimer", { name: assistantName })}
+        </p>
+
+        {messages.length > 0 && (
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="ghost" size="sm" disabled={clearing}>
+                <Trash2 aria-hidden className="size-4" />
+                {t("clear")}
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>{t("clearTitle")}</AlertDialogTitle>
+                <AlertDialogDescription>{t("clearBody")}</AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>{tCommon("cancel")}</AlertDialogCancel>
+                <form action={clearAction}>
+                  <AlertDialogAction type="submit" variant="destructive">
+                    {t("clearConfirm")}
+                  </AlertDialogAction>
+                </form>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        )}
+      </div>
+    </div>
+  );
+}

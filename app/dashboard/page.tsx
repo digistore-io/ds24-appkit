@@ -6,12 +6,15 @@ import { CalendarClock, CreditCard, CircleUser, ArrowRight } from "lucide-react"
 import { auth } from "@/auth";
 import { hasDigistoreApiKey } from "@/lib/digistore/settings";
 import { nextPaymentForMember } from "@/lib/digistore/subscriptions";
+import { purchaseNoticeFor } from "@/lib/digistore/member-billing";
+import { sellsPlans } from "@/lib/billing-mode";
 import {
   NEXT_PAYMENT_FORMAT,
   isUpcoming,
   todayInUtc,
   toUtcDate,
 } from "@/lib/digistore/next-payment";
+import { FlashToast } from "@/components/flash-toast";
 import { PageHeader } from "@/components/page-header";
 import { RoleBadge } from "@/components/role-badge";
 import { Button } from "@/components/ui/button";
@@ -32,12 +35,28 @@ export async function generateMetadata() {
 
 // The starting point of your app after signing in. The sign-in check and the
 // frame (sidebar, header) come from app/dashboard/layout.tsx.
-export default async function DashboardPage() {
+//
+// `?purchase=<ds24OrderId>` is where a buyer arrives from /optin/[orderId]
+// after paying. Only the REFERENCE travels; what gets said is resolved here,
+// from the database, scoped to the signed-in member — see §D2 of story 4.2 and
+// the comment on <FlashToast>.
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ purchase?: string }>;
+}) {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
   const t = await getTranslations("dashboard");
   const format = await getFormatter();
+
+  const { purchase } = await searchParams;
+  // null for a foreign order, an unattributed one, and anything not `paid` —
+  // the rule is in lib/digistore/purchase-notice.ts and is tested there.
+  const notice = purchase
+    ? await purchaseNoticeFor(session.user.id as string, purchase)
+    : null;
 
   // The Digistore24 connection is a matter of the installation, not of the
   // user: it comes from .env (node run.mjs ds24-connect), not from a form.
@@ -50,15 +69,33 @@ export default async function DashboardPage() {
   // subscription, one that was never attributed to this account, one that has
   // been cancelled or refunded (§D3 NULLs the date then), and one whose date
   // has slipped into the past.
-  const nextPaymentAt = await nextPaymentForMember(
-    session.user.id as string,
-  );
+  //
+  // Skipped entirely in a tokens-only app: there is no recurring charge to
+  // announce, so the query is not asked either (lib/billing-mode.ts). Nothing
+  // is hidden by that — the card only ever renders on an UPCOMING date, so a
+  // legacy subscription would still be shown by flipping the mode back.
+  const nextPaymentAt = sellsPlans()
+    ? await nextPaymentForMember(session.user.id as string)
+    : null;
   // The rule stated once more where it is rendered, so the card cannot advertise
   // a charge that will never come even if the query above is ever loosened.
   const showNextPayment = isUpcoming(nextPaymentAt, todayInUtc());
 
   return (
     <>
+      {notice && (
+        <FlashToast
+          message={
+            notice.kind === "tokens"
+              ? t("purchaseTokens", { credits: notice.credits })
+              : notice.kind === "plan"
+                ? t("purchasePlan", { product: notice.product })
+                : t("purchaseGeneric")
+          }
+          clearParam="purchase"
+        />
+      )}
+
       <PageHeader
         title={t("welcome")}
         description={t("signedInAs", { email: session.user.email ?? "" })}

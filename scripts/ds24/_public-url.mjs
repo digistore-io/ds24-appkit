@@ -5,10 +5,11 @@
 //
 //   DS24 API error (updateProduct): Please only use secure URLs with https://.
 //
-// During local development that is exactly where everything lives, though: the
-// app on http://localhost:3000, the assistant's listener on a short-lived port.
-// So the URL handed over is not the local one but a public redirect address,
-// and the browser is sent back to the local machine from there:
+// During local development that is exactly where everything lives, though — the
+// app on http://localhost:3000, and the connection assistant's return address is
+// a page of that same app. So the URL handed over is not the local one but a
+// public redirect address, and the browser is sent back to the local machine
+// from there:
 //
 //   http://localhost:3000/optin/[ORDER_ID]
 //     → https://ds24-appkit.com/redir/?port=3000&path=/optin/[ORDER_ID]
@@ -26,9 +27,10 @@
 //
 // The app-side twin of this file is lib/digistore/public-url.ts — same rules,
 // for the checkout links generated at runtime. Change one, change the other.
-
-/** The redirect page that ships with the template. */
-export const DEFAULT_REDIR_URL = "https://ds24-appkit.com/redir/";
+//
+// The address itself is not a setting: it is the same for every installation
+// and therefore lives in lib/digistore/config.mjs, not in the .env.
+import { DIGISTORE_REDIR_URL } from "../../lib/digistore/config.mjs";
 
 // http://localhost and http://127.0.0.1 are the same machine; ::1 is its IPv6
 // spelling and 0.0.0.0 is what a server that listens everywhere prints.
@@ -43,15 +45,6 @@ function parse(url) {
   } catch {
     return null;
   }
-}
-
-/**
- * The public redirect endpoint, always with a trailing slash.
- * @param {Record<string, string | undefined>} [env]
- */
-export function redirUrl(env = /** @type {Record<string, string | undefined>} */ (process.env)) {
-  const configured = (env.DIGISTORE_REDIR_URL || DEFAULT_REDIR_URL).trim();
-  return `${configured.replace(/\/+$/, "")}/`;
 }
 
 /**
@@ -78,7 +71,7 @@ export function isLocalhostUrl(url) {
  * would be cut off there. Such a URL is left alone on purpose — a clear error
  * from Digistore24 beats a redirect that silently drops half the address.
  */
-export function publicUrlFor(url, redir = redirUrl()) {
+export function publicUrlFor(url, redir = DIGISTORE_REDIR_URL) {
   if (!url) return undefined;
   if (!isLocalhostUrl(url)) return url;
 

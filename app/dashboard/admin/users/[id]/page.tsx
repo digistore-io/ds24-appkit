@@ -11,6 +11,7 @@ import {
   listLedgerFor,
   LEDGER_PAGE_SIZE,
 } from "@/lib/tokens/account";
+import { sellsTokens } from "@/lib/billing-mode";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -58,6 +59,25 @@ export default async function AdminUserDetailPage({
 
   const t = await getTranslations("memberBilling");
 
+  // The token half of this page — balance, ledger, correction — unless the app
+  // sells no tokens AND this Member has nothing to show. A support page that
+  // hides a balance somebody paid for is worse than one card too many, so the
+  // mode alone never decides it (lib/billing-mode.ts).
+  //
+  // The CORRECTION is the exception, and it hangs off the mode alone: it MINTS
+  // tokens, and an app that does not sell them should not carry an endpoint
+  // that hands them out. A legacy balance is therefore read-only here — set
+  // "billingMode" back to "tokens"/"both" to correct one. `adjustTokensAction`
+  // refuses on the same condition; the form being gone protects nothing.
+  // "Empty" is a balance of 0 with no bookings — NOT the absence of an account
+  // row. A row is created by the first `getOrCreateTokenAccount`, which an
+  // auto-top-up attempt or a since-reverted correction is enough to trigger, so
+  // `Boolean(account)` would keep the card on screen for accounts that never
+  // held a single token.
+  const tokensSold = sellsTokens();
+  const showTokens =
+    tokensSold || (account?.balance ?? 0) !== 0 || ledger.length > 0;
+
   // The state is derived HERE, on the server, against one `now` shared by
   // every row: deriving it in the browser would make an expiry flip on a
   // re-render and hand the client a clock the server never agreed to.
@@ -82,6 +102,8 @@ export default async function AdminUserDetailPage({
         memberLabel={user.email ?? user.id}
         balance={account?.balance ?? 0}
         hasAccount={Boolean(account)}
+        showTokens={showTokens}
+        canAdjust={tokensSold}
         ledger={ledger.slice(0, LEDGER_PAGE_SIZE)}
         ledgerLimit={LEDGER_PAGE_SIZE}
         ledgerTruncated={ledger.length > LEDGER_PAGE_SIZE}

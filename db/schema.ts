@@ -111,3 +111,24 @@ export * from "./schema-entitlements";
 // `email_changes` — a Member's requested address change, until it is confirmed.
 // See schema-email-changes.ts.
 export * from "./schema-email-changes";
+
+// --- AI assistant -------------------------------------------------------------
+// `chat_messages` — the transcripts of the in-app assistant. Deleted with the
+// member, unlike the billing records. See schema-chat.ts.
+export * from "./schema-chat";
+
+// --- MCP server ---------------------------------------------------------------
+// `mcp_keys` — the credentials a Member issues to reach this app from an AI
+// client. Hashed, never readable back. See schema-mcp.ts.
+export * from "./schema-mcp";
+
+// --- AI usage -----------------------------------------------------------------
+// `ai_usage` — one row per model call: task, provider, model, tokens, outcome.
+// Numbers only, never content. See schema-ai-usage.ts.
+export * from "./schema-ai-usage";
+
+// --- Scheduled jobs -----------------------------------------------------------
+// `cron_runs` — one row per job: when it last ran, whether it worked, and the
+// lock that keeps two app instances from running it at once. See schema-cron.ts
+// and docs/cron.md.
+export * from "./schema-cron";

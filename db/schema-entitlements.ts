@@ -97,7 +97,12 @@ export const grants = pgTable(
     uniqueIndex("grants_purchase_product")
       .on(t.ds24PurchaseId, t.productKey)
       .where(sql`${t.ds24PurchaseId} is not null`),
-    // The read path: entitlementsFor(memberId).
+    // The read path: entitlementsFor(memberId), and listGrantsFor on the
+    // Operator's member page.
     index("grants_member").on(t.memberId),
+    // `hasPlan(memberId, productKey)` — the check on every gated page and in
+    // every gated route handler. It is the most-called query in the app after
+    // the session lookup, and it names both columns.
+    index("grants_member_product").on(t.memberId, t.productKey),
   ],
 );

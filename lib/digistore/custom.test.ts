@@ -17,6 +17,7 @@ describe("buildIdentity", () => {
       memberId: MEMBER,
       checkoutToken: TOKEN,
       productKey: "pro",
+      armAutoReload: false,
     });
     // The literal wire format is pinned: it is stored on the purchase at
     // Digistore24 and comes back on every later event for years.
@@ -26,6 +27,7 @@ describe("buildIdentity", () => {
       memberId: MEMBER,
       checkoutToken: TOKEN,
       productKey: "pro",
+      armAutoReload: false,
     });
   });
 
@@ -38,6 +40,7 @@ describe("buildIdentity", () => {
       memberId: MEMBER,
       checkoutToken: TOKEN,
       productKey: "pro",
+      armAutoReload: false,
     });
   });
 
@@ -47,6 +50,7 @@ describe("buildIdentity", () => {
       memberId: MEMBER,
       checkoutToken: TOKEN,
       productKey: "pro",
+      armAutoReload: false,
     });
   });
 });
@@ -93,6 +97,7 @@ describe("parseCustom", () => {
       memberId: MEMBER,
       checkoutToken: TOKEN,
       productKey: undefined,
+      armAutoReload: false,
     });
   });
 
@@ -145,7 +150,14 @@ describe("newCheckoutToken", () => {
   it("round-trips through the grammar", () => {
     const t = newCheckoutToken();
     expect(parseCustom(buildIdentity({ memberId: MEMBER, checkoutToken: t }))).toEqual(
-      { kind: "identity", memberId: MEMBER, checkoutToken: t, productKey: undefined },
+      {
+        kind: "identity",
+        memberId: MEMBER,
+        checkoutToken: t,
+        productKey: undefined,
+        origin: undefined,
+        armAutoReload: false,
+      },
     );
   });
 });
@@ -177,5 +189,67 @@ describe("kind", () => {
     const parsed = parseCustom(`m:${MEMBER};t:${TOKEN};k:whatever`);
     expect(parsed?.kind).toBe("identity");
     expect(parsed?.kind === "identity" && parsed.origin).toBeUndefined();
+  });
+});
+
+describe("the auto top-up flag (r:)", () => {
+  const M = "3f2504e0-4f89-41d3-9a0c-0305e82c3301";
+  const T = "Ab3xY9zQ1w";
+
+  it("round-trips when the buyer asked for it", () => {
+    const s = buildIdentity({
+      memberId: M,
+      checkoutToken: T,
+      productKey: "pro",
+      kind: "topup",
+      armAutoReload: true,
+    });
+    expect(s).toContain("r:1");
+    const parsed = parseCustom(s);
+    expect(parsed).toMatchObject({ kind: "identity", armAutoReload: true });
+  });
+
+  it("is not emitted when they did not", () => {
+    const s = buildIdentity({ memberId: M, checkoutToken: T, kind: "topup" });
+    expect(s).not.toContain("r:");
+    expect(parseCustom(s)).toMatchObject({ armAutoReload: false });
+  });
+
+  it("reads absent as NOT armed", () => {
+    // Every purchase made before this shipped. Arming those retroactively
+    // would start charging cards nobody offered a choice about.
+    expect(parseCustom(`m:${M};t:${T};p:pro`)).toMatchObject({
+      armAutoReload: false,
+    });
+  });
+
+  it("accepts strictly '1' and nothing else", () => {
+    // This flag authorises an unattended card charge, so anything ambiguous
+    // resolves to off.
+    // " 1" is the one the first version of this test missed: the parser trims
+    // every value, so a padded flag arrived as "1" and armed a card charge.
+    for (const raw of ["0", "true", "yes", "Y", "01", " 1x", " 1", "1 ", "\t1"]) {
+      // A pair AFTER it, deliberately: the whole custom value is trimmed
+      // before parsing, so a trailing space on the last pair is
+      // indistinguishable from none. Padding only matters mid-string, and
+      // that is exactly where the parser's own per-value trim used to let
+      // `r: 1` through as armed.
+      expect(
+        parseCustom(`m:${M};t:${T};r:${raw};p:pro`),
+        JSON.stringify(raw),
+      ).toMatchObject({ armAutoReload: false });
+    }
+  });
+
+  it("does not disturb the rest of the grammar", () => {
+    const parsed = parseCustom(`m:${M};t:${T};p:pro;k:auto;r:1`);
+    expect(parsed).toMatchObject({
+      kind: "identity",
+      memberId: M,
+      checkoutToken: T,
+      productKey: "pro",
+      origin: "auto",
+      armAutoReload: true,
+    });
   });
 });

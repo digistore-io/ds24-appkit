@@ -303,12 +303,9 @@ a `kind: "token"` package in the registry. Only `kind: "subscription"` and
 `kind: "one_time"` entries become entitlements.
 
 ```ts
-import {
-  getTokenAccount,
-  hasSufficientBalance,
-  consumeTokens,
-  InsufficientTokensError,
-} from "@/lib/tokens/account";
+import { getTokenAccount, hasSufficientBalance } from "@/lib/tokens/account";
+import { spendTokens } from "@/lib/tokens/spend";
+import { TokenError } from "@/lib/tokens/rules";
 
 // Read the balance (undefined = the Member has no account yet).
 const account = await getTokenAccount(memberId);
@@ -319,28 +316,36 @@ if (!hasSufficientBalance(balance, 42)) {
   // offer them a top-up
 }
 
-// Spend. Transactional, with a row lock: safe under concurrent requests.
+// Spend. Charges the SIGNED-IN Member — note that no id is passed.
+// Transactional, with a row lock: safe under concurrent requests.
 try {
-  const left = await consumeTokens({ memberId, amount: 42, note: "report" });
+  const left = await spendTokens({ amount: 42, note: "report generation" });
   // `left` is the new balance
 } catch (err) {
-  if (err instanceof InsufficientTokensError) {
-    // err.balance, err.requested
+  if (err instanceof TokenError) {
+    // err.code === "insufficientBalance" — translate it: t(err.code)
   }
   throw err;
 }
 ```
 
-`consumeTokens` throws `InsufficientTokensError` rather than returning `false`,
-and it throws on `amount <= 0` too. Every booking lands in the ledger, so a
-balance is always explainable.
+**`spendTokens` takes no member id, and must never be given one.** It resolves
+the account from the session (`requireActiveUser()`, which also turns away
+blocked accounts), so a `memberId` out of a `FormData` cannot drain another
+customer's balance. The underlying `consumeTokens({ memberId, … })` stays
+exported for the IPN and the Operator pages, where naming somebody else is the
+job — features do not call it. Full rules, including why an optional
+`memberId` parameter does not solve this: `CLAUDE.md` → **Charging tokens**.
+
+A shortfall throws rather than returning `false`, and writes nothing. Every
+booking lands in the ledger, so a balance is always explainable.
 
 The two models combine well and are meant to: a subscription gates *whether*
 the feature exists for this customer, the balance limits *how much* they use it.
 
 ```ts
 if (!(await hasPlan(memberId, "basis_monatlich"))) return notEntitled();
-await consumeTokens({ memberId, amount: cost });
+await spendTokens({ amount: cost, note: "report generation" });
 ```
 
 Buying packages, auto top-up and the subscription self-service:

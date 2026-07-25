@@ -7,7 +7,7 @@ import {
   blockerFor,
   type CheckoutBlocker,
 } from "./checkout";
-import { DEFAULT_REDIR_URL } from "./public-url";
+import { DIGISTORE_REDIR_URL as DEFAULT_REDIR_URL } from "./config.mjs";
 import type { ProductDef } from "./products";
 
 const sub: ProductDef = {

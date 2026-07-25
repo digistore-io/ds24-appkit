@@ -1,10 +1,6 @@
 import { describe, it, expect } from "vitest";
-import {
-  DEFAULT_REDIR_URL,
-  isLocalhostUrl,
-  publicUrlFor,
-  redirUrl,
-} from "./_public-url.mjs";
+import { isLocalhostUrl, publicUrlFor } from "./_public-url.mjs";
+import { DIGISTORE_REDIR_URL as DEFAULT_REDIR_URL } from "../../lib/digistore/config.mjs";
 
 describe("isLocalhostUrl", () => {
   it("recognizes the hosts that only exist on this machine", () => {
@@ -29,18 +25,12 @@ describe("isLocalhostUrl", () => {
   });
 });
 
-describe("redirUrl", () => {
-  it("defaults to the public relay of the template", () => {
-    expect(redirUrl({})).toBe(DEFAULT_REDIR_URL);
-  });
-
-  it("can be pointed somewhere else, with or without a trailing slash", () => {
-    expect(redirUrl({ DIGISTORE_REDIR_URL: "https://own.example/redir" })).toBe(
-      "https://own.example/redir/",
-    );
-    expect(redirUrl({ DIGISTORE_REDIR_URL: "https://own.example/redir/" })).toBe(
-      "https://own.example/redir/",
-    );
+describe("the redirect address", () => {
+  it("is a public https address with a trailing slash", () => {
+    // It is hard-wired (lib/digistore/config.mjs) rather than configurable:
+    // Digistore24 takes public https only, and the page it points at is part
+    // of the template. A trailing slash, because "?port=" is appended to it.
+    expect(DEFAULT_REDIR_URL).toMatch(/^https:\/\/.+\/$/);
   });
 });
 

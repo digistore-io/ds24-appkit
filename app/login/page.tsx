@@ -3,41 +3,48 @@ import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { ArrowLeft } from "lucide-react";
 
-import { AuthError } from "next-auth";
-
-import { signIn, auth } from "@/auth";
+import { auth } from "@/auth";
 import { ACCESS_DENIED } from "@/lib/authz";
 import { isUserBlocked } from "@/lib/users/blocked";
 import { isEmailLoginEnabled } from "@/lib/email";
 import { isDevLoginActive, demoLoginSuggestion } from "@/lib/auth/dev-login";
 import { APP_NAME } from "@/lib/app";
+import { googleSignInAction } from "./actions";
+import { SignInForm } from "./ui";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent } from "@/components/ui/card";
 import { Callout } from "@/components/ui/callout";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LanguageSwitcher } from "@/components/language-switcher";
+
+/**
+ * What Auth.js calls a rejected Credentials sign-in (`AuthError.type`).
+ *
+ * The dialog answers a wrong password itself now, on step 2 — so this arrives
+ * only if Auth.js redirects here on its own (`pages.error` in auth.config.ts).
+ * Kept because that path still exists and a rejected credential must not be
+ * described as an expired link.
+ */
+const CREDENTIALS_FAILED = "CredentialsSignin";
 
 export async function generateMetadata() {
   const t = await getTranslations("login");
   return { title: t("title") };
 }
 
-/**
- * What Auth.js calls a rejected Credentials sign-in (`AuthError.type`). Ours is
- * the password provider — see lib/auth/password-login.ts, which returns null
- * for every kind of "no" rather than saying which.
- */
-const CREDENTIALS_FAILED = "CredentialsSignin";
-
-// Sign-in page. Default: email token sign-in (magic link, Postmark/SMTP).
-// Google sign-in optional (only if GOOGLE_CLIENT_ID/SECRET are set).
+// Sign-in page. ONE dialog, two steps — the address first, then whatever that
+// address actually needs to prove. The branch lives in
+// lib/auth/sign-in-route.ts, the form in ui.tsx, the submits in actions.ts.
 //
-// `?error=…` comes from two sources: from Auth.js when a sign-in was rejected,
-// and from requireActiveUser() (lib/authz.ts) when a blocked account opens a
-// protected page. Both set the same value — there is exactly one message for
-// it.
+// There used to be two cards stacked here: a password form and, whenever the
+// development login was active, a second form beside it. Both were correct on
+// their own and nothing ever decided they were alternatives, so a demo
+// installation showed the visitor two ways in and no way to tell them apart.
+//
+// `?error=…` comes from two sources, and neither of them is this page's own
+// form any more (a wrong password is answered inside the dialog, on step 2,
+// with the typed address still in place). What is left arrives from Auth.js
+// when a sign-in link is rejected, and from requireActiveUser() (lib/authz.ts)
+// when a blocked account opens a protected page.
 export default async function LoginPage({
   searchParams,
 }: {
@@ -103,103 +110,16 @@ export default async function LoginPage({
             {error === ACCESS_DENIED
               ? t("blockedBody")
               : error === CREDENTIALS_FAILED
-                ? // ONE sentence for every password refusal — wrong password,
-                  // no password set on the account, no such account, and too
-                  // many attempts. Splitting them would tell a stranger which
-                  // addresses have accounts here and which of those have a
-                  // password. It still names the way out (request a link) and
-                  // the wait, so a locked-out owner is not left guessing.
-                  t("passwordFailedBody")
+                ? t("passwordFailedBody")
                 : t("errorBody")}
           </Callout>
         )}
 
-        {/* ONE form for both ways in, and deliberately not two steps.
-            Asking for the address first and then revealing whether a password
-            field applies would answer "does an account exist here?" to anyone
-            who types one. Here the password field is simply there: fill it in
-            and it signs you in, leave it empty and a link comes by mail. A
-            visitor without a password never sees a dead end, and a stranger
-            learns nothing either way. */}
-        {/* ALWAYS rendered — a password does not depend on mail delivery, and
-            an earlier version of this hid the card whenever the development
-            login was active. That looked tidy locally and meant a password set
-            on this machine could not be used to sign in with. Whatever else is
-            configured, the way in that needs no configuration stays visible. */}
-        {
-          <Card>
-            <CardContent>
-              <form
-                action={async (formData: FormData) => {
-                  "use server";
-                  const email = String(formData.get("email"));
-                  const password = String(formData.get("password") ?? "");
-                  try {
-                    // An empty password means "mail me a link" — the only place
-                    // the two paths part company.
-                    if (password) {
-                      await signIn("password", {
-                        email,
-                        password,
-                        redirectTo: "/dashboard",
-                      });
-                    } else {
-                      await signIn("email", { email, redirectTo: "/dashboard" });
-                    }
-                  } catch (error) {
-                    // A SUCCESSFUL signIn throws NEXT_REDIRECT, which is not an
-                    // AuthError and therefore falls through to the rethrow
-                    // below. Only genuine refusals land in the redirect.
-                    if (error instanceof AuthError) {
-                      redirect(`/login?error=${error.type}`);
-                    }
-                    throw error;
-                  }
-                }}
-                className="flex flex-col gap-3"
-              >
-                <Label htmlFor="email">{t("emailLabel")}</Label>
-                <Input
-                  id="email"
-                  name="email"
-                  type="email"
-                  required
-                  autoComplete="email"
-                  placeholder={t("emailPlaceholder")}
-                />
-
-                <Label htmlFor="password">{t("passwordLabel")}</Label>
-                <Input
-                  id="password"
-                  name="password"
-                  type="password"
-                  // Required only when there is no mail transport to fall back
-                  // on — then the password is the sole way in.
-                  required={!emailEnabled}
-                  autoComplete="current-password"
-                />
-                <p className="text-muted-foreground text-xs">
-                  {emailEnabled ? t("passwordHint") : t("passwordOnlyHint")}
-                </p>
-
-                <Button type="submit" className="w-full">
-                  {t("submit")}
-                </Button>
-
-                {/* Where a "forgot password?" link would sit. There is no reset
-                    flow because there is nothing to reset to: whoever forgets
-                    their password signs in with a link, exactly as before, and
-                    sets a new one on their account page. An unexplained absence
-                    would read as a missing feature. */}
-                {emailEnabled && (
-                  <p className="text-muted-foreground text-xs">
-                    {t("forgotPassword")}
-                  </p>
-                )}
-              </form>
-            </CardContent>
-          </Card>
-        }
+        <SignInForm
+          mailConfigured={emailEnabled}
+          demoLogin={devLogin}
+          demoEmail={demoEmail}
+        />
 
         {emailEnabled && googleEnabled && (
           <div className="text-muted-foreground flex items-center gap-3 text-xs">
@@ -210,61 +130,11 @@ export default async function LoginPage({
         )}
 
         {googleEnabled && (
-          <form
-            action={async () => {
-              "use server";
-              await signIn("google", { redirectTo: "/dashboard" });
-            }}
-          >
+          <form action={googleSignInAction}>
             <Button type="submit" variant="outline" className="w-full">
               {t("google")}
             </Button>
           </form>
-        )}
-
-        {/* The demo login hangs off exactly one condition: isDevLoginActive()
-            (i.e. isDevLoginAllowed). It ALWAYS appears when the development
-            login is allowed — regardless of whether Google is configured.
-
-            Deliberately terse: whoever lands here wants to look at the app,
-            not set up mail delivery. The how lives in docs/ and in the
-            terminal. */}
-        {devLogin && (
-          <Card>
-            <CardContent>
-              <form
-                action={async (formData: FormData) => {
-                  "use server";
-                  await signIn("dev-login", {
-                    email: String(formData.get("email")),
-                    redirectTo: "/dashboard",
-                  });
-                }}
-                className="flex flex-col gap-3"
-              >
-                <Callout variant="warning" title={t("devTitle")}>
-                  <p>{t("devReason")}</p>
-                  <p className="mt-2">
-                    {demoEmail
-                      ? t("devHint", { email: demoEmail })
-                      : t("devHintAny")}
-                  </p>
-                </Callout>
-                <Label htmlFor="dev-email">{t("emailLabel")}</Label>
-                <Input
-                  id="dev-email"
-                  name="email"
-                  type="email"
-                  required
-                  defaultValue={demoEmail ?? ""}
-                  placeholder={t("emailPlaceholder")}
-                />
-                <Button type="submit" className="w-full">
-                  {t("devSubmit")}
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
         )}
 
         {!emailEnabled && !googleEnabled && !devLogin && (

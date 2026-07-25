@@ -31,7 +31,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import type { BillingOrder } from "@/lib/digistore/member-billing";
 
-type Row = BillingOrder & { productName: string | null };
+export type Row = BillingOrder & { productName: string | null };
 
 // Order status → badge intent. Money already moved; this only colours it.
 const STATUS_VARIANT: Record<

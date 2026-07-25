@@ -13,9 +13,15 @@ import {
 
 describe("packages", () => {
   it("liefert ein bekanntes Paket", () => {
-    const pkg = getTokenPackage("starter");
-    expect(pkg.key).toBe("starter");
+    // Ein Paket AUS der Registry, kein fest verdrahtetes "starter": wer nur
+    // Abos verkauft, loescht die Token-Pakete aus
+    // config/digistore-products.json — und ein Test, der auf den
+    // Auslieferungszustand zeigt, wird dann rot, ohne dass etwas kaputt ist.
+    const [pkg] = listTokenPackages();
+    if (!pkg) return;
+    expect(pkg.key).toBeTruthy();
     expect(pkg.credits).toBeGreaterThan(0);
+    expect(getTokenPackage(pkg.key)).toEqual(pkg);
   });
 
   it("wirft bei unbekanntem Paket", () => {

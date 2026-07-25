@@ -3,11 +3,10 @@
 //
 // Two routes:
 //
-//  A) Default — fully automatic. The script starts a short-lived local server,
-//     opens the Digistore24 approval page in the browser, catches the redirect
-//     coming back and picks up the finished API key. It uses the built-in
-//     developer key; your own can be set via DIGISTORE_DEVELOPER_KEY in the
-//     .env.
+//  A) Default — fully automatic. The script opens the Digistore24 approval page
+//     in the browser and asks Digistore24 itself, every couple of seconds,
+//     whether the approval has happened yet. It uses the developer key the
+//     template ships with (lib/digistore/config.mjs).
 //
 //  B) --manual: The script opens the Digistore24 page where you create an API
 //     key yourself, and you paste it in here.
@@ -16,8 +15,11 @@
 // .gitignore and is NOT checked in.
 //
 // Flow according to the DS24 docs: requestApiKey (with the developer key) →
-// user confirms on request_url → redirect back to return_url →
-// retrieveApiKey(token) → api_key.
+// user confirms on request_url → retrieveApiKey(token) → api_key. The
+// return_url only decides where the browser is left standing afterwards; it is
+// not how this script finds out. retrieveApiKey answers an unconfirmed request
+// with request_status "pending" (and result "success"), so asking again is the
+// documented way to wait.
 // https://dev.digistore24.com/hc/en-us/articles/32486158815121
 //
 // Disconnecting again: the DS24 function `unregister()` deletes the key on the
@@ -28,40 +30,62 @@
 //   node scripts/ds24/connect-api-key.mjs           (or: node run.mjs ds24-connect)
 //   node scripts/ds24/connect-api-key.mjs --manual  (force route B)
 //   node scripts/ds24/connect-api-key.mjs --print   (write nothing, just show)
-//   node scripts/ds24/connect-api-key.mjs --port 53682   (different local port)
-import { createServer } from "node:http";
+//   node scripts/ds24/connect-api-key.mjs --port 3005  (the app runs on this port)
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline/promises";
 import "../lib/env.mjs";
 import { ds24Call, parseArgs } from "./_client.mjs";
-import { publicUrlFor, redirUrl } from "./_public-url.mjs";
+import { publicUrlFor } from "./_public-url.mjs";
 import { setEnvValue } from "../lib/env-write.mjs";
-
-// Built-in developer key. A developer key carries no account permissions, it
-// only identifies the calling application — the role of an OAuth client ID.
-// Not a secret, which is why it sits openly in the code and is deliberately not
-// obfuscated. The permission-bearing API key only comes into being once the
-// merchant approves the access in the browser, and afterwards lives solely in
-// that merchant's local .env.
-const BUILT_IN_DEVELOPER_KEY =
-  "1706550-aASzoSnqcChueKmMDBvcwqUWvOqnfhXTncfkTN6X"; // gitleaks:allow trufflehog:ignore pragma: allowlist secret NOSONAR nosemgrep
+import { rememberedPort } from "../dev/app-port.mjs";
+import {
+  DIGISTORE_API_URL,
+  DIGISTORE_DEVELOPER_KEY,
+  DIGISTORE_REDIR_URL,
+  DIGISTORE_REQUESTED_PERMISSIONS,
+} from "../../lib/digistore/config.mjs";
 
 const args = parseArgs(process.argv.slice(2));
 const printOnly = Boolean(args.print);
-const devKey = process.env.DIGISTORE_DEVELOPER_KEY || BUILT_IN_DEVELOPER_KEY;
+const devKey = DIGISTORE_DEVELOPER_KEY;
 const manual = Boolean(args.manual);
-const baseUrl = (process.env.DIGISTORE_URL || "https://www.digistore24.com").replace(/\/$/, "");
+const baseUrl = DIGISTORE_API_URL.replace(/\/$/, "");
 const ENV_FILE = ".env";
-const CALLBACK_PORT = Number(args.port || 53682);
 
-// Return address. Digistore24 does NOT accept a localhost address as
-// return_url — but the local listener sits exactly there. Hence the same detour
-// every other localhost URL takes here: the public /redir/ page, which forwards
-// the browser back to localhost (scripts/ds24/_public-url.mjs). That page never
-// sees the API key: it is exchanged further down via retrieveApiKey directly
-// between this script and Digistore24, the redirect only carries the "approved"
-// signal. Source of the page: web-site/ in the template source repo.
-const REDIR_URL = redirUrl();
+// Where the browser lands after the approval: a page of THIS app, on the web
+// server that is running anyway.
+//
+// There is deliberately no second web server here any more. This script used to
+// open one on a high port for exactly one request — and it could not survive
+// long enough: whoever first has to sign in at Digistore24 needs longer than
+// the script waits, and by the time they approve, the port answers nothing. The
+// browser then showed "this page cannot be loaded" while the approval itself
+// had gone through perfectly.
+//
+// So the browser is now sent somewhere that is still there minutes later, and
+// the approval is not read from an incoming request at all: the script asks
+// Digistore24 itself (retrieveApiKey, further down). The landing page is
+// therefore pure courtesy — if the app happens not to be running, the terminal
+// still gets the key.
+const CALLBACK_PATH = "/ds24-connected";
+const REDIR_URL = DIGISTORE_REDIR_URL;
+
+// Digistore24 does NOT accept a localhost address as return_url, and locally
+// that is exactly where the app sits. Hence the same detour every other
+// localhost URL takes here: the public /redir/ page, which forwards the browser
+// back to localhost (scripts/ds24/_public-url.mjs). That page never sees the API
+// key — it is exchanged directly between this script and Digistore24, and the
+// redirect carries nothing but a browser. Source: web-site/ in the source repo.
+//
+// APP_URL is the authority on the app's address: `node run.mjs start` writes the
+// port it really took in there (scripts/dev/app-port.mjs). .dev/port is the
+// fallback for a project that has never been started, 3000 the one after that.
+function appBaseUrl() {
+  if (args.port) return `http://localhost:${Number(args.port)}`;
+  const fromEnv = String(process.env.APP_URL || "").trim().replace(/\/+$/, "");
+  if (fromEnv) return fromEnv;
+  return `http://localhost:${rememberedPort() ?? 3000}`;
+}
 // Only for testing against a DS24 test host that lets localhost through.
 const noRelay = Boolean(args["no-relay"]);
 
@@ -77,6 +101,13 @@ function openBrowser(url) {
       detached: true,
       shell: process.platform === "win32",
     });
+    // A missing `xdg-open` — a headless Linux box, a container, a server over
+    // SSH — does NOT throw here: spawn reports it asynchronously as an 'error'
+    // event, and an 'error' event nobody listens for takes the whole process
+    // down. That would kill the setup on exactly the machines where the printed
+    // link above is the only way through. The link is already on screen, so
+    // there is nothing left to say here.
+    child.on("error", () => {});
     child.unref();
     return true;
   } catch {
@@ -134,10 +165,56 @@ async function manualRoute() {
 // ---------------------------------------------------------------------------
 // Route A — automatic, via the developer key.
 // ---------------------------------------------------------------------------
+
+const POLL_INTERVAL_MS = 2_000;
+// Eight minutes, and the number is not free: the agent running this command is
+// told to allow it ten (.claude/skills/setup-digistore). Giving up first means
+// the user reads our sentence instead of a killed process.
+const APPROVAL_TIMEOUT_MS = 8 * 60_000;
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Ask Digistore24 whether the merchant has approved yet.
+ *
+ * `retrieveApiKey` answers a pending request with `result: "success"` and
+ * `request_status: "pending"` — so a pending approval is a normal answer here,
+ * not an error, and asking again is the intended way to find out. That is what
+ * makes the local listener unnecessary: nothing has to reach this machine, the
+ * script goes and looks.
+ */
+async function waitForApproval(token) {
+  const deadline = Date.now() + APPROVAL_TIMEOUT_MS;
+  let failures = 0;
+
+  for (;;) {
+    if (Date.now() > deadline) {
+      throw new Error(
+        "Timed out (8 minutes) — nothing saved. Run the command again.",
+      );
+    }
+    await sleep(POLL_INTERVAL_MS);
+
+    let answer;
+    try {
+      answer = await ds24Call("retrieveApiKey", devKey, { token });
+      failures = 0;
+    } catch (err) {
+      // A hiccup on the line is not an answer, and giving up on the first one
+      // would throw away an approval the user has already granted. Five in a
+      // row is a different thing and says so.
+      if (++failures >= 5) throw err;
+      continue;
+    }
+
+    if (answer?.request_status !== "pending") return answer;
+  }
+}
+
 async function automaticRoute() {
-  const localCallback = `http://localhost:${CALLBACK_PORT}/callback`;
-  const returnUrl = noRelay ? localCallback : publicUrlFor(localCallback, REDIR_URL);
-  const permissions = process.env.DIGISTORE_REQUESTED_PERMISSIONS || "writable";
+  const landing = `${appBaseUrl()}${CALLBACK_PATH}`;
+  const returnUrl = noRelay ? landing : publicUrlFor(landing, REDIR_URL);
+  const permissions = DIGISTORE_REQUESTED_PERMISSIONS;
 
   // DS24 insists on https for site_url as well — it rejects an http://localhost.
   // During local development (APP_URL is http/localhost) we therefore send the
@@ -163,56 +240,20 @@ async function automaticRoute() {
     process.exit(1);
   }
 
-  // Wait for the redirect back — the listener lives for this one call only.
-  //
-  // Two of them, on 127.0.0.1 and on ::1: the browser is sent to "localhost",
-  // and which of the two that resolves to differs from machine to machine. A
-  // single IPv4 listener would leave everyone whose resolver answers ::1 first
-  // waiting forever. Loopback only, deliberately — nothing outside this machine
-  // is meant to reach it.
-  const callbackReceived = new Promise((resolve, reject) => {
-    const servers = [];
-    const shutDown = () => servers.forEach((s) => s.close());
-
-    const listen = (host, required) => {
-      const server = createServer((req, res) => {
-        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-        res.end(
-          "<html><body style='font-family:sans-serif;padding:2rem'>" +
-            "<h1>Done</h1><p>You can close this window and return to the terminal.</p>" +
-            "</body></html>",
-        );
-        shutDown();
-        resolve();
-      });
-      // Only the IPv4 side is fatal. A machine without IPv6 simply has no ::1,
-      // and that is not a reason to abort the setup.
-      server.on("error", (err) => (required ? reject(err) : server.close()));
-      server.listen(CALLBACK_PORT, host);
-      servers.push(server);
-    };
-
-    listen("127.0.0.1", true);
-    listen("::1", false);
-
-    // Don't hang around forever if the user aborts.
-    setTimeout(() => {
-      shutDown();
-      reject(new Error("Timed out (5 minutes) — nothing saved."));
-    }, 300_000).unref();
-  });
-
   showLink(requestUrl, "Please approve the access at Digistore24:");
-  console.log("Waiting for the approval …");
-  await callbackReceived;
+  console.log("Waiting for the approval — take your time, this waits for you.");
 
-  const result = await ds24Call("retrieveApiKey", devKey, { token: requestToken });
+  const result = await waitForApproval(requestToken);
   if (result?.request_status !== "completed" || !result?.api_key) {
     console.error(
       `\n✗ Approval not completed (status: ${result?.request_status || "unknown"}).`,
     );
     process.exit(1);
   }
+  // Say it in the terminal too. The browser may well be showing an error —
+  // whoever has not started the app yet lands on a page that does not answer —
+  // and that is exactly the moment somebody concludes the setup failed.
+  console.log("✓ Approval received.");
   // On some accounts the SHA passphrase comes along right away — save it too.
   done(result.api_key, {
     DIGISTORE_IPN_PASSPHRASE: result.thankyou_page_key,

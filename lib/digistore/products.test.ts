@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   allProducts,
+  findProduct,
   getProduct,
   productsByKind,
   hasProductId,
@@ -10,6 +11,21 @@ import {
   intervalKey,
   type ProductDef,
 } from "./products";
+
+// Ein Key AUS der Registry, nicht einer aus dem Template.
+//
+// Die Registry ist die Datei, die der Kunde umbaut — das steht in ihrem eigenen
+// `_comment`, und wer nur Abos verkauft, loescht die Token-Pakete daraus. Ein
+// Test, der auf "pro" oder "starter" festgenagelt ist, wird dann rot und sieht
+// aus wie ein Fehler in der App. Geprueft gehoert die FORM dessen, was die
+// Registry haelt, nicht ihr Auslieferungszustand.
+//
+// `null` bei leerer Registry: auch das ist ein legitimer Zwischenstand — die
+// Planseite hat einen EmptyState genau dafuer.
+function someProduct(kind?: ProductDef["kind"]): ProductDef | null {
+  const all = kind ? productsByKind(kind) : allProducts();
+  return all[0] ?? null;
+}
 
 describe("Produkt-Registry", () => {
   it("reads products including the resolved key", () => {
@@ -23,10 +39,29 @@ describe("Produkt-Registry", () => {
   });
 
   it("liefert ein Produkt oder wirft bei unbekanntem key", () => {
-    const pro = getProduct("pro");
-    expect(pro.kind).toBe("token");
-    expect(pro.credits).toBeGreaterThan(0);
+    const any = someProduct();
+    if (any) expect(getProduct(any.key).key).toBe(any.key);
     expect(() => getProduct("gibtsnicht")).toThrow();
+  });
+
+  it("jedes Token-Paket hat ein Guthaben", () => {
+    // Die Bedingung, an der lib/tokens/packages.ts sonst wirft: ein
+    // kind="token" ohne `credits` ist ein Paket, das nichts gutschreibt.
+    for (const pkg of productsByKind("token")) {
+      expect(pkg.credits, pkg.key).toBeGreaterThan(0);
+    }
+  });
+
+  it("findProduct liefert null statt zu werfen — auch fuer Prototyp-Keys", () => {
+    const any = someProduct();
+    if (any) expect(findProduct(any.key)?.key).toBe(any.key);
+    // Der Fall, fuer den es die Funktion gibt: ein Key, den die Registry nicht
+    // (mehr) fuehrt, weil er umbenannt oder geloescht wurde.
+    expect(findProduct("gibtsnicht")).toBeNull();
+    // Der Object.hasOwn-Schutz gilt hier genauso wie in getProduct().
+    for (const key of ["constructor", "__proto__", "toString", "valueOf"]) {
+      expect(findProduct(key)).toBeNull();
+    }
   });
 
   it("filtert nach Typ", () => {
@@ -37,9 +72,17 @@ describe("Produkt-Registry", () => {
   });
 
   it("meldet fehlende productId und wirft bei productId()", () => {
-    // Im Template sind die productIds Platzhalter (null) — vor dem Sync.
-    expect(hasProductId("pro")).toBe(false);
-    expect(() => productId("pro")).toThrow(/sync-products/);
+    // Vor dem Sync sind die productIds Platzhalter (null) — danach nicht mehr,
+    // denn sync-products.mjs schreibt sie in genau diese Datei zurueck. Also
+    // wird die Verknuepfung geprueft, nicht der eine oder andere Zustand:
+    // fehlt die id, muss productId() werfen und auf den Sync zeigen.
+    for (const product of allProducts()) {
+      if (hasProductId(product.key)) {
+        expect(productId(product.key)).toBeTruthy();
+      } else {
+        expect(() => productId(product.key)).toThrow(/sync-products/);
+      }
+    }
   });
 });
 

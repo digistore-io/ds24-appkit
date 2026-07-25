@@ -111,6 +111,30 @@ try {
     ? await sql`select * from grants where member_id = ${memberId} order by created_at`
     : [];
 
+  // --- The AI assistant --------------------------------------------------------
+  // Everything this person typed into the chat, and everything she answered.
+  // Their own words are about as personal as this file gets — and unlike the
+  // billing records they are deleted with the account, so an export made after
+  // a deletion request correctly finds none. Empty when the chat is switched
+  // off, and empty for a purchase with no account behind it.
+  const chatMessages = memberId
+    ? await sql`select id, role, content, created_at from chat_messages where member_id = ${memberId} order by created_at`
+    : [];
+
+  // What this person's use of the AI features consumed.
+  //
+  // Numbers only — no prompt and no answer, because `ai_usage` holds none
+  // (db/schema-ai-usage.ts). It belongs in the answer all the same: it is a
+  // record OF this person's activity, with timestamps, even though it says
+  // nothing about what they said. Rows survive a deletion with the member link
+  // removed, so an export made afterwards correctly finds none.
+  const aiUsage = memberId
+    ? await sql`
+        select id, task, provider, model, input_tokens, output_tokens,
+               cached_input_tokens, thinking_tokens, outcome, latency_ms, created_at
+        from ai_usage where member_id = ${memberId} order by created_at`
+    : [];
+
   // --- The raw webhooks --------------------------------------------------------
   // Held for 60 days for diagnosis and pruned after that
   // (lib/digistore/ipn-log.ts), so this is usually shorter than the order list.
@@ -147,6 +171,10 @@ try {
       reviewBeforeSending: [
         "`webhookEvents[].payload` is the RAW body Digistore24 posted. It can contain fields about OTHER people — an affiliate, for instance. Third-party data must be redacted before this file is handed over; only this person's data belongs in the answer.",
         "`grants[].note` and `tokenLedger[].note` are what the operator wrote about this person, and `issued_by` is who wrote it. They belong in the answer — the app hides them from the customer's own page as a matter of tone, which is not an exemption. Read them before sending.",
+        "`chatMessages[].content` is what this person typed into the assistant. People paste things into a chat box that nobody asked for, occasionally including data about somebody else — the same redaction rule as the webhook payloads applies.",
+      ],
+      alsoIncluded: [
+        "`aiUsage[]` is what this person's use of the AI features consumed — task, provider, model, token counts, timestamps. It contains NO prompt and NO answer, because that table holds none. It is here because it records this person's activity, not because it records their words.",
       ],
       notHeldAtAll: [
         "No tracking, profiling or advertising data — this application collects none.",
@@ -165,6 +193,8 @@ try {
     tokenAccounts,
     tokenLedger,
     grants,
+    chatMessages,
+    aiUsage,
     webhookEvents,
   };
 
@@ -180,7 +210,7 @@ try {
   console.error(
     found === 0
       ? `\nℹ Nothing found for ${email}. That is itself a valid answer to a subject access request — but check the spelling first.${where}`
-      : `\n✓ ${email}: account ${account ? "yes" : "no"}, ${orders.length} order(s), ${subscriptions.length} subscription(s), ${grants.length} grant(s), ${tokenLedger.length} ledger entr${tokenLedger.length === 1 ? "y" : "ies"}, ${webhookEvents.length} webhook event(s).${where}`,
+      : `\n✓ ${email}: account ${account ? "yes" : "no"}, ${orders.length} order(s), ${subscriptions.length} subscription(s), ${grants.length} grant(s), ${tokenLedger.length} ledger entr${tokenLedger.length === 1 ? "y" : "ies"}, ${chatMessages.length} chat message(s), ${aiUsage.length} AI call(s), ${webhookEvents.length} webhook event(s).${where}`,
   );
 } finally {
   await sql.end({ timeout: 5 });

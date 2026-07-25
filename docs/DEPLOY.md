@@ -55,29 +55,58 @@ in production.
 
 ---
 
-## Scheduled cleanup (IPN log)
+## Scheduled cleanup
 
-The IPN log (`/dashboard/admin/purchases` → **IPN-Log**) keeps the full raw
-payload of every incoming IPN so a rejected or mis-signed webhook can be
-diagnosed after the fact. That payload contains buyer data, so it is **pruned
-after 60 days** — you just have to schedule the prune.
+**There is nothing to set up.** The app schedules its own jobs while it is
+running — see [`docs/cron.md`](cron.md). Two ship, both daily:
 
-1. Set a `CRON_SECRET` in the host's secrets
+| Job | What it deletes | Window |
+|---|---|---|
+| `prune-ai-usage` | AI-usage rows — the cost history | 12 months |
+| `prune-ipn-log` | IPN-log rows — raw webhook payloads, i.e. buyer PII | 60 days |
+
+Both windows are one number in `config/cron.json`.
+
+This used to be a manual step: an endpoint, and a line here telling you to point
+your host's scheduler at it. It was the most skippable line in this document,
+and skipping it left buyer data in the log for ever with nothing to say so.
+
+**Two things to check after the first deploy**, because "it runs by itself" is
+worth verifying once rather than assuming for a year:
+
+```
+GET https://YOUR-DOMAIN/api/cron?list
+Authorization: Bearer <CRON_SECRET>
+```
+
+and the `[cron]` lines in the app's log. `last run: never` a week in means the
+scheduler is not running — most likely the app is being restarted more often
+than the interval, or `config/cron.json` has `"enabled": false`.
+
+### If you would rather your platform did the timing
+
+Some hosts stop a container between requests, and some Operators simply want the
+cleanup at 03:00 and not "24 h after last time". Both are handled the same way:
+
+1. `"enabled": false` in `config/cron.json` — the in-app timer stops, the jobs
+   stay.
+2. Set `CRON_SECRET` in the host's secrets
    (`node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`).
-2. Have the host's scheduler call the endpoint **once a day**:
+3. Have the scheduler call it once a day:
 
    ```
-   GET https://YOUR-DOMAIN/api/cron/prune-ipn-log
+   POST https://YOUR-DOMAIN/api/cron
    Authorization: Bearer <CRON_SECRET>
    ```
 
-   - **Railway / Render / Fly:** add a cron job (or a tiny scheduled service)
-     that runs `curl -fsS -H "Authorization: Bearer $CRON_SECRET" \
-     https://YOUR-DOMAIN/api/cron/prune-ipn-log`.
-   - **Vercel:** add it to `vercel.json` → `crons` (daily) and set `CRON_SECRET`.
-   - **A plain server / crontab:** the same `curl` line in a daily cron entry —
-     or, with database access, `node run.mjs db-prune-ipn` (no running app needed).
+   - **Railway / Render / Fly:** a cron job running
+     `curl -fsS -X POST -H "Authorization: Bearer $CRON_SECRET" \
+     https://YOUR-DOMAIN/api/cron`.
+   - **Vercel:** `vercel.json` → `crons` (daily), and set `CRON_SECRET`.
+   - **A plain server / crontab:** the same `curl` line — or, with database
+     access and no running app, `node run.mjs db-prune-ai` and
+     `node run.mjs db-prune-ipn`.
 
-Without `CRON_SECRET` the endpoint refuses to run (fail closed), so it can never
-be left open. To change the window, use `node run.mjs db-prune-ipn --days 30`
-locally; the endpoint itself uses the 60-day default.
+Without `CRON_SECRET` the endpoint refuses to run (503, fail closed), so it can
+never be left open as a "delete my data" URL. The in-app scheduler needs no
+secret — it is not making a request.

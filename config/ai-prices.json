@@ -1,0 +1,14 @@
+{
+  "_comment": "What each model costs, per MILLION tokens, in the currency named below. Yours to maintain — nothing fetches prices, because a template whose correctness depends on five undocumented endpoints is a template that breaks quietly. A model with no entry here is still recorded with its token counts, and the AI-costs page counts it separately rather than pretending it was free. Keys are 'provider/model'. Check with: node run.mjs ai-check.",
+  "_currencyComment": "One default currency, and any entry may name its own — an installation drawing on providers who bill differently stays honest that way. Nothing is converted and no two currencies are ever added together. Recommended: EUR for a German installation, USD for an English one. A recommendation, not a rule: a provider bills in what it bills in.",
+  "defaultCurrency": "USD",
+  "updated": "2026-07-25",
+  "models": {
+    "anthropic/claude-sonnet-5": {
+      "input": 3,
+      "output": 15,
+      "cachedInput": 0.3,
+      "cacheWrite": 3.75
+    }
+  }
+}

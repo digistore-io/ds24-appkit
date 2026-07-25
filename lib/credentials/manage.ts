@@ -12,12 +12,17 @@ import { users } from "@/db/schema";
 import { hashPassword, verifyPassword } from "@/lib/credentials/hash";
 import {
   CredentialError,
+  LOOKUP_BUCKET,
+  LOOKUP_LIMIT,
+  LOOKUP_ORIGIN_BUCKET,
+  LOOKUP_ORIGIN_LIMIT,
   SIGN_IN_BUCKET,
   SIGN_IN_LIMIT,
   SIGN_IN_ORIGIN_BUCKET,
   SIGN_IN_ORIGIN_LIMIT,
   canChangePassword,
   checkNewPassword,
+  normaliseEmail,
 } from "@/lib/credentials/rules";
 import { clearKey, isLimited, record, resetRateLimits } from "@/lib/rate-limit";
 
@@ -147,6 +152,60 @@ export type SignInResult =
   | { ok: true; user: AuthenticatedUser }
   | { ok: false; rateLimited: boolean };
 
+/**
+ * Does this ADDRESS have a password? — the step-1 lookup of the sign-in dialog.
+ *
+ * ⛔ THE EXCEPTION TO THE RULE AT THE TOP OF THIS FILE. Every other function
+ * here acts on an id the caller read from a session; this one takes an
+ * identifier straight from a form typed by a stranger. That is deliberate and it
+ * is the only such function — signing in is the one moment where nobody has a
+ * session yet, so there is no id to read.
+ *
+ * Two properties keep it as narrow as a form-fed lookup can be, and both are
+ * load-bearing rather than stylistic:
+ *
+ *   1. **An unknown address answers `false`**, exactly as a known address with
+ *      no password does. So the caller can distinguish "has a password" from
+ *      "does not" — and never "exists" from "does not exist".
+ *   2. **It returns a boolean about passwords and nothing else.** Not the row,
+ *      not the id, not `emailVerified`, not `blockedAt`. Whoever needs one of
+ *      those on the sign-in path is writing a different, worse function and
+ *      should notice that they are.
+ *
+ * It is still an oracle — that was accepted when the two-step dialog was chosen
+ * (see LOOKUP_LIMIT in rules.ts) — so it is metered. Over the limit it answers
+ * `rateLimited` WITHOUT reading the database: a limit that still returns the
+ * answer it was added to withhold protects nothing.
+ */
+export type LookupResult =
+  | { ok: true; hasPassword: boolean }
+  | { ok: false; rateLimited: true };
+
+export async function addressHasPassword(
+  email: string,
+  /** Where the lookup came from — see `originOf` in lib/auth/password-login.ts. */
+  origin?: string | null,
+): Promise<LookupResult> {
+  const key = normaliseEmail(email);
+
+  if (isLimited(LOOKUP_BUCKET, key, LOOKUP_LIMIT)) return { ok: false, rateLimited: true };
+  if (origin && isLimited(LOOKUP_ORIGIN_BUCKET, origin, LOOKUP_ORIGIN_LIMIT)) {
+    return { ok: false, rateLimited: true };
+  }
+
+  // Counted BEFORE the answer is produced, and on every hit rather than on
+  // failures — a lookup has no failure, and the answer is the thing metered.
+  record(LOOKUP_BUCKET, key, LOOKUP_LIMIT);
+  if (origin) record(LOOKUP_ORIGIN_BUCKET, origin, LOOKUP_ORIGIN_LIMIT);
+
+  const [row] = await db
+    .select({ passwordHash: users.passwordHash })
+    .from(users)
+    .where(eq(users.email, key));
+
+  return { ok: true, hasPassword: Boolean(row?.passwordHash) };
+}
+
 export async function verifyPasswordLogin(
   email: string,
   password: string,
@@ -158,7 +217,8 @@ export async function verifyPasswordLogin(
    */
   origin?: string | null,
 ): Promise<SignInResult> {
-  const key = email.trim().toLowerCase();
+  // The SAME normalisation the step-1 lookup used — see normaliseEmail().
+  const key = normaliseEmail(email);
   if (isRateLimited(key)) return { ok: false, rateLimited: true };
   if (origin && isLimited(SIGN_IN_ORIGIN_BUCKET, origin, SIGN_IN_ORIGIN_LIMIT)) {
     return { ok: false, rateLimited: true };
@@ -211,7 +271,7 @@ export function recordFailedAttempt(key: string, now: number = Date.now()): void
 }
 
 export function clearAttempts(key: string | null): void {
-  if (key) clearKey(SIGN_IN_BUCKET, key.trim().toLowerCase());
+  if (key) clearKey(SIGN_IN_BUCKET, normaliseEmail(key));
 }
 
 /** Test seam — drops all recorded failures, in every bucket. */

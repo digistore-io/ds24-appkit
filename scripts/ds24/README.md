@@ -7,8 +7,7 @@ ESM — no build needed.
 ## Prerequisites (env)
 
 ```bash
-export DIGISTORE_API_KEY="…"                       # writable/developer key
-export DIGISTORE_URL="https://www.digistore24.com" # Digistore24 API base
+export DIGISTORE_API_KEY="…"   # writable/developer key
 ```
 
 You fetch the API key with `node run.mjs ds24-connect` (= `connect-api-key.mjs`): the
@@ -63,8 +62,8 @@ http://localhost:3000/optin/[ORDER_ID]
 ```
 
 The page behind it is static and never sees a key or a purchase; the target host
-is hard-wired to localhost, only port and path come from the URL. Point
-`DIGISTORE_REDIR_URL` somewhere else if you run your own.
+is hard-wired to localhost, only port and path come from the URL. The address
+itself is in `lib/digistore/config.mjs`.
 
 **The IPN endpoint is the exception.** That URL is called by the *Digistore24
 server*, and its localhost is not yours — the redirect cannot help, which is why

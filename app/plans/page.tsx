@@ -18,6 +18,7 @@ import { startCheckoutAction } from "./actions";
 import { PublicHeader } from "@/components/public-header";
 import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -117,8 +118,43 @@ async function PlanCard({
           // Signed in: the checkout is built on click, not on render, so it
           // can carry the identity that names this Member. `mt-auto`
           // sits on the form — it is what keeps the card footers aligned.
-          <form action={startCheckoutAction} className="mt-auto">
+          <form action={startCheckoutAction} className="mt-auto flex flex-col gap-3">
             <input type="hidden" name="planKey" value={def.key} />
+            {/* Only for packages, and only for a signed-in buyer. A
+                subscription has no balance to keep topped up, and the
+                signed-OUT path serves a SHARED cached link (AD-6/AD-7) which
+                cannot carry one person's preference. */}
+            {def.kind === "token" && (
+              // A NATIVE checkbox, and the one place this template knowingly
+              // steps outside `components/ui/` — recorded here rather than left
+              // to look like an oversight.
+              //
+              // shadcn's Checkbox is a Radix button with no form value: it needs
+              // `@radix-ui/react-checkbox` (NFR-12 forbids a new runtime
+              // dependency) plus a hidden input to reach `FormData` at all. This
+              // control has to work in a plain POST — it authorises a recurring
+              // card charge, and the consent for that must not depend on
+              // JavaScript having loaded.
+              //
+              // So: native input, but styled and labelled like the rest of the
+              // system — colours from tokens, the focus ring the design system
+              // gives every other control, and a real <Label> so the text is a
+              // click target.
+              <div className="flex items-start gap-2">
+                <input
+                  id={`auto-reload-${def.key}`}
+                  type="checkbox"
+                  name="autoReload"
+                  className="accent-primary border-input focus-visible:ring-ring/50 mt-0.5 size-4 shrink-0 rounded-[4px] focus-visible:ring-[3px] focus-visible:outline-none"
+                />
+                <Label
+                  htmlFor={`auto-reload-${def.key}`}
+                  className="text-muted-foreground text-sm leading-snug font-normal"
+                >
+                  {t("autoReloadLabel")}
+                </Label>
+              </div>
+            )}
             <Button type="submit" size="lg" className="w-full">
               {t("buy")}
             </Button>

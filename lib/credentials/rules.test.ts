@@ -1,9 +1,14 @@
 import { describe, it, expect } from "vitest";
 import {
+  ATTEMPT_WINDOW_MS,
+  LOOKUP_LIMIT,
+  LOOKUP_ORIGIN_LIMIT,
   MAX_PASSWORD_LENGTH,
   MIN_PASSWORD_LENGTH,
+  SIGN_IN_ORIGIN_LIMIT,
   canChangePassword,
   checkNewPassword,
+  normaliseEmail,
   passwordLength,
 } from "./rules";
 
@@ -71,6 +76,45 @@ describe("canChangePassword", () => {
 
   it("refuses when there is none", () => {
     expect(canChangePassword({ hasPassword: false })).toBe("noPasswordSet");
+  });
+});
+
+describe("normaliseEmail", () => {
+  it("trims and lowercases", () => {
+    expect(normaliseEmail("  Owner@Example.COM ")).toBe("owner@example.com");
+  });
+
+  it("survives the empty string rather than throwing", () => {
+    // The sign-in form can submit one, and a lookup on "" must be an ordinary
+    // miss, not a crash on the sign-in path.
+    expect(normaliseEmail("")).toBe("");
+    expect(normaliseEmail("   ")).toBe("");
+  });
+});
+
+describe("the lookup limits", () => {
+  // These meter the step-1 address lookup on /login — the one thing in this app
+  // that answers a question about an address nobody has proved they own.
+
+  it("counts in the same window as the sign-in limits", () => {
+    // One number to reason about, not three. If these ever diverge it should be
+    // because somebody decided to, not because a literal was pasted.
+    expect(LOOKUP_LIMIT.windowMs).toBe(ATTEMPT_WINDOW_MS);
+    expect(LOOKUP_ORIGIN_LIMIT.windowMs).toBe(ATTEMPT_WINDOW_MS);
+  });
+
+  it("is more generous per address than per origin is per origin", () => {
+    // A person fumbling their own address a few times must never hit it; a
+    // script walking an address list is what the origin counter is for.
+    expect(LOOKUP_LIMIT.max).toBeGreaterThan(0);
+    expect(LOOKUP_ORIGIN_LIMIT.max).toBeGreaterThan(LOOKUP_LIMIT.max);
+  });
+
+  it("tolerates more lookups per origin than failed sign-ins per origin", () => {
+    // A lookup is counted on EVERY hit, a failed sign-in only on failures. The
+    // same number would therefore be a much tighter limit here, and would fire
+    // on an office behind one NAT going about its day.
+    expect(LOOKUP_ORIGIN_LIMIT.max).toBeGreaterThanOrEqual(SIGN_IN_ORIGIN_LIMIT.max);
   });
 });
 

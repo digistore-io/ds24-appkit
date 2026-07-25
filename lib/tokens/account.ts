@@ -14,13 +14,14 @@
 // asserting has to be assertable without one.
 import { db } from "@/db";
 import { tokenAccounts, tokenLedger } from "@/db/schema";
-import { and, desc, eq, isNull, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import { createBillingOnDemand, type BillOnDemandArgs } from "@/lib/digistore/billing";
 import { productId } from "@/lib/digistore/products";
 import { getTokenPackage } from "./packages";
 import { buildIdentity } from "@/lib/digistore/custom";
 import { ensureCheckoutToken } from "@/lib/users/checkout-token";
-import { decideAdjustment, TokenError } from "./rules";
+import { clampThreshold, decideAdjustment, TokenError } from "./rules";
+import { sellsTokens } from "@/lib/billing-mode";
 import type { Actor } from "@/lib/users/rules";
 
 /** Thrown when a consumption would exceed the balance. */
@@ -196,8 +197,22 @@ export async function creditTokens(args: {
   credits: number;
   ds24OrderId: string;
   note?: string;
-  /** Release the lock after a successful auto reload. */
+  /**
+   * Release the lock after a successful auto reload.
+   *
+   * Released ONLY when it is still the lock the outstanding charge set — see
+   * the `reloadLockedAt` guard at both write sites below. An unconditional
+   * clear here is the same defect `releaseReloadSlot` was fixed for in story
+   * 1.5: a late IPN wipes a successor's lock and the next spend fires a third
+   * charge against the customer's card.
+   */
   releaseReloadLock?: boolean;
+  /**
+   * The lock timestamp this credit is allowed to clear. Defaults to clearing
+   * whatever is there — kept only so existing callers compile; the IPN passes
+   * the account's current `reloadLockedAt`.
+   */
+  releaseLockedAt?: Date | null;
   /** How the purchase was initiated (from the k: pair). Stored on the ledger
    *  row so a top-up is distinguishable from a manual purchase. */
   origin?: string | null;
@@ -268,7 +283,7 @@ export async function creditTokens(args: {
             ...(args.linkPurchaseId && !acct.ds24PurchaseId
               ? { ds24PurchaseId: args.linkPurchaseId }
               : {}),
-            ...(args.releaseReloadLock
+            ...(args.releaseReloadLock && ownsLock(acct, args)
               ? { reloadLockedAt: null, lastReloadAt: now }
               : {}),
             updatedAt: now,
@@ -285,7 +300,7 @@ export async function creditTokens(args: {
         ...(args.linkPurchaseId && !acct.ds24PurchaseId
           ? { ds24PurchaseId: args.linkPurchaseId }
           : {}),
-        ...(args.releaseReloadLock
+        ...(args.releaseReloadLock && ownsLock(acct, args)
           ? { reloadLockedAt: null, lastReloadAt: now }
           : {}),
         updatedAt: now,
@@ -336,6 +351,18 @@ export async function adjustTokens(args: {
   reason: unknown;
   now?: Date;
 }): Promise<{ balance: number; delta: number }> {
+  // An app that sells no tokens carries no endpoint that mints them
+  // (config/digistore-products.json -> "billingMode"; lib/billing-mode.ts).
+  // HERE rather than in the server action, because this is the only by-hand
+  // mint in the app and every caller has to meet the same refusal — the form
+  // being gone from the page protects nothing.
+  //
+  // Deliberately the one place the mode does more than hide a card: everything
+  // else about a legacy balance keeps working — it is displayed, it is
+  // consumed, an IPN still credits it. Only creating tokens out of nothing
+  // stops. To correct a legacy balance, set the mode back.
+  if (!sellsTokens()) throw new TokenError("tokensNotSold");
+
   const now = args.now ?? new Date();
   // Outside the transaction, exactly as creditTokens does it: `FOR UPDATE`
   // cannot lock a row that does not exist, and a Member who never bought
@@ -379,6 +406,29 @@ export async function adjustTokens(args: {
     });
     return { balance: decision.balanceAfter, delta: decision.delta };
   });
+}
+
+/**
+ * Does this credit still own the lock it is about to clear?
+ *
+ * The row is read `FOR UPDATE` inside the transaction, so `acct.reloadLockedAt`
+ * is the live value. When the caller names the timestamp it expects, clearing
+ * a DIFFERENT one is refused: a charge whose IPN arrives after its lock went
+ * stale and was taken over must not release the successor's lock, or the next
+ * spend claims a fresh slot and fires a third charge. Same rule, same reason as
+ * `releaseReloadSlot` (story 1.5 §D2) — that one guarded its own UPDATE and
+ * this twin was missed.
+ *
+ * A caller that names nothing keeps the old behaviour, so nothing that does not
+ * know about locks changes.
+ */
+function ownsLock(
+  acct: { reloadLockedAt: Date | null },
+  args: { releaseLockedAt?: Date | null },
+): boolean {
+  if (args.releaseLockedAt === undefined) return true;
+  if (args.releaseLockedAt === null) return acct.reloadLockedAt === null;
+  return acct.reloadLockedAt?.getTime() === args.releaseLockedAt.getTime();
 }
 
 /**
@@ -435,7 +485,35 @@ export async function releaseReloadSlot(
     );
 }
 
-/** Sets an account's auto-reload settings. */
+/**
+ * The threshold this package can actually be topped up past.
+ *
+ * Resolving the package here rather than in `rules.ts` keeps that file pure —
+ * the registry lookup is I/O-shaped and throws on an unknown key. An unknown or
+ * absent package cannot be reasoned about, so the threshold is refused
+ * outright: 0 means "only when empty", which is the safe direction. A wrong
+ * high threshold is a repeating card charge.
+ */
+function safeReloadThreshold(threshold: number, packageKey: string | null): number {
+  if (!packageKey) return 0;
+  try {
+    return clampThreshold(threshold, getTokenPackage(packageKey).credits);
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Sets an account's auto-reload settings.
+ *
+ * The threshold is CLAMPED against the package it tops up with
+ * (`safeReloadThreshold`). `shouldAutoReload` is `balance <= threshold`, so a
+ * threshold at or above the package's credits means the balance is still at or
+ * below it right after a successful top-up — and the next spend fires another
+ * charge, and the next, until Digistore24's 10-per-day cap stops it. Clamping
+ * here rather than at the call sites is deliberate: this is the only writer of
+ * those columns, and the documented cron-sweep path calls it directly.
+ */
 export async function setAutoReload(args: {
   memberId: string;
   enabled: boolean;
@@ -450,12 +528,106 @@ export async function setAutoReload(args: {
     .update(tokenAccounts)
     .set({
       autoReloadEnabled: args.enabled,
-      autoReloadThreshold: args.threshold,
+      autoReloadThreshold: safeReloadThreshold(args.threshold, args.packageKey),
       autoReloadPackageKey: args.packageKey,
       ds24PurchaseId: args.ds24PurchaseId,
       updatedAt: now,
     })
     .where(eq(tokenAccounts.memberId, args.memberId));
+}
+
+/**
+ * Stops unattended charging for one account, and forgets the mandate when the
+ * mandate itself is what went wrong.
+ *
+ * Called from two places that have nothing to do with each other and everything
+ * to do with the same rule — **the app must never charge a card it has been
+ * told to stop charging**:
+ *
+ *  - a refund or chargeback of the purchase the mandate points at. Continuing
+ *    to charge a payment the customer has just reversed is the single worst
+ *    thing this feature can do.
+ *  - blocking the account. A blocked Member is redirected out of `/dashboard`,
+ *    so their own off switch is unreachable — leaving them armed would charge a
+ *    card belonging to somebody the Operator has just locked out.
+ *
+ * `clearMandate` distinguishes the two: a reversed purchase must not be
+ * re-armable, so its `ds24PurchaseId` goes; a blocked account may be unblocked
+ * tomorrow and keeps its mandate.
+ *
+ * Idempotent, and silent when there is no account — both callers run on paths
+ * where most accounts have never touched tokens.
+ */
+export async function disarmAutoReload(args: {
+  memberId: string;
+  clearMandate?: boolean;
+  /** Only disarm when the mandate is this purchase. Omit to disarm regardless. */
+  onlyForPurchaseId?: string;
+  now?: Date;
+}): Promise<boolean> {
+  const now = args.now ?? new Date();
+  const acct = await getTokenAccount(args.memberId);
+  if (!acct) return false;
+  if (args.onlyForPurchaseId && acct.ds24PurchaseId !== args.onlyForPurchaseId) {
+    return false;
+  }
+  if (!acct.autoReloadEnabled && !args.clearMandate) return false;
+  await db
+    .update(tokenAccounts)
+    .set({
+      autoReloadEnabled: false,
+      // The lock goes too. `claimReloadSlot` only ever takes a slot on an
+      // ENABLED account, so a lock left behind here could never be cleared by
+      // anything — and would silently swallow the first 6h of a later re-arm.
+      reloadLockedAt: null,
+      ...(args.clearMandate ? { ds24PurchaseId: null, autoReloadPackageKey: null } : {}),
+      updatedAt: now,
+    })
+    .where(eq(tokenAccounts.id, acct.id));
+  return true;
+}
+
+/**
+ * Flips ONLY the on/off switch, leaving threshold, package and mandate alone.
+ *
+ * A single conditional UPDATE rather than a read-then-write: the Member's own
+ * switch and the IPN's arming touch the same row, and a read-modify-write there
+ * hands back a stale snapshot that clobbers a mandate the IPN has just linked.
+ *
+ * Enabling REQUIRES a stored mandate and a package. It cannot invent one — the
+ * chargeable `purchase_id` only comes into being through a purchase — so this
+ * returns false rather than arming something that would answer
+ * "not-configured" for ever, silently.
+ *
+ * Returns whether the row was actually changed.
+ */
+export async function setAutoReloadEnabled(args: {
+  memberId: string;
+  enabled: boolean;
+  now?: Date;
+}): Promise<boolean> {
+  const now = args.now ?? new Date();
+  const changed = await db
+    .update(tokenAccounts)
+    .set({
+      autoReloadEnabled: args.enabled,
+      // Turning off clears the lock: `claimReloadSlot` only takes a slot on an
+      // enabled account, so a lock left here could never be released by
+      // anything, and would silently swallow the first 6h of a later re-arm.
+      ...(args.enabled ? {} : { reloadLockedAt: null }),
+      updatedAt: now,
+    })
+    .where(
+      args.enabled
+        ? and(
+            eq(tokenAccounts.memberId, args.memberId),
+            isNotNull(tokenAccounts.ds24PurchaseId),
+            isNotNull(tokenAccounts.autoReloadPackageKey),
+          )
+        : eq(tokenAccounts.memberId, args.memberId),
+    )
+    .returning({ id: tokenAccounts.id });
+  return changed.length === 1;
 }
 
 export interface AutoReloadResult {

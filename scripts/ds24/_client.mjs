@@ -1,17 +1,17 @@
 // Shared Digistore24 API client for the setup scripts (plain Node ESM).
-// Auth: header X-DS-API-KEY. Base URL via DIGISTORE_URL (test/prod).
+// Auth: header X-DS-API-KEY. Base URL from lib/digistore/config.mjs.
 //
 // Env:
 //   DIGISTORE_API_KEY  (required in order to run; for product/IPN management
 //                       usually a "writable" or "developer" key)
-//   DIGISTORE_URL      (optional; defaults to prod)
 //
 // The .env is loaded automatically (scripts/lib/env.mjs); variables already set
 // in the shell take precedence.
 import "../lib/env.mjs";
+import { DIGISTORE_API_URL } from "../../lib/digistore/config.mjs";
 
 export function baseUrl() {
-  return process.env.DIGISTORE_URL || "https://www.digistore24.com";
+  return DIGISTORE_API_URL;
 }
 
 export function requireApiKey() {

@@ -35,6 +35,18 @@ const nextConfig: NextConfig = {
   // Runs directly with `npm run start` (next start) on Railway/Render/Fly.
   // For minimal Docker images, optionally set `output: "standalone"` and then
   // mit `node .next/standalone/server.js` starten.
+
+  // The assistant reads her handbook from `content/knowledge/` at runtime, and
+  // Next.js only copies what it can SEE being imported. A `readdirSync` is
+  // invisible to that analysis, so with `output: "standalone"` the folder would
+  // simply be absent from the image — and the symptom is not a build error but
+  // an assistant who answers "I have no handbook" in production while working
+  // perfectly on the machine that built her. Harmless without standalone.
+  outputFileTracingIncludes: {
+    "/api/chat": ["./content/knowledge/**/*"],
+    "/dashboard/chat": ["./content/knowledge/**/*"],
+  },
+
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },

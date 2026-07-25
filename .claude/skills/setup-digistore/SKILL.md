@@ -63,12 +63,19 @@ deliberately no interface for entering or generating a key.
      care of the rest."
    - Then call `node run.mjs ds24-connect`. Choose a **generous timeout (10 minutes /
      600000 ms)**, because the script waits until the user has granted access in
-     the browser (up to 5 min).
-   - The script starts a short-lived local server, opens the authorization page,
-     catches the redirect back and fetches the key. It writes
-     `DIGISTORE_API_KEY` into the `.env` — plus `DIGISTORE_IPN_PASSPHRASE`, if
-     Digistore24 supplies it. For checkout links a **`writable`** key is
-     required (the script's default requirement).
+     the browser (it gives up after 8 min).
+   - The script opens the authorization page and then asks Digistore24 every
+     couple of seconds whether the approval has happened — it does **not** wait
+     for anything to be delivered to this machine. Once it has, it fetches the
+     key and writes `DIGISTORE_API_KEY` into the `.env` — plus
+     `DIGISTORE_IPN_PASSPHRASE`, if Digistore24 supplies it. For checkout links
+     a **`writable`** key is required (the script's default requirement).
+   - **Never open a second web server for this, and never suggest one.** The
+     script used to, on a high port, for that one redirect back — and it was
+     regularly already gone by the time the user finished clicking, so the
+     browser said "this page cannot be loaded" while the approval had gone
+     through fine. The app's own server is running anyway; that is the one that
+     is used.
    - If **no** browser opens (headless/remote), the script prints the URL as
      text — pass it on to the user to click.
    - Once the call has finished with `✓ DIGISTORE_API_KEY saved in .env`,
@@ -76,12 +83,20 @@ deliberately no interface for entering or generating a key.
 
    - Digistore24 does not accept `localhost` as a `return_url` — not as a
      `site_url` either. That's why both run through the public redirect page
-     (`https://ds24-appkit.com/redir/?port=53682&path=/callback`),
-     which sends the browser back to `http://localhost:<port>/callback`. The
-     page never sees the API key. Overridable via `DIGISTORE_REDIR_URL`;
+     (`https://ds24-appkit.com/redir/?port=3000&path=/ds24-connected`),
+     which sends the browser back to `http://localhost:<port>/ds24-connected` —
+     a page of the app itself (`app/ds24-connected/page.tsx`). Neither that page
+     nor the redirect ever sees the API key; the script fetches it directly from
+     Digistore24. The address is hard-wired in `lib/digistore/config.mjs`;
      `--no-relay` uses localhost directly (only on test hosts).
-   - Flags: `--print` only displays the key without saving it; `--port <n>`
-     picks a different local callback port. `--manual` asks for a key you
+   - **The app does not have to be running.** The landing page is a courtesy for
+     whoever is looking at the browser — the key arrives in the terminal either
+     way. If the user reports that the page after the approval did not load, do
+     **not** treat that as a failed setup: read the terminal output, which says
+     `✓ Approval received.` and then `✓ DIGISTORE_API_KEY saved in .env`.
+   - Flags: `--print` only displays the key without saving it; `--port <n>` says
+     which port the app runs on, for the rare case the script guesses wrong
+     (normally it takes `APP_URL` from the `.env`). `--manual` asks for a key you
      created yourself (Digistore24 → Settings → API) — that needs a keyboard
      entry and is the **emergency route** for when the user runs the command
      themselves in the terminal; you yourself always use the automatic route
