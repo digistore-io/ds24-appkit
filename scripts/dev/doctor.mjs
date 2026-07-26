@@ -79,6 +79,64 @@ export const FIXES = {
     darwin: { note: "nothing to do — any shell works here" },
     win32: { note: "open Git Bash (it comes with Git for Windows) or a WSL2 shell, and run the commands there" },
   },
+
+  // ── the hosting CLIs ──────────────────────────────────────────────────────
+  // None of these belongs on a development machine, which is why they are not
+  // among the checks above: they are needed once, by whoever is putting the app
+  // online, and only for the host that person picked. `--deploy` asks for them
+  // (see deployChecks below), the skill `setup-hosting` reads the answer.
+  //
+  // They are in this table anyway, and not in that skill's prose, for the same
+  // reason as everything else here: an install command written into a skill is
+  // a command nobody maintains, on a system nobody here runs.
+  railway: {
+    linux: { command: "npm install -g @railway/cli" },
+    darwin: { command: "brew install railway" },
+    win32: { command: "npm install -g @railway/cli" },
+  },
+  flyctl: {
+    linux: { url: "https://fly.io/docs/flyctl/install/", note: "the page names the command for your distribution" },
+    darwin: { command: "brew install flyctl" },
+    win32: { url: "https://fly.io/docs/flyctl/install/", note: "the PowerShell one-liner from that page" },
+  },
+  doctl: {
+    linux: { command: "sudo snap install doctl", admin: true, note: "without snap: https://docs.digitalocean.com/reference/doctl/how-to/install/" },
+    darwin: { command: "brew install doctl" },
+    win32: { url: "https://docs.digitalocean.com/reference/doctl/how-to/install/", note: "download the archive and put doctl.exe on the PATH" },
+  },
+};
+
+// The hosts this template is documented for (docs/DEPLOY.md), and how you ask
+// their CLI two questions: is it there, and does it know who I am.
+//
+// Render is deliberately in the list with no CLI at all. Its deploy runs from
+// the connected GitHub repo and its settings live in the dashboard, so there is
+// nothing to install and nothing to log into — and saying that here is worth
+// more than leaving whoever picked Render wondering what they failed to find.
+export const DEPLOY_HOSTS = {
+  railway: {
+    host: "Railway",
+    command: "railway",
+    version: ["--version"],
+    // `railway whoami` answers from the stored token; it does not need a linked
+    // project, so it is the honest test of "am I authenticated".
+    auth: ["whoami"],
+    login: { command: "railway login", note: "opens the browser; RAILWAY_TOKEN instead, on a machine without one" },
+  },
+  flyctl: {
+    host: "Fly.io",
+    command: "flyctl",
+    version: ["version"],
+    auth: ["auth", "whoami"],
+    login: { command: "flyctl auth login", note: "opens the browser; FLY_API_TOKEN instead, on a machine without one" },
+  },
+  doctl: {
+    host: "DigitalOcean",
+    command: "doctl",
+    version: ["version"],
+    auth: ["account", "get"],
+    login: { command: "doctl auth init", note: "asks for a Personal Access Token from the DigitalOcean API page" },
+  },
 };
 
 /** Which package manager this Linux has — so the fix can be a command, not a link. */
@@ -283,6 +341,62 @@ export async function inspect({ quick = false } = {}) {
   return checks;
 }
 
+/**
+ * The hosting CLIs — `node run.mjs doctor --deploy`.
+ *
+ * Deliberately NOT part of `inspect()`. Nobody needs any of this to build the
+ * app, and a doctor that reports three missing CLIs to every user on their
+ * first day is a doctor people learn to skim. It is asked for by the one skill
+ * that needs it (`setup-hosting`), for the one host the user picked.
+ *
+ * Every entry answers TWO questions, because they have different fixes and
+ * conflating them is how somebody ends up reinstalling a CLI that was there all
+ * along: is it installed, and does it know who I am. An installed CLI that is
+ * not logged in is the normal state after an install, not a fault.
+ *
+ * The auth call talks to the network, so it gets a timeout. A hosting API that
+ * is having a bad morning must not hang the setup — an unanswered question is
+ * reported as unanswered.
+ */
+export async function deployChecks(only = null) {
+  const wanted = only ? [only] : Object.keys(DEPLOY_HOSTS);
+  const checks = [];
+
+  for (const id of wanted) {
+    const cli = DEPLOY_HOSTS[id];
+    if (!cli) continue;
+    const label = `${cli.host} CLI (${cli.command})`;
+
+    if (!(await hasCommand(cli.command, cli.version))) {
+      checks.push({
+        id,
+        label,
+        ok: false,
+        severity: "optional",
+        detail: "not installed",
+        fix: FIXES[id],
+      });
+      continue;
+    }
+
+    const auth = await capture(cli.command, cli.auth, { shell: isWindows, timeout: 20000 });
+    checks.push({
+      id,
+      label,
+      ok: auth.code === 0,
+      severity: "optional",
+      detail: "installed, but not logged in",
+      // The fix here is NOT the install command: it is there. Handing somebody
+      // an install command for a login they have not done yet is the kind of
+      // advice that gets followed and then does nothing. The login is the same
+      // on all three systems, which is why it is one entry and not a table.
+      fix: everywhere(cli.login),
+    });
+  }
+
+  return checks;
+}
+
 /** The static table, with the Linux entry upgraded to a real command if we can. */
 async function withLinuxFix(id) {
   const found = await linuxFix(id);
@@ -332,6 +446,27 @@ export function render(checks) {
 
 /** `node run.mjs doctor` — and `--json` for whoever reads it as data. */
 export async function doctor(args = []) {
+  // `--deploy` asks a different question ("can I put this online from here?")
+  // and answers only that one. It never blocks: not having a hosting CLI is the
+  // normal state of every machine that has not deployed yet, so the exit code
+  // stays 0 and nobody's `doctor` starts failing because of it.
+  if (args.includes("--deploy")) {
+    const only = DEPLOY_HOSTS[args[args.indexOf("--deploy") + 1]] ? args[args.indexOf("--deploy") + 1] : null;
+    const checks = await deployChecks(only);
+    if (args.includes("--json")) {
+      console.log(JSON.stringify({ platform: process.platform, checks: checks.map((c) => ({ ...c, fix: fixFor(c) })) }, null, 2));
+      return;
+    }
+    console.log(["Hosting from this machine:", ""].join("\n"));
+    for (const check of checks) {
+      const hint = [check.detail, fixLine(fixFor(check))].filter(Boolean).join(" — ");
+      console.log(check.ok ? `  ✓ ${check.label} — logged in` : `  · ${check.label} — ${hint}`);
+    }
+    console.log("\nRender needs no CLI — it deploys from the connected GitHub repo.");
+    console.log("What to book, and what each one costs: docs/DEPLOY.md");
+    return;
+  }
+
   const checks = await inspect();
   if (args.includes("--json")) {
     console.log(

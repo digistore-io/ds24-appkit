@@ -43,12 +43,22 @@ hands over to the next:
 | 3 | **Security** | `security-gateway` | scan the app for security holes and fix them |
 | 4 | **Scaling** | `performance-gateway` | make sure ~100 concurrent users run smoothly |
 | 5 | **Legal** | `compliance-check` | imprint/privacy policy/terms/right of withdrawal + GDPR |
-| 6 | **Live** | `go-live` | put the app online and verify it live |
+| 5b | **The server** | `setup-hosting` | pick a host (Railway/Render/Fly.io/DigitalOcean), say what it costs, install its CLI, authenticate, app + managed Postgres, secrets, migration in the deploy, domain |
+| 6 | **Live** | `go-live` | put the app online and verify it live — a real test purchase included |
 | 7 | **Marketing** | `go-to-market` | positioning, channels, launch plan + ready-made content (landing page, emails, **video scripts**) |
 
 While building (step 1), **tests are written and run automatically**
 (`npm run test`) — locally, on your machine, before anything moves on.
 Throughout, **`guardrails`** watches over money, secrets and customer data.
+
+**Lost the thread? Ask the coach.** `coach` is the skill for the two questions
+that come up between the steps — *"what is the next step?"* and *"how do I solve
+this?"*. It looks at the project itself to work out where you got to, names the
+one thing that comes next and starts it; and it takes a symptom (an error page,
+a test purchase that never arrived, the assistant answering "I do not know") to
+the place that fixes it. You never have to know a skill name:
+
+> **"What's the next step?"**
 
 **You don't have to remember any of this.** Start Claude Code in the project
 folder and say:
@@ -152,11 +162,24 @@ port: `node run.mjs start --port 3005`.
 
 ## Deployment
 
-One deploy artifact (`output: "standalone"`), ideal for **Railway, Render or
-Fly.io** + managed Postgres. Step by step: see [`docs/DEPLOY.md`](docs/DEPLOY.md).
+`npm run build` and `npm run start` — that is the whole contract, and it is what
+**Railway, Render, Fly.io and DigitalOcean** all want, each with a managed
+Postgres next to it. It costs money — a small server plus a small database, per
+month, at every one of them. The free tiers are not suitable for a product that
+takes money (a sleeping app server, an expiring database — both explained in the
+doc), and what the paid ones cost today is something Claude looks up with you
+before you book anything.
 
-Afterwards register it in Digistore24 as the IPN URL:
-`https://YOUR-DOMAIN/api/ipn` (without further path segments).
+**You do not have to do this by hand.** Ask Claude Code for the skill
+**`setup-hosting`**: it picks the host with you, says what it costs before you
+book anything, installs the host's CLI, gets itself authenticated, creates app
+and database, sets every secret, wires the migration into the deploy and puts a
+domain on it. Step by step, and the reasoning behind each step:
+[`docs/DEPLOY.md`](docs/DEPLOY.md).
+
+The IPN URL is registered at Digistore24 automatically by
+`node run.mjs ds24-sync` as soon as `APP_URL` is the live domain — always
+`https://YOUR-DOMAIN/api/ipn`, nothing to enter by hand.
 
 ## Project structure
 

@@ -90,10 +90,19 @@ There are guided skills in `.claude/skills/` — use them in this order:
 - **`security-gateway`** — before the launch: scan for security holes and fix them.
 - **`performance-gateway`** — make sure ~100 parallel users run smoothly.
 - **`compliance-check`** — legal pages (imprint/privacy/terms/withdrawal) & GDPR.
-- **`go-live`** — put the app online and verify it live.
+- **`setup-hosting`** — the server: pick a host (Railway/Render/Fly.io/
+  DigitalOcean), say what it costs, install its CLI, authenticate, create app
+  and managed Postgres, set the secrets, wire the migration into the deploy.
+- **`go-live`** — put the app online and verify it live (starts with
+  `setup-hosting`, then the live Digistore side and a real test purchase).
 - **`go-to-market`** — marketing: positioning, channels, launch plan, content
   (landing page, emails, video scripts).
 - **`guardrails`** — continuous security rules (money/secrets/customer data).
+- **`coach`** — *(any time)* the guide through all of the above: works out from
+  the project where it stands, names the next step and starts it — and routes a
+  symptom ("Internal Server Error", a purchase that never arrived, the assistant
+  answering "I do not know") to the skill that fixes it. Use it whenever the
+  user asks what comes next or how to solve something without naming a skill.
 
 The complete path (as simple as possible for the user, every step hands over to the
 next one):
@@ -104,8 +113,10 @@ next one):
 optional `ai-chat-knowledge` for the in-app assistant, optional `ai-providers`
 to choose the AI company, optional `mcp-server` for the AI interface)* →
 **(3) Security** `security-gateway` → **(4) Scaling** `performance-gateway` →
-**(5) Legal** `compliance-check` → **(6) Live** `go-live` → **(7) Marketing**
-`go-to-market`. Alongside all of it: `guardrails`.
+**(5) Legal** `compliance-check` → **(6) Live** `go-live` *(which begins with
+`setup-hosting` — host, database, secrets, domain)* → **(7) Marketing**
+`go-to-market`. Alongside all of it: `guardrails`, and `coach` whenever somebody
+has lost the thread.
 
 ## Rules
 
@@ -902,13 +913,13 @@ Optional, off until switched on, and it has its own guide:
 `ai-chat-knowledge`. Four things are worth knowing before you touch any of it:
 
 - **Two switches, both required.** `"enabled"` in `config/ai-chat.json` (a
-  property of the PRODUCT) and a key for **whichever provider her task is bound
-  to** (a property of the MACHINE) — Anthropic by default, but she runs on the
-  `chat` task and `config/ai-models.json` decides who answers it. Read them
-  through `isChatEnabled()` in `lib/ai/chat-config.ts`, never by re-reading the
-  JSON, and never by asking about one company by name. A malformed config
-  switches her OFF — the opposite direction from `billingMode()`, because the
-  failure mode here is a bill.
+  property of the PRODUCT) and a key for **whichever provider her task resolves
+  to** (a property of the MACHINE) — she ships on `"auto"`, so **any one** of
+  the five keys does, and `config/ai-models.json` is where you pin a company
+  once you have chosen. Read them through `isChatEnabled()` in
+  `lib/ai/chat-config.ts`, never by re-reading the JSON, and never by asking
+  about one company by name. A malformed config switches her OFF — the opposite
+  direction from `billingMode()`, because the failure mode here is a bill.
 - **Which model answers is NOT in `config/ai-chat.json`.** That file holds what
   she IS — her name, her handbook, her history window. Which company and which
   model is a property of the TASK, because a second task needs the same
@@ -919,6 +930,15 @@ Optional, off until switched on, and it has its own guide:
   once more as her own page under `/dashboard/chat`. Both use the same
   `ChatWindow` with a different `variant` — do not build a second chat
   component for a second place to put her.
+- **A feature switched ON that this machine cannot run keeps its menu entry for
+  the OPERATOR.** "Switched off" and "not working" are different questions, and
+  a `featureKey` that conflates them hides the broken feature *and* the page
+  explaining it — an assistant with `"enabled": true` and a key for the wrong
+  company then produces no button, no entry and no notice anywhere. The rule is
+  `chatNavVisible()` in `lib/ai/rules.ts`; a Member still sees nothing, because
+  the diagnosis names an environment variable. Whoever adds the next optional
+  feature to `NAVIGATION` decides this again — copy the shape, do not reach for
+  `isXEnabled()` alone.
 - **She answers only from `content/knowledge/`.** No database, no account data,
   no web. Nothing about the signed-in person is sent to the API — which is why
   she is told she cannot see the account, and why `docs/data-protection.md` §8
@@ -966,6 +986,17 @@ before you write a model call:
   `lib/ai/task-rules.mjs` AND to the union in `lib/ai/tasks.ts`; binding it in
   `config/ai-models.json` is optional, because a declared task with no entry
   inherits `default` and works. Adding is cheap; misspelling is a build error.
+- **`"auto"` is the shipped binding, and it means "run on whichever key is in
+  the `.env`".** That is the property a new app is judged on: one of the five
+  keys and the AI works, with no company to choose first. Two rules keep it
+  honest and both are load-bearing — a binding that NAMES a company is obeyed
+  exactly as written (an honest error beats a quiet substitution onto an API
+  somebody else's invoice arrives for), and a `model` or a `providerOptions`
+  entry may never sit beside `"auto"`, because both belong to exactly one
+  company. `ai-check` refuses that combination rather than letting it work
+  until the day a second key appears. New defaults live in
+  `PROVIDER_DEFAULT_MODELS` (`lib/ai/providers/ids.mjs`) and **go stale** — a
+  retired model id is a 404 on the first question.
 - **`system` is a LIST of blocks, and everything stable goes first**, marked
   `cacheable: true`. This is the same rule `lib/ai/prompt.ts` already
   documents, now applying to every task: on three of the five providers a stable

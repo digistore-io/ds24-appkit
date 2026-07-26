@@ -1,12 +1,18 @@
 import { describe, expect, it } from "vitest";
 
+import models from "@/config/ai-models.json";
+
 import {
+  AUTO,
   FALLBACK_BINDING,
+  LAST_RESORT_PROVIDER,
   TASKS as TASK_IDS,
   bindingProblems,
+  mergedBinding,
   resolveBinding,
 } from "./task-rules.mjs";
-import { TASKS, allBindings, bindingFor, isTaskId, taskConfigProblems } from "./tasks";
+import { PROVIDER_DEFAULT_MODELS } from "./providers/ids.mjs";
+import { TASKS, allBindings, isTaskId, taskConfigProblems } from "./tasks";
 import { PROVIDER_IDS } from "./providers/types";
 import { PROVIDER_IDS as MJS_PROVIDER_IDS, PROVIDER_ENV_VARS } from "./providers/ids.mjs";
 
@@ -63,11 +69,33 @@ describe("config/ai-models.json", () => {
     }
   });
 
-  it("gives the chat task the cache window its economics depend on", () => {
-    // Not a style assertion: the assistant sends her whole handbook on every
-    // question, and the TTL is what decides whether that is billed once an hour
-    // or once every five minutes.
-    expect(bindingFor("chat").providerOptions.cacheTtl).toBe("1h");
+  it("ships every task on \"auto\", so one key in the .env is enough", () => {
+    // The property a new app is judged on: a developer puts ONE of the five
+    // keys in .env and the AI works. A company named here would be a decision
+    // nobody had made yet, and it silently costs everybody who chose a
+    // different one their whole AI layer.
+    const raw = models as { default?: { provider?: string }; tasks?: Record<string, { provider?: string }> };
+    expect(raw.default?.provider).toBe(AUTO);
+    for (const task of TASKS) {
+      expect(raw.tasks?.[task]?.provider ?? AUTO, `task ${task}`).toBe(AUTO);
+    }
+  });
+
+  it("pins no provider-specific option while the provider is \"auto\"", () => {
+    // `thinking` is Anthropic's word, `generationConfig` is Gemini's. An option
+    // belongs to one company, so one written down here is wrong the moment
+    // `auto` lands on another — and a request carrying a field a provider does
+    // not know comes back as an error, on a customer's first question.
+    //
+    // This is where the chat's `cacheTtl: "1h"` went. Nothing was lost: the
+    // Anthropic adapter defaults to a one-hour window when the binding says
+    // nothing (`cacheTtlFrom` in providers/anthropic.ts, asserted in its own
+    // test), so the assistant's handbook is still billed once an hour rather
+    // than once every five minutes. What changed is that the guarantee no
+    // longer needs a line naming one company in a config that ships portable.
+    for (const [task, binding] of Object.entries(allBindings())) {
+      expect(Object.keys(binding.providerOptions), `task ${task}`).toEqual([]);
+    }
   });
 });
 
@@ -99,11 +127,30 @@ describe("resolveBinding", () => {
   });
 
   it("falls back again when the config says nothing", () => {
-    expect(resolveBinding({}, "chat")).toMatchObject({
-      provider: FALLBACK_BINDING.provider,
-      model: FALLBACK_BINDING.model,
+    // The fallback is "auto"/"auto", so an app with no config at all still runs
+    // on whatever key is present rather than on a company nobody chose.
+    expect(FALLBACK_BINDING.provider).toBe(AUTO);
+    expect(mergedBinding({}, "chat")).toMatchObject({ provider: AUTO, model: AUTO });
+    expect(resolveBinding({}, "chat", ["mistral"])).toMatchObject({
+      provider: "mistral",
+      model: PROVIDER_DEFAULT_MODELS.mistral,
     });
     expect(resolveBinding(undefined, "chat").maxTokens).toBe(FALLBACK_BINDING.maxTokens);
+  });
+
+  it("still names a provider when the machine has no key at all", () => {
+    // A binding is never left unresolved — half the app reads
+    // `binding.provider` and none of it wants a null. Nothing is called: with
+    // no key the chat is off and `ai-check` says which variable to set.
+    expect(resolveBinding({}, "chat", []).provider).toBe(LAST_RESORT_PROVIDER);
+  });
+
+  it("obeys a named provider even when its key is missing", () => {
+    // The line that keeps `auto` from being a surprise on an invoice: a
+    // decision, once written down, is never quietly swapped for another
+    // company — it produces an honest error instead.
+    expect(resolveBinding({ default: { provider: "openai", model: "auto" } }, "chat", ["mistral"]))
+      .toMatchObject({ provider: "openai", model: PROVIDER_DEFAULT_MODELS.openai });
   });
 
   it("merges providerOptions rather than replacing them", () => {
@@ -157,11 +204,35 @@ describe("bindingProblems", () => {
     expect(problems.join(" ")).toContain("anthropic");
   });
 
-  it("catches a missing model", () => {
+  it("accepts a named provider with no model, and uses that provider's default", () => {
+    // This used to be an error. It stopped being one when a model id became
+    // something the layer can supply: naming the company is the decision, and
+    // its current general-purpose model is the obvious consequence.
     expect(
-      bindingProblems({ default: { provider: "anthropic", model: "  " } }, ALL_PROVIDERS)
-        .join(" "),
-    ).toContain("model");
+      bindingProblems({ default: { provider: "anthropic", model: "  " } }, ALL_PROVIDERS),
+    ).toEqual([]);
+    expect(resolveBinding({ default: { provider: "anthropic", model: "  " } }, "chat", ALL_PROVIDERS))
+      .toMatchObject({ provider: "anthropic", model: PROVIDER_DEFAULT_MODELS.anthropic });
+  });
+
+  it("refuses a model pinned to one company while the company is \"auto\"", () => {
+    // The contradiction that would otherwise work until the day a second key
+    // appears, then 404 on a customer's first question.
+    const problems = bindingProblems(
+      { default: { provider: AUTO, model: "claude-sonnet-5" } },
+      ALL_PROVIDERS,
+    );
+    expect(problems.join(" ")).toContain("claude-sonnet-5");
+    expect(problems.join(" ")).toContain(AUTO);
+  });
+
+  it("says which keys would do when \"auto\" has none to choose from", () => {
+    // The message an Operator with an empty .env reads. It must not name one
+    // company — any of the five ends the problem.
+    const problems = bindingProblems({ default: { provider: AUTO } }, []).join(" ");
+    for (const id of ALL_PROVIDERS) {
+      expect(problems).toContain(PROVIDER_ENV_VARS[id]);
+    }
   });
 
   it("names the environment variable when the key is missing", () => {

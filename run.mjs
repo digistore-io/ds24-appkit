@@ -317,7 +317,7 @@ const TASKS = {
   // ── Setup helpers ─────────────────────────────────────────────────────────
   doctor: {
     group: "Setup",
-    help: "What has to be installed — and what is missing on this machine (--json)",
+    help: "What has to be installed — and what is missing on this machine (--json, --deploy)",
     run: (args) => doctor(args),
   },
   setup: {

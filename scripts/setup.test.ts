@@ -13,7 +13,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { FIXES, PLATFORMS, fixLine } from "./dev/doctor.mjs";
+import { DEPLOY_HOSTS, FIXES, PLATFORMS, fixLine } from "./dev/doctor.mjs";
 import { DB_DRIVERS } from "./db/driver.mjs";
 
 const ROOT = path.join(import.meta.dirname, "..");
@@ -35,24 +35,25 @@ describe("every tool can be installed on all three systems", () => {
   });
 });
 
+// Why this is a test and not a note in the file: the moment a document carries
+// its own `brew install …`, there are two tables. The one in doctor.mjs gets
+// maintained because commands run through it; the copy in the prose does not,
+// and it is the copy the agent reads out to the user.
+const INSTALLERS = [
+  /\bbrew\s+install\b/,
+  /\bwinget\s+install\b/,
+  /\bapt(-get)?\s+install\b/,
+  /\bdnf\s+install\b/,
+  /\bpacman\s+-S\b/,
+  /\bsnap\s+install\b/,
+  /\bxcode-select\b/,
+  /\bnpm\s+install\s+-g\b/,
+  // A pipe from the network into a shell — never, and least of all out of prose.
+  /\|\s*(ba)?sh\b/,
+];
+
 describe("the setup skill reads the commands, it does not know them", () => {
   const skill = read(".claude/skills/setup-machine/SKILL.md");
-
-  // Why this is a test and not a note in the file: the moment the skill carries
-  // its own `brew install …`, there are two tables. The one in doctor.mjs gets
-  // maintained because commands run through it; the copy in the prose does not,
-  // and it is the copy the agent reads out to the user.
-  const INSTALLERS = [
-    /\bbrew\s+install\b/,
-    /\bwinget\s+install\b/,
-    /\bapt(-get)?\s+install\b/,
-    /\bdnf\s+install\b/,
-    /\bpacman\s+-S\b/,
-    /\bxcode-select\b/,
-    /\bnpm\s+install\s+-g\b/,
-    // A pipe from the network into a shell — never, and least of all out of prose.
-    /\|\s*(ba)?sh\b/,
-  ];
 
   it.each(INSTALLERS.map((re) => [String(re), re] as const))(
     "contains no %s",
@@ -63,6 +64,80 @@ describe("the setup skill reads the commands, it does not know them", () => {
 
   it("points at doctor --json as its source", () => {
     expect(skill).toContain("node run.mjs doctor --json");
+  });
+});
+
+// The same rule, one step further along the path: the hosting CLIs are
+// installed per system too, and the deploy is the moment somebody is on a
+// machine none of us has seen. `docs/DEPLOY.md` is in here as well because it
+// is where a person reads the same instruction — a stale command there is a
+// stale command whether an agent or a human follows it.
+describe("the hosting instructions read the commands too", () => {
+  it.each(
+    [".claude/skills/setup-hosting/SKILL.md", "docs/DEPLOY.md"].flatMap((file) =>
+      INSTALLERS.map((re) => [file, String(re), re] as const),
+    ),
+  )("%s contains no %s", (file, _label, pattern) => {
+    expect(read(file)).not.toMatch(pattern);
+  });
+
+  it.each([".claude/skills/setup-hosting/SKILL.md", "docs/DEPLOY.md"])(
+    "%s points at doctor --deploy as its source",
+    (file) => {
+      expect(read(file)).toContain("node run.mjs doctor --deploy");
+    },
+  );
+
+  // Hosting prices are not kept in this repository. They change, and a stale
+  // number is worse than none: somebody budgets on it. The agent reads the
+  // host's pricing page when it needs one — `setup-hosting` step 2.
+  it.each([".claude/skills/setup-hosting/SKILL.md", "docs/DEPLOY.md", "README.md"])(
+    "%s quotes no price",
+    (file) => {
+      expect(read(file)).not.toMatch(/[$€£]\s?\d|\d+\s?(USD|EUR)\b/);
+    },
+  );
+
+  it("has an install entry per system for every hosting CLI", () => {
+    for (const id of Object.keys(DEPLOY_HOSTS)) {
+      expect(Object.keys(FIXES[id as keyof typeof FIXES]).sort(), id).toEqual(
+        [...PLATFORMS].sort(),
+      );
+    }
+  });
+});
+
+// The list of environment variables in DEPLOY.md is what somebody types into a
+// hosting dashboard. A name that is wrong there produces an app that starts and
+// then fails at the first thing anybody tries — and the name that was wrong for
+// a while was `AUTH_RESEND_KEY`, a variable this project has never read.
+describe("DEPLOY.md names variables that exist", () => {
+  const deploy = read("docs/DEPLOY.md");
+  const example = read(".env.example");
+
+  // Tokens that look like an environment variable: SHOUTING_WITH_UNDERSCORES.
+  const mentioned = [...new Set(deploy.match(/\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+\b/g) ?? [])];
+
+  // Not variables of this app: the hosting tokens belong to the host's account
+  // and never enter the app's environment, and PRE_DEPLOY is a DigitalOcean job
+  // kind sitting in a YAML block.
+  const FOREIGN = ["RAILWAY_TOKEN", "FLY_API_TOKEN", "DIGITALOCEAN_ACCESS_TOKEN", "PRE_DEPLOY"];
+
+  it.each(mentioned.filter((name) => !FOREIGN.includes(name)))(
+    "%s is declared in .env.example",
+    (name) => {
+      expect(example).toContain(name);
+    },
+  );
+
+  // The other direction, for the two the app refuses to start without: whatever
+  // lib/env-guard.ts complains about by name has to be findable here.
+  it("names every variable the startup check demands", () => {
+    const guard = read("lib/env-guard.ts");
+    const demanded = [...new Set(guard.match(/\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+\b/g) ?? [])].filter(
+      (name) => example.includes(name),
+    );
+    for (const name of demanded) expect(deploy, name).toContain(name);
   });
 });
 

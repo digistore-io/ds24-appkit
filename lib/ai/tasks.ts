@@ -14,7 +14,9 @@
 import raw from "@/config/ai-models.json";
 
 import {
+  AUTO,
   FALLBACK_BINDING,
+  LAST_RESORT_PROVIDER,
   TASKS as TASK_IDS,
   bindingProblems,
   resolveBinding,
@@ -55,20 +57,25 @@ export interface Binding {
  * `default` inherits the fallback. A config that is merely incomplete still
  * runs; one that is WRONG is caught by `taskProblems()` at check time, which is
  * where a mistake belongs — not at a customer's first request.
+ *
+ * ⚠️ **This reads the environment**, through `configuredProviders()` — because
+ * the shipped binding is `"auto"`, and which company that means is a property
+ * of the machine rather than of the file. Same rule as everything else in this
+ * module: server components, Server Actions, route handlers and scripts, never
+ * a client component.
  */
 export function bindingFor(task: TaskId): Binding {
-  const binding = resolveBinding(raw, task) as Binding;
+  const binding = resolveBinding(raw, task, configuredProviders()) as Binding;
 
-  // `resolveBinding` merges JSON; it does not know what a provider IS. Without
-  // the check below the cast above asserts a check-time guarantee as a
-  // compile-time fact, and a typo in `config/ai-models.json` becomes a
-  // `TypeError` rather than the named problem `taskProblems()` promises:
-  // `isConfigured()` indexes the registry unguarded, and it runs inside
-  // `isChatEnabled()` in the dashboard LAYOUT — so a misspelt provider takes
-  // down every page under /dashboard, not merely the chat. Falling back keeps
-  // the app up; the mistake is still reported, by name, by `ai-check`.
+  // `resolveProvider` inside `resolveBinding` already guarantees a real
+  // provider id — a typo resolves like `"auto"` rather than travelling. This
+  // re-asserts it at the type boundary, because the guarantee lives in a `.mjs`
+  // file the compiler cannot see, and the cost of being wrong is not a wrong
+  // answer: `isConfigured()` indexes the registry unguarded and runs inside
+  // `isChatEnabled()` in the dashboard LAYOUT, so an unknown provider would
+  // take down every page under /dashboard rather than one feature.
   if (!isProviderId(binding.provider)) {
-    return { ...binding, provider: FALLBACK_BINDING.provider as ProviderId };
+    return { ...binding, provider: LAST_RESORT_PROVIDER as ProviderId };
   }
   return binding;
 }
@@ -107,4 +114,4 @@ export function taskConfigProblems(): string[] {
   return bindingProblems(raw, [...PROVIDER_IDS]);
 }
 
-export { FALLBACK_BINDING, TASK_IDS };
+export { AUTO, FALLBACK_BINDING, LAST_RESORT_PROVIDER, TASK_IDS };

@@ -427,8 +427,9 @@
     "cleared": "History deleted.",
     "offTitle": "{name} is not ready yet",
     "offDisabledInConfig": "The assistant is switched off. Set \"enabled\" to true in config/ai-chat.json.",
-    "offNoApiKey": "{envVar} is missing from .env — that is the key of the AI provider the assistant is bound to. In the terminal: node run.mjs ai-check",
+    "offNoApiKey": "She is bound to the provider {provider} (config/ai-models.json → tasks.chat), and its key {envVar} is not in .env. Either put it there — or bind the task to the provider whose key you already have. A key from another company does not count here. In the terminal: node run.mjs ai-check",
     "offBrokenConfig": "config/ai-chat.json does not hold together. node run.mjs kb-check says what is wrong.",
+    "offForMember": "{name} is not available in this app at the moment.",
     "noAccessTitle": "No access",
     "noAccessBody": "The assistant belongs to a plan this account does not hold."
   },

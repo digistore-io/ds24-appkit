@@ -173,7 +173,11 @@ OAuth tokens, and spent sign-in tokens. The file says so itself, in an
 ## 8. The AI assistant
 
 Only relevant if the in-app chat is switched on — `config/ai-chat.json`
-(`"enabled"`) plus an `ANTHROPIC_API_KEY`. **It is the first feature in this
+(`"enabled"`) plus a key for whichever provider her `chat` task resolves to.
+**Name that company in your privacy policy**: it is the recipient of the data,
+and with the shipped `"auto"` binding it is decided by which key is in the
+`.env` rather than by anything in this file. `node run.mjs ai-check` says which
+one it is. **It is the first feature in this
 template that sends customer input to a third party outside the payment and mail
 path, so it needs a paragraph in your privacy policy of its own.**
 

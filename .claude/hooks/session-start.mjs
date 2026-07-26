@@ -34,7 +34,13 @@ try {
 
 // Has an app of their own already been built? A rough, but reliable indicator:
 // own pages below app/dashboard/ beyond the ones that ship with the template.
-const SHIPPED = new Set(["admin", "plans", "abo", "account", "billing"]);
+//
+// This list has to match what is actually in app/dashboard/, and it silently
+// stops doing so the moment somebody adds a page here — the count then never
+// reaches 0 and every first-time user is greeted with "carry on with what?"
+// instead of the one line the whole README points at ("Build my app").
+// `scripts/session-start.test.ts` fails the build when the two drift apart.
+const SHIPPED = new Set(["account", "admin", "billing", "chat"]);
 let customPages = 0;
 try {
   customPages = readdirSync("app/dashboard", { withFileTypes: true }).filter(

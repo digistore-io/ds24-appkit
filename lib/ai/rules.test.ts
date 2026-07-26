@@ -7,6 +7,7 @@ import {
   chatLimit,
   checkMessage,
   hasControlChar,
+  chatNavVisible,
   mayUseChat,
   trimHistory,
   type ChatTurn,
@@ -192,6 +193,32 @@ describe("mayUseChat", () => {
   it("asks for the plan when the chat belongs to one", () => {
     expect(mayUseChat(true, "pro", true)).toBe(true);
     expect(mayUseChat(true, "pro", false)).toBe(false);
+  });
+});
+
+describe("chatNavVisible", () => {
+  it("shows the entry while she is usable, to anybody", () => {
+    expect(chatNavVisible(true, true, true)).toBe(true);
+    expect(chatNavVisible(true, true, false)).toBe(true);
+  });
+
+  it("keeps the entry for the Operator when the machine cannot run her", () => {
+    // The case this function exists for: switched on in config/ai-chat.json,
+    // no key for the provider her task is bound to. The page behind the entry
+    // is the only thing in the app that says so.
+    expect(chatNavVisible(false, true, true)).toBe(true);
+  });
+
+  it("hides it from the Member in that same case", () => {
+    // The diagnosis names an environment variable. A customer is owed neither
+    // the problem nor the infrastructure behind it.
+    expect(chatNavVisible(false, true, false)).toBe(false);
+  });
+
+  it("hides it from everybody once the product says no", () => {
+    // `"enabled": false` — a decision, not a fault. There is nothing to report.
+    expect(chatNavVisible(false, false, true)).toBe(false);
+    expect(chatNavVisible(false, false, false)).toBe(false);
   });
 });
 

@@ -3,7 +3,8 @@ import { requireActiveUser } from "@/lib/authz";
 import { AppShell } from "@/components/app-shell";
 import { APP_NAME } from "@/lib/app";
 import { chatConfig, isChatEnabled } from "@/lib/ai/chat-config";
-import { mayUseChat } from "@/lib/ai/rules";
+import { chatNavVisible, mayUseChat } from "@/lib/ai/rules";
+import { isOwner } from "@/lib/roles";
 import { hasPlan } from "@/lib/entitlements/manage";
 import { ChatLauncher } from "@/app/dashboard/chat/launcher";
 
@@ -79,7 +80,17 @@ export default async function DashboardLayout({
         // Resolved here rather than in the shell: `isChatEnabled()` reads the
         // product registry, and that JSON carries prices and Digistore24 product
         // ids. The shell is a client component — it gets the answer, not the file.
-        features={{ chat: chatEnabled }}
+        //
+        // NOT `chatEnabled` on its own: an assistant switched on in
+        // config/ai-chat.json whose provider key is missing would otherwise hide
+        // the one page that says so. See `chatNavVisible()`.
+        features={{
+          chat: chatNavVisible(
+            chatEnabled,
+            chat.enabled,
+            isOwner(session.user.role),
+          ),
+        }}
         signOutAction={signOutAction}
       >
         {children}

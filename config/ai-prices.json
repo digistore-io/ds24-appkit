@@ -1,14 +1,27 @@
 {
   "_comment": "What each model costs, per MILLION tokens, in the currency named below. Yours to maintain — nothing fetches prices, because a template whose correctness depends on five undocumented endpoints is a template that breaks quietly. A model with no entry here is still recorded with its token counts, and the AI-costs page counts it separately rather than pretending it was free. Keys are 'provider/model'. Check with: node run.mjs ai-check.",
   "_currencyComment": "One default currency, and any entry may name its own — an installation drawing on providers who bill differently stays honest that way. Nothing is converted and no two currencies are ever added together. Recommended: EUR for a German installation, USD for an English one. A recommendation, not a rule: a provider bills in what it bills in.",
+  "_defaultsComment": "The four entries below are the default models 'auto' picks (lib/ai/providers/ids.mjs), so the cost page has a number whichever key you put in the .env. They were taken from each vendor's own pricing page on the date above and they go stale — re-check them before you rely on the figure, and add a line whenever you pin a different model. OpenRouter is deliberately absent: it reports the actual cost of every call back to us, so a price on file would only be a worse copy of what the invoice already says.",
   "defaultCurrency": "USD",
-  "updated": "2026-07-25",
+  "updated": "2026-07-26",
   "models": {
     "anthropic/claude-sonnet-5": {
       "input": 3,
       "output": 15,
       "cachedInput": 0.3,
       "cacheWrite": 3.75
+    },
+    "openai/gpt-5.6-luna": {
+      "input": 1,
+      "output": 6
+    },
+    "gemini/gemini-3.6-flash": {
+      "input": 1.5,
+      "output": 7.5
+    },
+    "mistral/mistral-large-latest": {
+      "input": 0.5,
+      "output": 1.5
     }
   }
 }

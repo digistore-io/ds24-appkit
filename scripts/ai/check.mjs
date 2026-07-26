@@ -23,8 +23,18 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 
-import { PROVIDER_ENV_VARS, PROVIDER_IDS } from "../../lib/ai/providers/ids.mjs";
-import { TASKS, bindingProblems, resolveBinding } from "../../lib/ai/task-rules.mjs";
+import {
+  PROVIDERS_REPORTING_COST,
+  PROVIDER_ENV_VARS,
+  PROVIDER_IDS,
+} from "../../lib/ai/providers/ids.mjs";
+import {
+  AUTO,
+  TASKS,
+  bindingProblems,
+  mergedBinding,
+  resolveBinding,
+} from "../../lib/ai/task-rules.mjs";
 import {
   estimateMicros,
   formatMicros,
@@ -66,8 +76,8 @@ for (const id of PROVIDER_IDS) {
 if (configured.length === 0) {
   console.log(
     "\n  No provider is configured on this machine. Add ONE of the keys above to\n" +
-      "  .env — you need at most one, and which one is a decision you make per\n" +
-      "  task rather than per app.",
+      "  .env — any one of them is enough, and the tasks below ship on \"auto\",\n" +
+      "  so whichever you pick is the one they run on. Nothing else to change.",
   );
 }
 
@@ -83,19 +93,32 @@ console.log(`\nTasks  (estimate per call: ${SAMPLE_INPUT_TOKENS} in / ${SAMPLE_O
 const unpriced = [];
 
 for (const task of TASKS) {
-  const binding = resolveBinding(models, task);
+  const declared = mergedBinding(models, task);
+  const binding = resolveBinding(models, task, configured);
   const bound = Boolean(models?.tasks?.[task]);
   const price = priceFor(prices, binding.provider, binding.model);
+  // What the file says, when that is not what runs. An Operator reading
+  // "mistral" here has to be able to see that they never typed it.
+  const via = declared.provider === AUTO ? `  (via "${AUTO}")` : "";
 
   const estimate = price
     ? formatMicros(estimateMicros(price, SAMPLE_INPUT_TOKENS, SAMPLE_OUTPUT_TOKENS), price.currency)
-    : "no price on file";
+    : PROVIDERS_REPORTING_COST.includes(binding.provider)
+      ? `${binding.provider} reports the real cost of every call — no estimate needed`
+      : "no price on file";
 
-  if (!price) unpriced.push(priceKey(binding.provider, binding.model));
+  // A provider that reports its own cost needs no price on file — and telling
+  // somebody to add one would be telling them to write down a worse copy of
+  // the invoice. `costOf()` prefers the reported figure either way.
+  if (!price && !PROVIDERS_REPORTING_COST.includes(binding.provider)) {
+    unpriced.push(priceKey(binding.provider, binding.model));
+  }
 
   console.log(`  ${task}`);
-  console.log(`    provider   ${binding.provider}${bound ? "" : "  (inherited from default)"}`);
-  console.log(`    model      ${binding.model}`);
+  console.log(
+    `    provider   ${binding.provider}${via}${bound ? "" : "  (inherited from default)"}`,
+  );
+  console.log(`    model      ${binding.model}${via}`);
   console.log(`    maxTokens  ${binding.maxTokens}`);
   console.log(`    per call   ~ ${estimate}`);
 }

@@ -123,6 +123,20 @@ export function chatProviderEnvVar(): string {
 }
 
 /**
+ * WHICH company her task is bound to, for the notice on the page.
+ *
+ * The env var above says what is missing; this says why that one. An Operator
+ * who put a key in `.env` and got no assistant is holding a correct key for the
+ * wrong company — `config/ai-models.json` binds `chat` to somebody else — and
+ * "MISTRAL_API_KEY is set, ANTHROPIC_API_KEY is missing" is a sentence they can
+ * act on where "add ANTHROPIC_API_KEY" alone reads as a contradiction of what
+ * they just did.
+ */
+export function chatProviderId(): string {
+  return bindingFor("chat").provider;
+}
+
+/**
  * Everything wrong with the shipped config — empty when it is coherent.
  *
  * The same job `contradictingProducts()` does for the billing mode: a second
@@ -180,7 +194,8 @@ export function chatConfigProblems(): string[] {
  *
  * All three have to hold, and the page says which one does not:
  *   1. the product wants it   (`config/ai-chat.json` → `enabled`)
- *   2. the machine can do it  (`ANTHROPIC_API_KEY`)
+ *   2. the machine can do it  (a key for the provider her task resolves to —
+ *                              any one of the five while it is on `"auto"`)
  *   3. the config is coherent (`chatConfigProblems()`)
  *
  * This answers "is the feature there", NOT "may this person use it". The second

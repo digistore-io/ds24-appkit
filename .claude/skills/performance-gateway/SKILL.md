@@ -13,7 +13,7 @@ Do not guess — prove it with a small load test.
 
 ### 1. Database connections (the most common cause)
 - The DB client (`db/index.ts`) uses a **pool** with `DB_POOL_MAX` (default 10).
-  With a single, permanently running server (Railway/Render/Fly) the pool should
+  With a single, permanently running server (Railway/Render/Fly/DigitalOcean) the pool should
   have several connections (10–20) — **not 1**, otherwise all requests get
   serialized.
 - **Serverless/multiple instances:** connections add up (instances × pool).

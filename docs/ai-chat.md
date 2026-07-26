@@ -18,20 +18,19 @@ Both have to hold. `isChatEnabled()` in `lib/ai/chat-config.ts` is the one
 answer, and the page says which of the two is missing rather than showing a
 chat box that fails on the first message.
 
-**Which key** depends on which provider her task is bound to — she runs on the
-`chat` task, and `config/ai-models.json` says who answers it. Anthropic is the
-shipped default, so `ANTHROPIC_API_KEY` is the usual answer, but an assistant
-bound to Gemini wants `GEMINI_API_KEY` and nothing else. `node run.mjs ai-check`
-names the one this installation actually needs. See
+**Which key** is up to you: she ships on `"auto"`, so **any one** of
+`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, `MISTRAL_API_KEY` or
+`OPENROUTER_API_KEY` in the `.env` is enough, and she runs on that company's
+current default model. `node run.mjs ai-check` names which one she picked. See
 [`docs/ai-providers.md`](ai-providers.md).
 
-**She runs on any of the five**, and moving her is one edit to `tasks.chat` in
-`config/ai-models.json`: `provider`, `model` and `providerOptions` together —
-the third one is the one people forget, and the shipped value is Anthropic's
-vocabulary. Putting a key in the `.env` alone changes nothing: the binding says
-who answers, and a key for somebody else leaves her switched off with the notice
-naming the provider she is bound to. `node run.mjs ai-check` says both things in
-one screen.
+**She runs on any of the five**, and pinning her to one is one edit to
+`tasks.chat` in `config/ai-models.json`: `provider`, `model` and
+`providerOptions` together — the third is the one people forget, and it is not
+portable between companies. Once you name a company, that is the key she needs
+and no other: a named binding is obeyed exactly as written, so a key for
+somebody else leaves her switched off with the notice naming the provider she is
+bound to. `node run.mjs ai-check` says both things in one screen.
 
 ```json
 {
@@ -279,6 +278,18 @@ what is drawn, never what is allowed: `app/api/chat/route.ts` asks every
 question again on every request, because a button nobody rendered is not a
 check.
 
+**One exception, and it is there for you rather than for your customers.** When
+she is switched on but this machine cannot run her — no key for the provider her
+task is bound to, or a config that does not hold together — the **menu entry
+stays, for the Operator only** (`chatNavVisible()` in `lib/ai/rules.ts`), and
+the page behind it names the cause. Without that the same switch that hides the
+broken assistant hides the only page that explains her: key in the `.env`,
+`"enabled": true`, and an app that says nothing anywhere. A Member never sees
+the entry in that state and gets no diagnosis if they type the URL — the
+sentence names an environment variable, which is your infrastructure and not
+their business. `"enabled": false` hides it from everybody, including you:
+that is a decision, not a fault, and there is nothing to report.
+
 The panel loads the transcript when it is opened, once — not in the layout,
 which would put a database query in front of every page in the app for a panel
 most visits never open.
@@ -287,9 +298,10 @@ most visits never open.
 
 | What you see | Where to look |
 |---|---|
-| No button at the bottom right | `isChatEnabled()`, and `requiresPlan` if it is set — same two answers as the menu entry |
-| The menu entry is missing | `isChatEnabled()` — `"enabled"` in the config, and the API key |
-| "not ready yet" on the page | The notice names which of the two is missing |
+| No button at the bottom right | `isChatEnabled()`, and `requiresPlan` if it is set |
+| The menu entry is missing, and you are the Operator | `"enabled": false` in `config/ai-chat.json`. Any other fault keeps the entry for you — open it and the page says what is wrong |
+| The menu entry is missing for a customer, not for you | Correct, and the page you see says why. She is on but this machine cannot run her |
+| "not ready yet" on the page | The notice names the cause. On a missing key it names the **provider her task is bound to** as well — a key for a different company leaves her off |
 | `cache_read=0` on every answer | Something volatile got into block 0 or 1 — `lib/ai/prompt.ts`, and run `npx vitest run lib/ai/prompt` |
 | She invents answers | The handbook does not cover it. Add the document; the persona already tells her to say so |
 | She answers in the wrong language | `LOCALE_LABELS` for that locale, passed through in `app/api/chat/route.ts` |

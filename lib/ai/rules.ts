@@ -184,6 +184,48 @@ export function mayUseChat(
   return requiresPlan === null || holdsPlan;
 }
 
+/**
+ * Does the assistant keep her entry in the navigation — the answer the SIDEBAR
+ * hangs on, and it is not the same one the launcher gets.
+ *
+ * Hiding the link of a feature that is switched off is right, and it stays
+ * right: nobody wants a menu entry leading to a page that only ever says "not
+ * configured". But there are two ways to be off, and they are not the same
+ * thing at all:
+ *
+ *   the PRODUCT said no   — `"enabled": false` in `config/ai-chat.json`. There
+ *                           is nothing to tell anybody. No entry.
+ *   the MACHINE cannot    — she is switched on, and the key of the provider her
+ *                           task is bound to is missing, or the config does not
+ *                           hold together. The Operator asked for her and did
+ *                           not get her.
+ *
+ * In the second case the app knows exactly what is wrong — `chatOffReason()`
+ * has the answer and `/dashboard/chat` renders it in a sentence — and used to
+ * show it to nobody, because the same flag that hid the misconfigured feature
+ * hid the only route to its diagnosis. Switched on, key present for the wrong
+ * company, and the entire app silent: no button, no menu entry, no notice. The
+ * one way to find out was to type the URL of a page you had no reason to
+ * believe existed.
+ *
+ * So: **a feature the Operator switched ON keeps its entrance even when this
+ * machine cannot run it — for the Operator.** Members get the old behaviour and
+ * must, because the diagnosis names an environment variable and a customer is
+ * owed neither the problem nor the infrastructure behind it.
+ *
+ * ⚠️ Cosmetics, like every `featureKey`. `/dashboard/chat` renders its own
+ * notice for whoever types the URL, and `app/api/chat/route.ts` refuses on its
+ * own — a menu entry is not a permission and its absence is not a check.
+ */
+export function chatNavVisible(
+  usable: boolean,
+  wanted: boolean,
+  isOwner: boolean,
+): boolean {
+  if (usable) return true;
+  return wanted && isOwner;
+}
+
 /** Bucket name for `lib/rate-limit.ts`. One per feature, as everywhere else. */
 export const CHAT_RATE_BUCKET = "chat-message";
 

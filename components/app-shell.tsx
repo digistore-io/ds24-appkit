@@ -20,6 +20,14 @@
 // page. The page still renders its own notice, and the route handler behind it
 // still refuses — see `app/api/chat/route.ts`. What the flag prevents is a menu
 // entry leading somewhere that only ever says "not configured".
+//
+// ⚠️ The flag is a boolean the LAYOUT computes, not a reading of a config file,
+// and "switched off" is not the same question as "not working". A feature the
+// Operator switched ON but this machine cannot run must keep its entry for the
+// Operator — otherwise the same flag that hides the broken feature hides the
+// page explaining what is broken, and the app goes silent about a fault it can
+// name exactly. `chatNavVisible()` in `lib/ai/rules.ts` is the worked example;
+// whoever adds the second `featureKey` decides the same thing again.
 
 import * as React from "react";
 import Link from "next/link";

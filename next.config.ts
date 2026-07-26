@@ -32,7 +32,8 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  // Runs directly with `npm run start` (next start) on Railway/Render/Fly.
+  // Runs directly with `npm run start` (next start) on all four hosts in
+  // docs/DEPLOY.md — Railway, Render, Fly.io and DigitalOcean.
   // For minimal Docker images, optionally set `output: "standalone"` and then
   // mit `node .next/standalone/server.js` starten.
 

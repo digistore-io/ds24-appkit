@@ -66,7 +66,7 @@ try {
 }
 
 console.log(">> Applying migrations (drizzle/)");
-run("npx", ["drizzle-kit", "migrate"]);
+run("node", ["scripts/db/migrate.mjs"]);
 
 if (existsSync("scripts/db/seed.mjs")) {
   console.log(">> Applying seed (scripts/db/seed.mjs)");

@@ -1,6 +1,6 @@
 ---
 name: go-live
-description: Brings the app online (deployment) and verifies that everything works live. Guides through the pre-flight check, choosing a host (Railway/Render/Fly), environment variables/secrets, database migration in production, the Digistore IPN on the live domain, a smoke test and a re-check of security/performance against the live instance. Use this when the app is built, secured and scaled — before marketing.
+description: Brings the app online and proves that a purchase really unlocks access. Runs the pre-flight check, hands the hosting itself to setup-hosting (host, CLI, secrets, managed Postgres, migration hook, domain), then does the live part — Digistore products and approval, the IPN on the live domain, a smoke test, a test purchase and a re-check of security/performance against the live instance. Use this when the app is built, secured and scaled — before marketing.
 ---
 
 # Go-Live — putting it online and verifying it
@@ -9,28 +9,48 @@ Goal: get the app **reliably live** and prove that the purchase-to-access flow
 works in production. Guide the user step by step; they do not have to know
 anything technical by heart.
 
+The **hosting itself is its own skill** — `setup-hosting` — because it is a
+conversation of its own: which host, what it costs, an account, a CLI, a token,
+a database. This skill owns the two ends around it: is the app ready to go, and
+does it really sell once it is up.
+
 ## 1. Pre-flight (before the deploy)
 
 - **Green locally:** `node run.mjs test` (typecheck + tests) and `node run.mjs build` without
   errors. Run them yourself — do not hand the commands to the user.
-- **Env complete:** `AUTH_SECRET` (`node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`), `DATABASE_URL`
-  (managed Postgres), `APP_URL` (= live domain), at least one auth provider.
-  All of them listed in `.env.example`. Plus `DIGISTORE_API_KEY` and
-  `DIGISTORE_IPN_PASSPHRASE` — written into the `.env` locally by
-  `node run.mjs ds24-connect`, for PROD stored as secrets at the host.
+- **Mail delivery exists.** In STAGING/PROD it is **mandatory** — without it the
+  app aborts at startup (`lib/env-guard.ts`), because the development login does
+  not exist there and nobody could sign in. `node run.mjs mail-setup` if it is
+  missing. This is the single most common reason a first deploy fails.
 - **Migrations ready:** `drizzle/` up to date (`npm run db:generate` after schema changes).
+- **Legal pages there?** If `compliance-check` has not run, it belongs before
+  the launch, not after.
 
-## 2. Hosting
+## 2. Hosting → **`setup-hosting`**
 
-- Choose a host: **Railway / Render / Fly.io** + **managed Postgres**. Step by
-  step see [`docs/DEPLOY.md`](../../docs/DEPLOY.md).
-- Set the env variables/secrets at the host (not in the code!).
-- Deploy. Start: `npm run start`.
+Start that skill and let it finish. It picks the host with the user (Railway,
+Render, Fly.io or DigitalOcean), says what it costs before anything is booked,
+installs the CLI, authenticates, creates the app and the managed Postgres, sets
+every environment variable, wires `npm run db:migrate` into the deploy and puts
+a domain on it. The reference behind it is [`docs/DEPLOY.md`](../../docs/DEPLOY.md).
+
+Come back here when the app answers on its domain.
 
 ## 3. Database in production
 
-- After the first deploy, migrate once: `npm run db:migrate`
-  (i.e. against the prod `DATABASE_URL`).
+Handled by `setup-hosting`: the migration is a **pre-deploy step at the host**
+(`npm run db:migrate`), so it runs before each new version takes traffic. If it
+was left out, put it in now rather than migrating by hand — a manual step in a
+deploy is a step that gets skipped exactly once.
+
+**The operator account** does not create itself. A fresh production database is
+empty, and the "first sign-in becomes owner" rule is DEV-only: on a live app the
+first person through the door may be a customer. Against the production
+`DATABASE_URL`:
+
+```
+node run.mjs user-create --email you@example.com --role owner --apply
+```
 
 ## 4. Digistore: products, approval & IPN on live
 

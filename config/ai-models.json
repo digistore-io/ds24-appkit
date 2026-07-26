@@ -1,20 +1,16 @@
 {
-  "_comment": "Which provider and which model runs each job. A call in the code names a TASK ('chat'), never a model — so you change what runs here, without touching code. Tasks are declared in lib/ai/tasks.mjs; a task with no entry below inherits 'default'. Check it with: node run.mjs ai-check. Details: docs/ai-providers.md.",
+  "_comment": "Which provider and which model runs each job. A call in the code names a TASK ('chat'), never a model — so you change what runs here, without touching code. Tasks are declared in lib/ai/task-rules.mjs; a task with no entry below inherits 'default'. Check it with: node run.mjs ai-check. Details: docs/ai-providers.md.",
+  "_autoComment": "\"auto\" means: run on whichever provider key is in the .env — put ONE of ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY, MISTRAL_API_KEY or OPENROUTER_API_KEY there and the AI works, on that company's current default model (lib/ai/providers/ids.mjs). Name a company instead as soon as you have chosen one: a named binding is obeyed exactly as written and is never swapped for another. Naming a company means naming its 'model' too, and usually its 'providerOptions' — those three travel together and are not portable between companies.",
   "default": {
-    "provider": "anthropic",
-    "model": "claude-sonnet-5",
+    "provider": "auto",
+    "model": "auto",
     "maxTokens": 2000
   },
   "tasks": {
     "chat": {
-      "provider": "anthropic",
-      "model": "claude-sonnet-5",
-      "maxTokens": 4000,
-      "providerOptions": {
-        "cacheTtl": "1h",
-        "thinking": { "type": "adaptive" },
-        "output_config": { "effort": "low" }
-      }
+      "provider": "auto",
+      "model": "auto",
+      "maxTokens": 4000
     }
   }
 }

@@ -427,8 +427,9 @@
     "cleared": "Verlauf gelöscht.",
     "offTitle": "{name} ist noch nicht bereit",
     "offDisabledInConfig": "Der Assistent ist ausgeschaltet. Setze \"enabled\" in config/ai-chat.json auf true.",
-    "offNoApiKey": "Es fehlt der Schlüssel {envVar} in der .env — das ist der Schlüssel des KI-Anbieters, an den die Assistentin gebunden ist. Im Terminal zeigt ihn: node run.mjs ai-check",
+    "offNoApiKey": "Sie ist an den Anbieter {provider} gebunden (config/ai-models.json → tasks.chat), und dessen Schlüssel {envVar} steht nicht in der .env. Entweder trägst du ihn dort ein — oder du bindest die Aufgabe an den Anbieter, dessen Schlüssel du schon hast. Ein Schlüssel einer anderen Firma zählt hier nicht. Im Terminal: node run.mjs ai-check",
     "offBrokenConfig": "config/ai-chat.json ist nicht schlüssig. node run.mjs kb-check sagt, was fehlt.",
+    "offForMember": "{name} steht in dieser App gerade nicht zur Verfügung.",
     "noAccessTitle": "Kein Zugang",
     "noAccessBody": "Der Assistent gehört zu einem Tarif, den dieses Konto nicht hat."
   },

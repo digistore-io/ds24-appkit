@@ -1,10 +1,19 @@
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect, vi } from "vitest";
 
 import {
   DEFAULT_CHAT_CONFIG,
   chatConfig,
   chatConfigProblems,
+  chatOffReason,
+  chatProviderEnvVar,
+  chatProviderId,
+  hasChatProviderKey,
+  isChatEnabled,
 } from "./chat-config";
+// The typed list, so `PROVIDER_ENV_VARS[id]` is a lookup and not an `any`.
+// `tasks.test.ts` is what keeps it in step with the .mjs copy.
+import { PROVIDER_IDS } from "./providers/types";
+import { PROVIDER_ENV_VARS } from "./providers/ids.mjs";
 
 describe("the shipped config", () => {
   // The same job `lib/billing-mode.test.ts` does for the billing mode: a second
@@ -32,6 +41,41 @@ describe("the shipped config", () => {
     // The avatar is fetched by the browser, so it has to be a path under
     // `public/`, not a filesystem path somebody pasted from their machine.
     expect(config.avatar.startsWith("/")).toBe(true);
+  });
+});
+
+describe("one key is enough to switch her on", () => {
+  // The property a new app is judged on, asserted through the code path the
+  // dashboard actually runs — not through `ai-check`, which is a different
+  // implementation of the same question. The shipped `chat` binding is `"auto"`,
+  // so each of the five keys on its own has to be sufficient. This is the test
+  // that fails if somebody pins the shipped binding back to one company.
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  function withOnly(envVar: string) {
+    for (const id of PROVIDER_IDS) vi.stubEnv(PROVIDER_ENV_VARS[id], "");
+    vi.stubEnv(envVar, "sk-test-not-a-real-key");
+  }
+
+  for (const id of PROVIDER_IDS) {
+    it(`runs on ${PROVIDER_ENV_VARS[id]} alone`, () => {
+      withOnly(PROVIDER_ENV_VARS[id]);
+      expect(hasChatProviderKey()).toBe(true);
+      expect(chatProviderId()).toBe(id);
+      expect(chatProviderEnvVar()).toBe(PROVIDER_ENV_VARS[id]);
+      expect(isChatEnabled()).toBe(true);
+      expect(chatOffReason()).toBeNull();
+    });
+  }
+
+  it("stays off, and says why, when there is no key at all", () => {
+    for (const id of PROVIDER_IDS) vi.stubEnv(PROVIDER_ENV_VARS[id], "");
+    expect(isChatEnabled()).toBe(false);
+    // Not "disabledInConfig" and not "brokenConfig": the product wants her and
+    // the config is fine — this machine simply cannot reach anybody.
+    expect(chatOffReason()).toBe("noApiKey");
   });
 });
 

@@ -14,7 +14,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
+    "db:migrate": "node scripts/db/migrate.mjs",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "db:reset": "node scripts/db/reset.mjs",

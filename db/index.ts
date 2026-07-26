@@ -11,7 +11,7 @@ const connectionString =
   process.env.DATABASE_URL ?? "postgresql://build:build@localhost:5432/build";
 
 // Connection pool per process. Default 10 — carries many concurrent users on a
-// single server (Railway/Render/Fly). Adjustable via DB_POOL_MAX. On
+// single server (Railway/Render/Fly/DigitalOcean). Adjustable via DB_POOL_MAX. On
 // serverless / with many instances keep it lower and put a connection pooler
 // (PgBouncer / Neon or Supabase pooling) in front. See the performance-gateway
 // skill.

@@ -73,7 +73,7 @@ run several times. No real customer data, no secrets in the seed.
 ## Migrations in production
 
 On deploy, `npm run db:migrate` runs **before** the new app version starts —
-`docs/DEPLOY.md` describes this for Railway/Render/Fly. Two rules:
+`docs/DEPLOY.md` describes this for all four hosts. Two rules:
 
 - **Migration first, then deploy.** Create new columns *optional* (nullable) or
   with a default at first, so the old version still running does not break.

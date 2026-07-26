@@ -46,13 +46,14 @@ Then set it in `config/ai-chat.json` and tell them what still has to happen:
 > "One thing I cannot do for you: the key. Until it is in your `.env`, the page
 > shows a notice instead of a chat."
 
-**Which key depends on which AI company answers for her**, and that is a
-separate decision from anything in this skill — she runs on the `chat` task, and
-`config/ai-models.json` says who runs it. Anthropic ships as the default, so
-`ANTHROPIC_API_KEY` from console.anthropic.com is usually the answer.
+**Any one of the five keys does.** She ships on `"auto"`, so
+`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, `MISTRAL_API_KEY` or
+`OPENROUTER_API_KEY` — whichever they already have an account for — is enough,
+and she runs on that company's current default model. There is no company to
+choose first.
 
-**If they have not chosen a provider, hand over to the `ai-providers` skill and
-come back.** That is the conversation about which invoice they want — accounts
+**If they want to choose one deliberately, hand over to the `ai-providers` skill
+and come back.** That is the conversation about which invoice they want — accounts
 they already have, where the data may go, what it costs — and it does not belong
 in the middle of writing a handbook. `node run.mjs ai-check` names the key this
 installation actually needs.

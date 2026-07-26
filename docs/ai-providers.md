@@ -38,9 +38,14 @@ You need **one**. Which one is your call, and the honest summary is that for
 handbook answers and short generation tasks all five are adequate; the decision
 is usually about the account you already have, where the data may go, and price.
 
+**Put a key in `.env` and you are done.** The app ships bound to `"auto"` — a
+rule rather than a company: *run on whichever key is here*, using that
+provider's current default model. Nothing names Anthropic, or any of the other
+four, until you decide to.
+
 | | Key | Notes |
 |---|---|---|
-| **Anthropic** | `ANTHROPIC_API_KEY` | The shipped default. Explicit prompt caching, which is what makes the assistant's whole-handbook approach affordable. |
+| **Anthropic** | `ANTHROPIC_API_KEY` | Explicit prompt caching, which is what makes the assistant's whole-handbook approach affordable. |
 | **OpenAI** | `OPENAI_API_KEY` | The account most people already have. Automatic prefix caching. |
 | **Gemini** | `GEMINI_API_KEY` | Generous free tier while you are still finding out whether your idea works. Implicit caching, up to 90% off a shared prefix. |
 | **Mistral** | `MISTRAL_API_KEY` | European provider — the answer when a customer or a procurement rule asks where the data goes. |
@@ -53,11 +58,22 @@ this installation can reach and what one call would cost.
 
 ## Binding a task
 
-`config/ai-models.json`:
+`config/ai-models.json`, as shipped:
 
 ```json
 {
-  "default": { "provider": "anthropic", "model": "claude-sonnet-5", "maxTokens": 2000 },
+  "default": { "provider": "auto", "model": "auto", "maxTokens": 2000 },
+  "tasks": {
+    "chat": { "provider": "auto", "model": "auto", "maxTokens": 4000 }
+  }
+}
+```
+
+And the same file once you have chosen a company:
+
+```json
+{
+  "default": { "provider": "auto", "model": "auto", "maxTokens": 2000 },
   "tasks": {
     "chat": {
       "provider": "anthropic",
@@ -72,10 +88,42 @@ this installation can reach and what one call would cost.
 | Field | Meaning |
 |---|---|
 | `default` | Used by any declared task with no entry of its own. A task therefore works before you have configured it. |
-| `provider` | One of the five. |
+| `provider` | One of the five, or `"auto"`. |
 | `model` | The provider's own model id, exactly as they spell it. |
 | `maxTokens` | Cap on the answer. It is a cost lever, which is why it lives here rather than in the feature. |
 | `providerOptions` | Passed to that provider **verbatim**. The layer never reads it — except for `cacheTtl`, which is its own word (below). `{"thinking": …}` for Anthropic, `{"reasoning_effort": …}` for OpenAI, `{"generationConfig": …}` for Gemini. Not portable between providers — but neither is the model name. |
+
+### `"auto"` — the shipped default
+
+`"auto"` is not a sixth provider. It is a rule the layer resolves at read time:
+**run on whichever of the five keys is in the `.env`**, using that company's
+current default model (`PROVIDER_DEFAULT_MODELS` in
+`lib/ai/providers/ids.mjs`). It exists because the alternative shipped a
+decision nobody had made yet — a developer put a key in `.env`, everything they
+could see said the key was right, and the AI stayed off because the file named
+somebody else.
+
+Four things are worth knowing about it:
+
+- **`provider` and `model` travel together.** `"auto"` for the company means
+  `"auto"` for the model, because a model id belongs to exactly one company.
+  Pinning `claude-sonnet-5` beside `"provider": "auto"` is refused by
+  `ai-check` rather than silently obeyed — it works for exactly as long as
+  `auto` happens to land on Anthropic.
+- **A name always wins.** Write `"anthropic"` and you get Anthropic, key or no
+  key — an honest error, never a quiet substitution onto a company you did not
+  choose. That is the line that keeps `auto` from becoming a surprise on an
+  invoice, and it means "pin it" is always available.
+- **Two keys is a choice you made.** With several present, `auto` takes the
+  first in the order shown in the provider table, deterministically. If that is
+  not the one you want, name it — that is the moment to.
+- **The default models go stale.** A model retired by its vendor answers a 404
+  on the first question. The fix is one line in `ids.mjs`, or a pinned `model`
+  in this file. `node run.mjs ai-check` always prints which one is in use, and
+  marks it `(via "auto")` so you can see you never typed it.
+
+Move off `auto` as soon as you have chosen — a named binding is the one you can
+tune, price and reason about. It is a good default, not a good permanent state.
 
 **A binding is not portable and is not meant to be.** Switching provider means
 changing `provider`, `model` and usually `providerOptions` together — all three
@@ -100,10 +148,10 @@ task moved away from Anthropic with that key still in its binding *works* — it
 just no longer buys anything, which is why `ai-check` names it too.
 
 **Every task runs on every provider**, this one included. The assistant ships
-bound to Anthropic because something has to be the default, not because she
-needs it — bind `chat` to any of the five, run `ai-check`, and she answers from
-there. What differs between the five is what a cached prefix is worth, and that
-is `lib/ai/providers/blocks.ts`, not the chat.
+on `"auto"` and needs no company in particular — bind `chat` to any of the
+five, run `ai-check`, and she answers from there. What differs between the five
+is what a cached prefix is worth, and that is `lib/ai/providers/blocks.ts`, not
+the chat.
 
 ---
 

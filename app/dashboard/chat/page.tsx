@@ -8,8 +8,10 @@ import {
   chatConfig,
   chatOffReason,
   chatProviderEnvVar,
+  chatProviderId,
   isChatEnabled,
 } from "@/lib/ai/chat-config";
+import { isOwner } from "@/lib/roles";
 import { listConversation } from "@/lib/ai/conversation";
 import { ChatWindow } from "./ui";
 
@@ -39,22 +41,41 @@ export default async function ChatPage() {
 
   const offReason = chatOffReason();
   if (!isChatEnabled() && offReason) {
-    // The reason is a code from lib/ai/chat-config.ts, translated here — the
-    // module has no language, the page does.
-    const body = {
-      disabledInConfig: t("offDisabledInConfig"),
-      // The env var is looked up rather than written into the message: which
-      // key is missing depends on which provider her task is bound to, and a
-      // sentence naming one company would be wrong for every app that chose
-      // another. Same bug the leak guard found inside chat-config.ts.
-      noApiKey: t("offNoApiKey", { envVar: chatProviderEnvVar() }),
-      brokenConfig: t("offBrokenConfig"),
-    }[offReason];
+    // WHO is asking decides what they are told, and this is the only place in
+    // the app where that distinction matters for a notice.
+    //
+    // The Operator gets the diagnosis: they switched her on, they are the one
+    // who can fix it, and the sentence names a file and an environment
+    // variable. A Member gets that this app has no assistant and nothing
+    // further — the name of a missing key is the shape of somebody else's
+    // infrastructure, and a customer can act on none of it. They reach this
+    // page only by typing the URL; the navigation never offers it to them.
+    const body = isOwner(session.user.role)
+      ? // The reason is a code from lib/ai/chat-config.ts, translated here —
+        // the module has no language, the page does.
+        {
+          disabledInConfig: t("offDisabledInConfig"),
+          // The env var is looked up rather than written into the message:
+          // which key is missing depends on which provider her task is bound
+          // to, and a sentence naming one company would be wrong for every app
+          // that chose another. Same bug the leak guard found inside
+          // chat-config.ts.
+          noApiKey: t("offNoApiKey", {
+            envVar: chatProviderEnvVar(),
+            provider: chatProviderId(),
+          }),
+          brokenConfig: t("offBrokenConfig"),
+        }[offReason]
+      : t("offForMember", { name: config.name });
 
     return (
       <>
         {header}
-        <Callout variant="info" title={t("offTitle", { name: config.name })}>
+        <Callout
+          // For the Operator this is a to-do, for the Member a fact.
+          variant={isOwner(session.user.role) ? "warning" : "info"}
+          title={t("offTitle", { name: config.name })}
+        >
           {body}
         </Callout>
       </>

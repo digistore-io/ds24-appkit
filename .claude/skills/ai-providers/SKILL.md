@@ -16,6 +16,28 @@ assistant, and your own code for anything else. This is about who gets paid.
 Full reference: **`docs/ai-providers.md`**. Read it before changing anything
 under `lib/ai/`.
 
+## Step 0 — Is anything actually wrong?
+
+**The app ships on `"auto"`: any one of the five keys in the `.env` and the AI
+works.** So before running this skill, check whether the person already has what
+they came for:
+
+```bash
+node run.mjs ai-check
+```
+
+Green, with a provider named `(via "auto")`? Then say so and stop:
+
+> "You are already running — `auto` picked Mistral because that is the key in
+> your `.env`, and it is using `mistral-large-latest`. Nothing to set up. Worth
+> pinning it in `config/ai-models.json` once you are sure that is the company
+> you want, but it works as it is."
+
+Run the rest of this skill when they want to **choose** a company (rather than
+accept the one their key implies), **switch** to another, or when `ai-check`
+reports a problem. Do not walk somebody through picking a provider they have
+already effectively picked.
+
 ## Step 1 — Which one?
 
 Ask once, and lead with the question that actually decides it:
@@ -28,7 +50,7 @@ Then, only if they have no preference, offer the short version:
 
 | | When it is the right answer |
 |---|---|
-| **Anthropic** | The default here. Best prompt caching, which is what makes the assistant cheap to run. |
+| **Anthropic** | Best prompt caching, which is what makes the assistant cheap to run. |
 | **OpenAI** | You already have an account. Most people do. |
 | **Gemini** | You are still finding out whether the idea works and want a free tier. |
 | **Mistral** | A customer or a rule requires a European provider. |
@@ -45,26 +67,31 @@ Then get the key in:
 
 ## Step 2 — Bind the tasks
 
-Open `config/ai-models.json`. The app ships with one task, `chat`, bound to
-Anthropic — a default, not a requirement: the assistant runs on any of the five.
-If they chose someone else, change all three together — provider, model and
-`providerOptions` — because the tuning options are not portable:
+Open `config/ai-models.json`. The app ships with one task, `chat`, on
+`"auto"` — no company named. Pinning it is the point of this step: write
+`provider`, `model` and (if the company has tuning worth setting)
+`providerOptions`, all three together, because none of them is portable:
 
 ```json
 "chat": {
   "provider": "openai",
-  "model": "gpt-5.1",
+  "model": "gpt-5.6-luna",
   "maxTokens": 4000,
   "providerOptions": { "reasoning_effort": "low" }
 }
 ```
 
-**The line people leave behind is `providerOptions`.** The shipped binding
-carries Anthropic's (`cacheTtl`, `thinking`, `output_config`); those words mean
-nothing to OpenAI or Mistral, and a request carrying a field a provider does not
-know comes back as an error — on the customer's first message. Replace them with
-the new provider's equivalent, or delete them. `ai-check` names any that are
-left, so run it and believe it rather than guessing which are portable.
+**Never leave `"provider": "auto"` beside a real model name.** A model id
+belongs to one company, so the two contradict each other — it works only for as
+long as `auto` happens to land on the right company, then 404s the day a second
+key appears. `ai-check` refuses the combination by name.
+
+**The line people leave behind is `providerOptions`.** Anthropic's words
+(`cacheTtl`, `thinking`, `output_config`) mean nothing to OpenAI or Mistral, and
+a request carrying a field a provider does not know comes back as an error — on
+the customer's first message. Replace them with the new provider's equivalent,
+or delete them. `ai-check` names any that are left, so run it and believe it
+rather than guessing which are portable.
 
 **You will not know their provider's current model names.** Say so rather than
 guessing:
@@ -82,8 +109,13 @@ else.
 fetches prices, deliberately.
 
 ```json
-"openai/gpt-5.1": { "input": 1.25, "output": 10 }
+"openai/gpt-5.6-luna": { "input": 1, "output": 6 }
 ```
+
+The file already carries the default models `auto` can pick, so a pinned model
+is the case that needs a new line. **The shipped figures go stale** — they were
+each taken from the vendor's own pricing page on the date in `updated`, not from
+memory. Re-check before relying on one, and say so rather than vouching for it.
 
 Two things to settle here, and both are decisions rather than lookups:
 

@@ -10,6 +10,7 @@ import {
   usageFrom,
 } from "./openai-compat";
 import { unexplainedTokens, type NormalizedRequest } from "./types";
+import { PROVIDERS_REPORTING_COST } from "./ids.mjs";
 
 const REQUEST: NormalizedRequest = {
   model: "some-model",
@@ -134,6 +135,19 @@ describe("the three profiles", () => {
     for (const profile of Object.values(COMPAT_PROFILES)) {
       expect(profile.baseUrl.endsWith("/")).toBe(false);
     }
+  });
+
+  it("agree with the .mjs list about who reports their own cost", () => {
+    // Two copies, one truth — the same deal PROVIDER_IDS gets. The flag lives
+    // here because the adapter acts on it; the list lives in ids.mjs because
+    // `scripts/ai/check.mjs` reads it and does not import TypeScript. Out of
+    // step, `ai-check` would demand a price for the one provider that already
+    // reports the real figure, or quietly stop asking for one that does not.
+    const fromProfiles = Object.values(COMPAT_PROFILES)
+      .filter((profile) => profile.usageAccounting)
+      .map((profile) => profile.id)
+      .sort();
+    expect(fromProfiles).toEqual([...PROVIDERS_REPORTING_COST].sort());
   });
 });
 
