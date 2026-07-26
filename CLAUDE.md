@@ -1168,6 +1168,18 @@ really calls the endpoint, which is the only check that covers the whole path.
 
 ## Plans & Digistore products
 
+**One fork comes before every other billing question: whose Digistore24 account
+gets paid.** Either the operator of this installation is the only vendor — that
+is the default, it is what everything below assumes, and it is fully built — or
+the app is a **platform** whose own users connect *their* Digistore24 accounts
+and get paid themselves. The second shape is not built here, and it is not a
+setting: it turns the API key, the IPN passphrase, the product ids and the order
+table into per-tenant things, and it needs a **Developer** API key of your own.
+Both shapes, the decision question and the complete build guide for the platform
+case are in **[`docs/digistore-integration.md`](docs/digistore-integration.md)**
+— read it before designing billing for an app where somebody other than the
+operator gets paid. Do not build the platform shape "just in case".
+
 The plan list in `config/digistore-products.json` is the **single source** —
 it feeds the plans page (`app/plans/page.tsx`) *and* the sync script. Don't create
 a second price list in the code.

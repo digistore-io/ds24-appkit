@@ -30,6 +30,27 @@ The **only** step that necessarily stays with the user is one click: the
 authorization in the browser at Digistore24 (the authorization itself — no tool
 can click that away for them). Everything else you do.
 
+## First: is the operator the only vendor?
+
+Almost always yes, and then everything below applies unchanged: **one** Digistore24
+account per installation, the key in the `.env`, the operator gets paid. That is
+what this template is built as.
+
+Ask the other question only when it is genuinely open — **does anybody other than
+the operator get paid?** If the app's own users are meant to sell to *their*
+customers (a course platform, a booking tool for coaches, a shop builder), that
+is the **platform** shape: each user connects their own Digistore24 account, and
+you need a **Developer** API key of your own. It is not a setting and it is not
+built here — the API key, the IPN passphrase, the product ids and the order table
+all become per-tenant. **Do not start building it from memory:**
+`docs/digistore-integration.md` carries both shapes and the full design for the
+platform one, including the two mistakes that cost money (a checkout URL cached
+across tenants, and attribution taken from the payload instead of the
+connection).
+
+Do not raise the question unprompted with a user who simply wants to sell their
+own app, and do not build the platform shape "just in case".
+
 ## How the billing works
 
 Digistore24 is the payment provider. Your app doesn't handle any money, it
@@ -250,5 +271,10 @@ After that, before the launch, in this order: **`security-gateway`** (security)
   in the hoster's secret management) and are read exclusively through
   `lib/digistore/settings.ts` — never in the code, in the repo or in logs.
   `ds24ApiKey()` throws if the key is missing; no silent fallback.
-- Field reference (IPN payload, events, createBuyUrl parameters): see
-  `docs/DEPLOY.md` and the comments in `lib/digistore/`.
+- Field reference (IPN payload, events, createBuyUrl parameters, the API
+  functions and which key each one needs): `docs/digistore-integration.md`,
+  `docs/DEPLOY.md` and the comments in `lib/digistore/`. The authoritative
+  sources are Digistore24's own — the event/payload list at
+  <https://dev.digistore24.com/hc/en-us/articles/32480561422353-Events> and the
+  API reference at <https://www.digistore24.com/api/docs/index.html>. Look there
+  rather than guessing a field name.

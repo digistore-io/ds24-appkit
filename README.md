@@ -209,6 +209,9 @@ run.mjs             all commands for everyday work (node run.mjs = overview)
 Database & migrations: see [`docs/database.md`](docs/database.md).
 Scheduled jobs (they run by themselves): see [`docs/cron.md`](docs/cron.md).
 Environments (DEV/STAGING/PROD) & local webhooks: see [`docs/environments.md`](docs/environments.md).
+The Digistore24 integration — API key, IPN, checkout, and the difference between
+"I am the only vendor" (the default) and "my users sell through their own
+accounts": see [`docs/digistore-integration.md`](docs/digistore-integration.md).
 
 ## Security
 
