@@ -8,8 +8,55 @@ import {
   mapEventToStatus,
   mapEventToSubscriptionStatus,
 } from "./ipn";
+import vectorsJson from "./ipn-vectors.json";
 
 const PASSPHRASE = "s3cret-passphrase";
+
+// One cast, here, rather than one per use. A JSON import is typed by its
+// literal contents, so TypeScript widens the array into a union in which every
+// key some OTHER vector has becomes `string | undefined` on this one. The file
+// holds nothing but strings — the optionality is the parser's invention.
+const vectors = vectorsJson as unknown as {
+  passphrase: string;
+  algorithm: string;
+  vectors: {
+    name: string;
+    uppercaseKeys: boolean;
+    params: Record<string, string>;
+    expected: string;
+  }[];
+};
+
+// The frozen vectors. This same file ships in the Digistore24 Skill Pack
+// (github.com/digistore-io/ds24-skills), where a Node, a Web-Crypto and a
+// Python implementation are measured against it — so an IPN that verifies here
+// verifies there and the other way round. That is the whole point of having it
+// as data rather than as assertions written twice.
+//
+// `make skill-pack-check` fails when the two copies stop being identical.
+// A value below is never "adjusted" to make a test pass: a changed expectation
+// means the signature changed, and a changed signature means every live
+// Digistore24 connection breaks.
+describe("digistoreShaSign — frozen vectors (shared with ds24-skills)", () => {
+  for (const v of vectors.vectors) {
+    it(`reproduces the vector "${v.name}"`, () => {
+      expect(
+        digistoreShaSign(v.params, vectors.passphrase, vectors.algorithm, v.uppercaseKeys),
+      ).toBe(v.expected);
+    });
+  }
+
+  it("covers the traps worth freezing", () => {
+    // A guard on the vector FILE, not on the code: whoever trims it down loses
+    // the cases that catch a broken port to another language.
+    const names = vectors.vectors.map((v) => v.name);
+    expect(names).toContain("utf8-value"); // latin-1 elsewhere → different hash
+    expect(names).toContain("uppercase-keys"); // convert_keys_to_uppercase
+    expect(names).toContain("empty-values-skipped");
+    expect(names).toContain("sha-sign-excluded");
+    expect(vectors.vectors.length).toBeGreaterThanOrEqual(8);
+  });
+});
 
 describe("digistoreShaSign", () => {
   it("erzeugt einen uppercase SHA512-Hex-String (128 Zeichen)", () => {
