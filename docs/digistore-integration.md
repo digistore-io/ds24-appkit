@@ -145,6 +145,52 @@ signature, answer the connection test with `OK`, hand a verified payload to
   On a rejected IPN, do not guess — `node run.mjs ds24-ipn-verify` recomputes
   the signature over the raw body that actually arrived.
 
+#### Registering it: two parameters decide whether events arrive
+
+`ipnSetup` is **both the setup and the update** — the same call, and the
+`domain_id` decides which: an existing connection for that id is updated, an
+unknown one creates a second connection.
+
+**`domain_id` must be unique, and a readable name is not.** Digistore24 finds a
+connection by **(merchant, API key, `domain_id`)**. So `test-local-1`,
+`local-app` or `myapp` is not a name but a collision waiting for the vendor's
+second project: the two do not get two connections, they take turns overwriting
+one. The later `ds24-sync` re-points the earlier app's IPN at its own address,
+and that app's purchases then arrive nowhere — both runs report success, and
+nothing anywhere reports the loss. **Put something random in it**
+(`local-my-app-diw2hvnz73`). `ipn-setup.mjs` does that by itself for any id it
+derives; an id you pass with `--domain` is yours to make unique.
+
+**`product_ids` says which products the connection covers**, comma-separated
+(`111,222,333`); Digistore24's default is `all`. `node run.mjs ds24-sync` sends
+the ids from `config/digistore-products.json` once the product sync has written
+them back, because a vendor's account usually sells more than this app — naming
+them is what lets two apps of the same vendor be connected at once. `all` stays
+safe here rather than merely tolerable: an order for a product the registry does
+not know is recorded and **grants nothing** (`resolveProduct()` in
+`lib/digistore/payment-event.ts` returns `null`), so foreign purchases are
+ignored, not mis-granted. What `all` costs is the separation.
+
+#### "The purchase worked but nothing happened" — ask Digistore24
+
+```bash
+node run.mjs ds24-purchase --order ABC12345      # --json for everything
+```
+
+`getPurchase` returns Digistore24's own view of one order: status, product,
+buyer, billing type, next payment and the management links. It is read-only, and
+it splits the complaint in two:
+
+- **Digistore24 does not know the id** → no purchase happened, or it happened in
+  another vendor account. Nothing here is broken.
+- **Digistore24 knows it and `/dashboard/admin/purchases` does not** → the order
+  was paid and no IPN reached this app. That is the connection: a URL that no
+  longer answers (a closed tunnel), a `domain_id` another project overwrote, or
+  a `product_ids` list this product is not in.
+
+For an IPN that *did* arrive and was rejected, the other command is the one:
+`node run.mjs ds24-ipn-verify` recomputes the signature over the stored body.
+
 Fields worth knowing before you design anything:
 
 | Field | Why it matters |
@@ -201,10 +247,11 @@ These are load-bearing decisions, not accidents:
 - **Billing rows carry no vendor column.** `orders.memberId` is the *buyer*
   (`db/schema-digistore.ts`); one installation bills through one account, so
   namespacing rows by vendor would buy nothing but a trap.
-- **One IPN connection, one passphrase, one stable `domain_id`**
+- **One IPN connection, one passphrase, one stable and UNIQUE `domain_id`**
   (`DIGISTORE_IPN_DOMAIN_ID`). `ipn-setup.mjs` is idempotent through it:
   delete-then-create against the same `domain_id`, so a changed URL updates the
-  connection instead of multiplying it.
+  connection instead of multiplying it. Stable and unique are two requirements,
+  not one — the second is why a derived id carries a random tail (above).
 - **`tracking[custom]` names the buyer**, as `m:<memberId>;t:<token>;…`
   (`lib/digistore/custom.ts`). That is how a payment finds its owner even when
   the buyer paid under a different address. An unattributed payment is recorded
@@ -344,10 +391,15 @@ registered against it:
 3. store the `sha_passphrase` Digistore24 returns on the row, and flip the status
    to `connected`.
 
-`domain_id` may stay a constant. Scoping is entirely by which key you
-authenticate with, so the value is unique *within* the vendor's account, and
-reusing it means a reconnect replaces that vendor's connection instead of adding
-a second one.
+`domain_id` may stay a constant here, and one constant is enough: scoping is by
+(merchant, API key, `domain_id`), and each vendor connects with their own key.
+Reusing it means a reconnect replaces that vendor's connection instead of adding
+a second one. Make that constant your platform's own name and not a generic one
+— the vendor may be connected to a second platform that reasoned the same way.
+
+`product_ids` is worth setting in this shape rather than leaving at `all`: a
+connected vendor sells things that have nothing to do with your platform, and
+`all` sends you every one of those events to store and ignore.
 
 **Each connection gets its own IPN URL**, with an opaque, unguessable
 `connectionId`. The route then knows which passphrase to verify against before it
@@ -472,8 +524,10 @@ Which key each function needs. "The vendor's key" is `ds24ApiKey()` from the
 | `requestApiKey` | developer key | start the interactive approval → `request_url`, `request_token` |
 | `retrieveApiKey` | developer key | ask whether it happened → `api_key`, `request_status` |
 | `unregister` | the vendor's key | delete that key and its IPN connections |
-| `ipnSetup` | the vendor's key | create the IPN connection (`ipn_url`, `name`, `domain_id`, `sha_passphrase`) |
+| `ipnSetup` | the vendor's key | create **or update** the IPN connection (`ipn_url`, `name`, `domain_id`, `product_ids`, `sha_passphrase`) — the `domain_id` decides which |
 | `ipnInfo` / `ipnDelete` | the vendor's key | read / remove by `domain_id` |
+| `getPurchase` | the vendor's key | one order as Digistore24 sees it — status, product, links (`node run.mjs ds24-purchase`) |
+| `listPurchases` | the vendor's key | the same for many, filtered (e.g. by buyer address) |
 | `listProducts`, `createProduct`, … | the vendor's key (`writable`) | products |
 | `createBuyUrl` | the vendor's key (`writable`) | checkout URL + payment plan |
 | `createBillingOnDemand` | the vendor's key (`writable`) | charge a stored mandate (token top-up) |

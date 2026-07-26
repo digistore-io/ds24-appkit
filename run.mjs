@@ -34,6 +34,7 @@ import { dbUp } from "./scripts/db/up.mjs";
 import { doctor } from "./scripts/dev/doctor.mjs";
 import { depsFresh, markDepsFresh } from "./scripts/dev/deps.mjs";
 import { ensureEnv } from "./scripts/dev/ensure-env.mjs";
+import { writeStamp } from "./scripts/dev/setup-stamp.mjs";
 import { usesLocalPostgres } from "./scripts/db/driver.mjs";
 import { localDown, localNuke } from "./scripts/db/local.mjs";
 import { run, runNpm, runScript } from "./scripts/lib/proc.mjs";
@@ -318,6 +319,11 @@ const TASKS = {
     needs: ["env", "node_modules"],
     run: (args) => script("scripts/ds24/ipn-verify.mjs", args),
   },
+  "ds24-purchase": {
+    group: "Digistore24",
+    help: "What Digistore24 says about one order — status, product, links (--order ABC123)",
+    run: (args) => script("scripts/ds24/purchase-info.mjs", args),
+  },
   "ds24-tunnel": {
     group: "Digistore24",
     help: "Receive IPNs locally: public address in the background + IPN registered",
@@ -338,7 +344,14 @@ const TASKS = {
     // for the whole preparation, so the setup-machine skill calls one and not
     // five — and so a person has a single thing to type after a fresh clone.
     needs: ["env", "node_modules", "db-up", "db-migrate"],
-    run: () => console.log("\n✓ Ready. Start it with: node run.mjs start"),
+    // The stamp is written HERE, after the needs above have all run: this is the
+    // moment the expensive half of the setup is genuinely through. From then on
+    // the greeting says `[Setup: ok — verified …]` and nobody has to walk the
+    // checklist again (scripts/dev/setup-stamp.mjs).
+    run: () => {
+      writeStamp();
+      console.log("\n✓ Ready. Start it with: node run.mjs start");
+    },
   },
   env: {
     group: "Setup",

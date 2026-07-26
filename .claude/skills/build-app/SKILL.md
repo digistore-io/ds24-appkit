@@ -25,17 +25,37 @@ a page under `app/` — without step 0, without `market-research`, without askin
 about the product. Only once it runs, offer in one sentence whether it should
 turn into something sellable. Offer it, don't push.
 
-## Step 0a — Does the machine work?
+## Step 0a — Prove the machine works, before the first file
 
-Before anything else, check the session-start line: `[Setup: ok]` means carry on
-straight away. `[Setup: blocked — …]` means run the skill **`setup-machine`**
-first — it installs what is missing and prepares the project.
+**This is a command, not a glance.** Unless the session greeting already says
+`[Setup: ok — verified <date>]`, your first tool call of this build is:
 
-Two sentences on it, no more, and only when it applies. Somebody who came here
-to build an app does not want a lecture about Docker; they want the thing to
-work. And an app built on a machine that cannot start it ends in the failure
-this template warns about most loudly: a confident report and a page that never
-loads.
+```bash
+node run.mjs doctor --json
+```
+
+Read the answer, and there are only three:
+
+| | |
+|---|---|
+| **the command does not exist** — "command not found", "not recognized" | there is no Node on this machine. Skill **`setup-machine`**, step 0. **STOP** |
+| `"ok": false` | skill **`setup-machine`**. **STOP** |
+| `"ok": true` | one sentence, and on to step 0 |
+
+**STOP means no file is written until it is solved** — not "note it and carry
+on". A machine without Node lets a whole app come into being and only gives way
+at the first test, which is the failure this template warns about most loudly: a
+confident report and a page that never loads.
+
+Why a command and not a look at the greeting: **a missing line is not a signal.**
+The greeting is printed by a Node program, so a machine without Node prints
+nothing at all — and "nothing" reads like "all fine". A command that does not
+exist does not read like that. (There is a second, shell-only hook that says it
+outright, but do not rely on having seen it.)
+
+Two sentences on all of this, no more, and only when it applies. Somebody who
+came here to build an app does not want a lecture about Docker; they want the
+thing to work.
 
 ## Step 0 — The switch: is the idea already there?
 
@@ -241,9 +261,20 @@ node run.mjs start                # DB + migrations + app
 node run.mjs smoke                # opens every page, reports server errors
 ```
 
-5xx means: fix it before you go on — find the cause with `node run.mjs logs`. A 307 to
-`/login` is correct for protected pages. `node run.mjs smoke` skips dynamic pages
-(`[id]`); open those once by hand with a real record.
+5xx means: fix it before you go on — find the cause with `node run.mjs logs`.
+
+`smoke` runs twice: anonymously, then **signed in as the owner** for every page
+that sent it to `/login` — so your new protected pages are really rendered. Two
+lines in its output are worth reading rather than skimming:
+
+- `Signed in as … — the N protected page(s) again` → they were checked.
+- `N protected page(s) NOT checked — <reason>` → **they were not.** Usually there
+  is no `owner` account yet (step 3b) or mail delivery is configured, which
+  switches the development login off. Fix the reason or open the pages yourself;
+  do not report them as working.
+
+Dynamic pages (`[id]`) are skipped either way — open those once by hand with a
+real record.
 
 Only then tell the user that they can take a look — and write down what they
 will see and at which address.

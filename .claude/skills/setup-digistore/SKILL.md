@@ -133,6 +133,25 @@ deliberately no interface for entering or generating a key.
      interface for that. The SHA512 passphrase is generated in the process and
      written into the `.env` as `DIGISTORE_IPN_PASSPHRASE`; a stable
      `DIGISTORE_IPN_DOMAIN_ID` keeps the connection idempotent across runs.
+     The same call is the update — Digistore24 looks a connection up by
+     (merchant, API key, `domain_id`) and updates the one it finds.
+
+   - **Two things about that registration are worth knowing, because both fail
+     silently when they are wrong** (full version in
+     `docs/digistore-integration.md`):
+     - **The `domain_id` has to be UNIQUE, not just stable.** A generic value —
+       `test-local-1`, `local-app` — is a collision with the user's own other
+       project: the second sync overwrites the first project's connection, and
+       that project's purchases arrive nowhere afterwards. The script puts a
+       random tail on every id it derives (`local-my-app-diw2hvnz73`). **If you
+       ever set one by hand (`--domain`), put random characters in it yourself.**
+     - **`product_ids` says which products the connection covers** (comma
+       separated, `111,222,333`; Digistore24's default is `all`). `ds24-sync`
+       sends the ids out of `config/digistore-products.json`, so the connection
+       stays on this app's products — a vendor account usually holds more than
+       this app. `all` is safe too (an unknown product is recorded and grants
+       nothing), it just does not separate. Force either with
+       `node run.mjs ds24-ipn --auto --products 111,222 --apply`.
 
    Only needs the `DIGISTORE_API_KEY` from step 1, no browser, no user input.
    `node run.mjs ds24-sync` **applies** — a preview that changes nothing is
@@ -187,6 +206,27 @@ deliberately no interface for entering or generating a key.
    matches names the rule Digistore24 actually used; if none matches, the
    passphrase is the suspect and not the code. `--order ABC123` picks a specific
    purchase, `--all` walks every rejected one.
+
+   **"The purchase went through and nothing happened in the app" is a different
+   sentence, and you can answer it yourself** — do not ask the user to look in
+   their Digistore24 backoffice:
+
+   ```bash
+   node run.mjs ds24-purchase --order ABC12345      # --json for the full payload
+   ```
+
+   `getPurchase` returns Digistore24's own view of that order — status, product,
+   buyer, billing type, next payment, invoice/cancel links. It reads only. Two
+   outcomes, two different faults:
+   - **Digistore24 does not know the id** → there was no purchase, or it was
+     made in a different vendor account than this `DIGISTORE_API_KEY`. Nothing
+     in the app is broken.
+   - **Digistore24 knows it, `/dashboard/admin/purchases` does not** → paid, and
+     no IPN reached this app. Look at the connection, in this order: is the
+     registered URL still answering (a closed tunnel is the usual cause), did
+     another project overwrite the `domain_id`, is this product in the
+     connection's `product_ids`? `node run.mjs ds24-ipn --auto --apply`
+     re-registers it.
 4. **Test a purchase from the app (before the approval):** new products are
    initially **not approved** at Digistore24 — then only **test purchases** are
    possible. So that the vendor can run through the real checkout from within

@@ -14,6 +14,31 @@
 // while the connection is meant to stay the one for this app. The passphrase is
 // reused across the delete, so signature verification is unaffected.
 //
+// The other half of that: the domain_id has to be UNIQUE per app, and a name
+// like "local-app" is not. Digistore24 finds a connection by (merchant, API
+// key, domain_id) and UPDATES the row it finds — so two of the vendor's own
+// projects that derive the same id do not get two connections, they take turns
+// overwriting one. The second sync silently re-points the first project's IPN
+// at its own address, and the first project's purchases then arrive nowhere,
+// with no error visible on either side. That is why a DERIVED id gets a random
+// tail (see below); an id passed with --domain is the caller's own business.
+//
+// WHICH products the connection covers is `product_ids`, and it is the second
+// thing that goes wrong in a real account. Digistore24's own default is `all`;
+// this script instead sends the ids actually in the registry
+// (config/digistore-products.json), because a vendor's account normally holds
+// more than this app's products — an older funnel, a second app, somebody
+// else's launch. Naming the ids keeps every connection to its own products, so
+// two apps of the same vendor can be connected at the same time. Several ids
+// travel comma-separated: product_ids=111,222,333.
+//
+// `all` stays legitimate and is the fallback when nothing is synced yet
+// (--products all forces it): this app's IPN handler records an order for a
+// product the registry does not know and grants nothing for it
+// (resolveProduct() in lib/digistore/payment-event.ts returns null), so foreign
+// purchases are ignored rather than mis-granted. What you lose with `all` is
+// the separation, not the safety.
+//
 // Return value of ipnSetup: { created, updated, deleted, sha_passphrase, ipn_id }.
 // The defaults (set by DS24) match this template's IPN handler:
 // transactions = payment/refund/chargeback/payment_missed/last_paid_day,
@@ -38,9 +63,14 @@
 //        # URL from APP_URL, domain_id from .env or derived+saved
 //   node scripts/ds24/ipn-setup.mjs --url "https://app.example.de/api/ipn" \
 //        --domain "app.example.de" --apply
+//   node scripts/ds24/ipn-setup.mjs --auto --products 111,222,333 --apply
+//        # only these products; --products all covers the whole account
 //   Dry run is the default; --apply executes, --dry-run beats --apply.
 //   Via make: `node run.mjs ds24-sync` applies, `node run.mjs ds24-sync --dry-run` previews.
+import { randomBytes } from "node:crypto";
+
 import { ds24Call, requireApiKey, parseArgs, isYes } from "./_client.mjs";
+import { readProducts } from "./_products.mjs";
 import { setEnvValue } from "../lib/env-write.mjs";
 import {
   CLOUDFLARED_MISSING,
@@ -59,6 +89,16 @@ const auto = Boolean(args.auto);
 
 function slug(s) {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
+
+// The random tail on a derived domain_id (see the header). Ten characters of
+// [a-z0-9] out of node:crypto — enough that two projects never meet, short
+// enough that the readable part still reads: "local-my-app-diw2hvnz73".
+const TAIL_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789";
+function withRandomTail(base) {
+  let tail = "";
+  for (const byte of randomBytes(10)) tail += TAIL_ALPHABET[byte % TAIL_ALPHABET.length];
+  return `${base}-${tail}`;
 }
 
 // --- IPN URL: explicitly via --url, in --auto mode derived. ------------------
@@ -161,6 +201,13 @@ if (viaTunnel) {
 // the public URL is ephemeral (every `node run.mjs ds24-tunnel` yields a new one) — here the
 // project name is what counts as a stable identifier. In staging/production the
 // domain itself is stable and meaningful.
+//
+// Whatever it is derived from, a derived id ends in a random tail. The readable
+// part says which app it is; the tail is what keeps it from being the SAME id
+// as somebody's other project — "local-app" is a name two projects arrive at
+// by themselves, and the loser of that collision loses its IPN silently (see
+// the header). Only a value we derive gets one: --domain and an id already in
+// the .env are taken exactly as they are.
 const isDev = ["", "development", "dev", "local"].includes(
   (process.env.APP_ENV || "").toLowerCase(),
 );
@@ -169,7 +216,7 @@ let domainIdIsNew = false;
 if (!domainId) domainId = process.env.DIGISTORE_IPN_DOMAIN_ID || null;
 if (!domainId) {
   const project = process.env.APP_NAME || process.cwd().split("/").filter(Boolean).pop() || "app";
-  domainId = isDev ? slug(`local-${project}`) : slug(new URL(url).hostname);
+  domainId = withRandomTail(isDev ? slug(`local-${project}`) : slug(new URL(url).hostname));
   domainIdIsNew = true;
 }
 
@@ -178,8 +225,41 @@ const hasPassphrase = Boolean(args.passphrase || process.env.DIGISTORE_IPN_PASSP
 const passphrase = args.passphrase || process.env.DIGISTORE_IPN_PASSPHRASE || "random";
 const vendorId = args.vendor ? String(args.vendor) : undefined;
 
+// --- product_ids: --products > the registry's synced ids > "all". ------------
+// See the header for why naming them beats "all". A product with no productId
+// has not been synced yet and cannot be named — `ds24-sync` creates the
+// products BEFORE it gets here, so by the time this runs they normally all
+// have one.
+function registryProductIds() {
+  try {
+    const products = Object.values(readProducts().products ?? {});
+    return products.map((p) => p?.productId).filter(Boolean).map(String);
+  } catch {
+    // A missing or broken registry is not this script's error to raise — the
+    // sync would already have said so. Fall back to the safe, wide setting.
+    return [];
+  }
+}
+
+if (args.products === true) {
+  console.error(
+    'ERROR: --products needs a value — a comma-separated list of Digistore24 product ids (111,222,333) or "all".',
+  );
+  process.exit(2);
+}
+const requestedProducts =
+  typeof args.products === "string" ? args.products.replace(/\s+/g, "") : null;
+const registryIds = requestedProducts ? [] : registryProductIds();
+const productIds = requestedProducts || (registryIds.length ? registryIds.join(",") : "all");
+
 function ipnSetupParams() {
-  const p = { ipn_url: url, name, domain_id: domainId, sha_passphrase: passphrase };
+  const p = {
+    ipn_url: url,
+    name,
+    domain_id: domainId,
+    product_ids: productIds,
+    sha_passphrase: passphrase,
+  };
   if (vendorId) p.vendor_id = vendorId;
   return p;
 }
@@ -239,6 +319,13 @@ const action = isYes(res.created)
 console.log(`✓ IPN connection ${action}: domain "${domainId}" → ${url}`);
 if (isYes(res.deleted)) console.log("  (duplicate connections removed)");
 console.log(`  ipn_id=${res.ipn_id ?? "?"}`);
+console.log(
+  productIds === "all"
+    ? "  Products: ALL of this account. Purchases of products outside the registry\n" +
+        "    are recorded but grant nothing. Narrow it with --products <ids> once the\n" +
+        "    products are synced, if the account sells anything besides this app."
+    : `  Products: ${productIds}`,
+);
 
 if (hasPassphrase) {
   console.log("  SHA512 passphrase: taken over from the .env, unchanged.");

@@ -144,6 +144,51 @@ describe("DEPLOY.md names variables that exist", () => {
   });
 });
 
+// The one failure this project cannot see from the inside: a machine with no
+// Node. The greeting that would report it is itself a Node program, so it stays
+// silent — and silence reads as "all fine". Three things hold that shut, and each
+// one is a sentence somebody could tidy away as redundant while removing the only
+// warning a whole class of users ever gets.
+describe("a machine without Node cannot go unnoticed", () => {
+  it("has a shell guard in front of the Node greeting", () => {
+    const settings = JSON.parse(read(".claude/settings.json"));
+    const commands = settings.hooks.SessionStart.flatMap(
+      (entry: { hooks: { command: string }[] }) => entry.hooks.map((hook) => hook.command),
+    );
+
+    const guard = commands.find((command: string) => command.includes("command -v node"));
+    expect(guard, "no SessionStart hook asks whether node exists").toBeTruthy();
+
+    // `if !` and not `||`: a shell that cannot parse this prints NOTHING, where
+    // the `||` form would warn somebody whose Node is fine. See CLAUDE.md →
+    // Three systems; silence is the safe failure here, a false alarm is not.
+    expect(guard).toMatch(/^if !/);
+    expect(guard).toContain("setup-machine");
+
+    // In front of it, so the reason is on screen before the missing greeting.
+    expect(commands.indexOf(guard)).toBeLessThan(
+      commands.findIndex((command: string) => command.includes("session-start.mjs")),
+    );
+  });
+
+  it("makes build-app run a command instead of reading a line", () => {
+    // Reading the greeting cannot work: on the machine this is for, there is no
+    // greeting. A command that does not exist is the signal.
+    const skill = read(".claude/skills/build-app/SKILL.md");
+    const step = skill.slice(skill.indexOf("## Step 0a"), skill.indexOf("## Step 0 "));
+    expect(step).toContain("node run.mjs doctor --json");
+    expect(step).toContain("STOP");
+  });
+
+  it("states the precondition in CLAUDE.md, where it is always read", () => {
+    // build-app is not always the way in — "build me an app" can go straight to
+    // a Write. So the rule has to live in the file that is loaded every session.
+    const rules = read("CLAUDE.md");
+    expect(rules).toMatch(/Before the first file .* is written or changed/);
+    expect(rules).toContain("node run.mjs doctor --json");
+  });
+});
+
 describe("both database drivers are handled", () => {
   it("knows exactly docker and local", () => {
     expect(DB_DRIVERS).toEqual(["docker", "local"]);

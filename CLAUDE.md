@@ -66,24 +66,54 @@ a product idea already exists (otherwise it hands over to `market-research`).
 In short: when in doubt, `build-app`. The user doesn't have to know any skill name —
 "Build my app" is enough, and even less than that will do.
 
-**One thing comes before all of that: does the machine work?** The greeting at
-the session start ends with a line `[Setup: ok]` or `[Setup: blocked — …]`. On
-`blocked`, run the skill **`setup-machine`** first — it installs what is missing
-and prepares the project. Building on a machine that cannot start the app
-produces a confident report and a page that never loads. The same applies when a
-command fails with "docker: not found", "npm not found" or "the database does
-not answer": that is a setup problem, not a bug in the app.
+**One thing comes before all of that, and it is a hard precondition: does the
+machine work?**
 
-**No greeting at all — or a hook error naming `node` — is the same case, and the
-most important one to recognise.** That line is printed by
-`.claude/hooks/session-start.mjs`, which is itself started with `node`. So a
-machine without Node cannot report that it has no Node; it simply says nothing,
-or shows a startup error instead. Claude Code does not need Node, git does not
-need Node, and the app needs it for everything — which makes "Claude Code and
-git installed, Node not yet" the ordinary state of a fresh clone rather than an
-exotic one. It is `setup-machine` again, and its step 0 is written for exactly
-this: it reads `scripts/dev/fixes.json` directly, because every command that
-would have told it what to do starts with `node`.
+> **Before the first file in this project is written or changed, a `node` command
+> has answered in this session.** Either the greeting says
+> `[Setup: ok — verified <date>]`, or you have run `node run.mjs doctor --json`
+> yourself and it came back `"ok": true`. No building before that.
+
+That is not ceremony. A machine without Node lets an entire app come into being
+— every page, every table, every test file — and gives way only at the first
+command that runs any of it. What the user gets is the failure this template
+warns about most loudly: a confident report and a page that never loads. One
+second of `doctor` in front of it is the whole cost.
+
+The greeting's line has three states, and the middle one is new:
+
+| | |
+|---|---|
+| `[Setup: ok — verified <date>]` | the full checklist went through on this machine. Carry on |
+| `[Setup: ok — not verified yet]` | nothing obvious is missing, but nobody has looked properly. Run `node run.mjs doctor` before building |
+| `[Setup: blocked — …]` | skill **`setup-machine`** first — it installs what is missing and prepares the project |
+
+The same applies when a command fails with "docker: not found", "npm not found"
+or "the database does not answer": that is a setup problem, not a bug in the app.
+
+**No greeting at all is the same case, and the most important one to recognise.**
+The greeting is printed by `.claude/hooks/session-start.mjs`, which is itself
+started with `node`. So a machine without Node cannot report that it has no Node;
+it simply says nothing, or shows a startup error instead. Claude Code does not
+need Node, git does not need Node, and the app needs it for everything — which
+makes "Claude Code and git installed, Node not yet" the ordinary state of a fresh
+clone rather than an exotic one.
+
+Since that absence is the one thing a Node program cannot report, a **second
+hook** in `.claude/settings.json` says it in shell instead — three words asking
+whether `node` exists, which is why a machine without one now greets you with
+`[Setup: blocked — node]` rather than with silence. **This is the single
+deliberate exception to "no bash" below** (see **Three systems**): it starts no
+process, finds no process, and is the one check that cannot be written in the
+language it is checking for. `settings.json` is JSON and cannot hold the comment,
+which is why the reason is written here.
+
+Either way it is `setup-machine`, and its step 0 is written for exactly this: it
+reads `scripts/dev/fixes.json` directly, because every command that would have
+told it what to do starts with `node`.
+
+**Do not rely on having seen the blocked line, though.** Absence of a signal is
+not a signal, and that is what the precondition above is for: run the command.
 
 There are guided skills in `.claude/skills/` — use them in this order:
 - **`setup-machine`** — before everything: install what is missing (Node, git)
@@ -417,13 +447,28 @@ node run.mjs smoke                # calls EVERY page and reports server errors
 node run.mjs errors               # what the log picked up — including on a 200
 ```
 
-`node run.mjs smoke` (`scripts/dev/smoke.mjs`) finds the pages by itself under `app/`
-and rates them like this:
+`node run.mjs smoke` (`scripts/dev/smoke.mjs`) finds the pages by itself under
+`app/` and calls them in **two passes**: first anonymously, then — signed in as
+the owner — exactly those that sent it to `/login`. So the pages with the real
+queries in them get rendered, not just counted as redirects. It rates them like
+this:
 
 - **5xx** → error. Fix it, don't argue it away, don't pass it on as a "known
   issue".
-- **307 to `/login`** → correct. Protected pages are supposed to redirect.
+- **307 to `/login` without a session** → correct. Protected pages are supposed
+  to redirect, and that answer says nothing about the page — which is what the
+  second pass is for.
+- **307 to `/login` *with* a session** → error. The session did not take, so the
+  page still has not been rendered by anybody.
+- **307 anywhere else while signed in** → fine. That is what a `hasPlan()` gate
+  looks like from the outside.
 - **2xx** → fine.
+
+**The second pass can be unavailable, and then it says so** — one line naming the
+reason. It signs in through the development login (`scripts/dev/sign-in.mjs`),
+which needs a local app in DEV with no mail transport configured, plus an `owner`
+account to sign in as. **Read that line.** "9 protected page(s) NOT checked" is
+not a pass, and `--no-signed-in` turns the pass off entirely.
 
 On an error the cause is in the log: `node run.mjs logs`. That's where the real
 stack trace is; the page in the browser often shows only the meaningless sentence.
@@ -447,11 +492,12 @@ Three things `node run.mjs smoke` cannot do:
 - **Dynamic pages** (`app/…/[id]/page.tsx`) are skipped — without a real ID
   the request is pointless. You call such pages up by hand once with a
   real record.
-- **It is not signed in.** Every page under `/dashboard` answers it with a 307 to
-  `/login`, which is the correct answer and tells you nothing about the page. So
-  the Operator and Member pages — the ones with the real queries in them — are
-  only ever exercised when *you* open them. Do that, then run
-  `node run.mjs errors`; the log does not care who made the request.
+- **It is signed in as the OWNER, and as nobody else.** So the pages are
+  rendered, but always with every right there is. What it therefore cannot see is
+  the other half of an access rule: what a `member` gets on an owner-only page,
+  what somebody without the plan gets on a gated one, what a blocked account
+  gets. Those need a test (`vitest`, on the rule) or your own eyes — a green
+  smoke test is not evidence that a gate holds.
 - **A green smoke test means "loads", not "is correct".** Whether the content is
   right is something it does not tell you. For everything to do with money, roles
   and customer data, a look at the page itself is part of the job.
@@ -1295,6 +1341,23 @@ alone. The address is new on every open, so `node run.mjs start` re-points Digis
 at it via the stable `domain_id`. Without that step the old, dead address would
 stay registered and every purchase would run into the void.
 
+**That `domain_id` has to be unique as well as stable, and `ipnSetup` is the
+update too.** Digistore24 finds a connection by (merchant, API key,
+`domain_id`) and updates the one it finds — so a generic value (`test-local-1`,
+`local-app`) is a collision with the vendor's own other project, and the second
+sync silently re-points the first app's IPN at itself. Every id the script
+derives therefore ends in a random tail (`local-my-app-diw2hvnz73`); one you
+pass with `--domain` is yours to make unique. The connection's `product_ids`
+follow the registry for the same reason — one account, several products, and
+only some of them this app's. Both, in full:
+`docs/digistore-integration.md`.
+
+**"Paid, but nothing happened in the app" has a command, not a theory:**
+`node run.mjs ds24-purchase --order ABC12345` asks Digistore24 what it holds for
+that order. Unknown id → no purchase (or another vendor account); known there and
+missing from `/dashboard/admin/purchases` → no IPN arrived, so the connection is
+the suspect. A *rejected* IPN is the other tool, `node run.mjs ds24-ipn-verify`.
+
 `APP_URL` is deliberately left alone: a non-local value there switches off the
 development login (`lib/auth/dev-login.ts`), and you would lock yourself out of
 your own app. That is also why the tunnel wins over `APP_URL` locally but never
@@ -1346,6 +1409,9 @@ overview). Arguments go straight through — there is no `ARGS="…"` wrapping.
 - `node run.mjs data-export --email …` — everything held about one person, as JSON (subject access request)
 - `node run.mjs mail-setup` — set up mail delivery (Postmark or SMTP) + test mail
 - `node run.mjs ds24-connect` — fetch the Digistore24 API key and store it in `.env`
+- `node run.mjs ds24-purchase --order …` — what Digistore24 holds for one order:
+  status, product, buyer, links. The first command when a purchase "did not
+  arrive"
 - `node run.mjs ds24-tunnel` — public address onto the local app **and** the IPN registered
   on it, so a real purchase reaches your machine (runs in the background;
   `node run.mjs status` shows it, `node run.mjs stop` ends it)
@@ -1511,6 +1577,16 @@ finds a process belongs in a `.mjs` script, not in bash.** Node is guaranteed
 present — it is a Next.js app — and `child_process.spawn`, `process.kill` and
 `fs` behave the same on all three systems, while every shell tool above does
 not.
+
+**There is exactly one exception in this project, and it is the question the rule
+cannot answer: is there a Node here at all?** The `SessionStart` guard in
+`.claude/settings.json` asks it in shell, because a Node program that is not
+there cannot report its own absence (see **First: meet the user where they are**).
+It is written `if ! command -v node …; then echo …; fi` and not with `||` on
+purpose: a shell that does not understand it — cmd.exe, if Claude Code ever hands
+a hook to one — fails on the syntax and prints **nothing**, where the `||` form
+would print the warning to somebody whose Node is fine. Silence is the safe
+failure here; a false alarm is not.
 
 **Ask the thing, not the process table.** Whether a service is alive is best
 answered by talking to it — a TCP connect, an HTTP GET — not by hunting for it

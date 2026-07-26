@@ -11,11 +11,19 @@
 // Windows alike (CLAUDE.md → Three systems). This one matters more than most:
 // it is the very first thing anybody sees in this project.
 //
+// And exactly there is the one thing this file cannot do: it is started WITH
+// `node`, so on a machine that has none it does not run, prints nothing, and
+// "nothing" reads like "all fine". That is why .claude/settings.json carries a
+// second, tiny hook in front of this one — three words of shell asking whether
+// `node` exists at all. It is the one check that cannot be written here, and
+// CLAUDE.md → Three systems says so out loud.
+//
 // Note: when a freshly cloned project is opened for the first time, Claude Code
 // asks whether it should trust the project folder. Only after that does this hook run.
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { blockers, inspect } from "../../scripts/dev/doctor.mjs";
 import { readNotes, unwrittenPages } from "../../scripts/dev/app-notes.mjs";
+import { readStamp, stampValid, verifiedOn } from "../../scripts/dev/setup-stamp.mjs";
 import { describe as describeUpdate, updateAvailable } from "../../scripts/dev/update-check.mjs";
 
 const hasEnv = existsSync(".env");
@@ -60,6 +68,13 @@ const customPages = ownPages.length;
 // the next session's only source for what the last one did — see
 // scripts/dev/app-notes.mjs for why this is asked by content and not by date.
 const unwritten = unwrittenPages(ownPages, readNotes((file) => readFileSync(file, "utf8")));
+
+// Has this machine ever been through the full checklist? The quick checks above
+// answer "is something obviously missing"; this answers "did anybody ever look",
+// which is a different question and the one that decides whether `build-app` has
+// to run `doctor` itself (scripts/dev/setup-stamp.mjs).
+const stamp = readStamp();
+const verifiedDay = stampValid(stamp) ? verifiedOn(stamp) : "";
 
 // Has the template been improved since this app was copied out of it? Asked at
 // most once a day, answered from .dev/ the rest of the time, and silent on any
@@ -107,6 +122,14 @@ if (blocked.length > 0) {
     `[Setup: blocked — ${blocked.map((c) => c.id).join(", ")}. ` +
       `Run the skill setup-machine BEFORE building anything.]`,
   );
+} else if (verifiedDay) {
+  // The full checklist went through on this machine — so whoever starts building
+  // may take this line as the answer and skip their own `doctor` run.
+  console.log(`[Setup: ok — verified ${verifiedDay}]`);
 } else {
-  console.log("[Setup: ok]");
+  // The cheap checks are green, but the expensive half (the Docker daemon, the
+  // dependencies, the migrations) has never been confirmed here. Said as a
+  // separate state on purpose: "ok" alone would be read as "checked", and the
+  // one thing this project cannot afford is an app built on an untested machine.
+  console.log("[Setup: ok — not verified yet. Run `node run.mjs doctor` before building.]");
 }

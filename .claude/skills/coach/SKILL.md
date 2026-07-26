@@ -83,6 +83,7 @@ below.
 | "Internal Server Error", a blank page, a page that will not load | `node run.mjs logs` for the stack trace, then fix it. `node run.mjs smoke` afterwards |
 | The page loads, but shows a raw timestamp, a missing text, `2026-07-25 11:29:17.5` | `node run.mjs errors` — a 200 is not proof it rendered. `CLAUDE.md` → **Dates and raw SQL** |
 | A test purchase never reaches the app locally | the IPN needs a publicly reachable address → **`setup-digistore`**, `node run.mjs ds24-tunnel`, `node run.mjs status` |
+| "Somebody paid and the app knows nothing about it" | ask Digistore24 first: `node run.mjs ds24-purchase --order …`. Unknown there → no purchase; known there and missing under `/dashboard/admin/purchases` → no IPN arrived (dead tunnel URL, a `domain_id` another project overwrote, a `product_ids` list without this product) → **`setup-digistore`** |
 | A customer paid and has no access | read the **grant**, not the order — `docs/entitlements.md`. Usually a wrong `hasPlan()` key, not a broken payment |
 | A balance stuck at 0, an empty "next payment" card | `"billingMode"` in `config/digistore-products.json` — a display setting, see `lib/billing-mode.ts` |
 | Subscriptions, prepaid tokens, auto top-up, cancellation, invoices | **`billing-modes`** |

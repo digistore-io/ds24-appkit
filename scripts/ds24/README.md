@@ -106,17 +106,58 @@ node scripts/ds24/create-product.mjs --saas "Paid Challenge" --plan "Gold" --app
 The **normal case** is `node run.mjs ds24-sync` — that creates products
 *and* sets up the IPN (the call: `ipn-setup.mjs --auto`). The `--auto` mode
 derives the IPN URL from `APP_URL` and picks a stable `domain_id`:
-- **live/staging** (public domain) → from the host, e.g. `app-example-de`;
-- **development** → `local-<project name>`, so that a changing tunnel URL does
-  not multiply the connection.
+- **live/staging** (public domain) → from the host, e.g. `app-example-de-k7f2m9x1qc`;
+- **development** → `local-<project name>-<random>`, so that a changing tunnel
+  URL does not multiply the connection.
 
 The value is written into the `.env` as `DIGISTORE_IPN_DOMAIN_ID` and stays
 stable. `ipnSetup` is idempotent via this `domain_id`: an existing connection
-is updated (duplicates removed), otherwise a new one is created. The defaults
-for events (payment/refund/chargeback/payment_missed/last_paid_day), timing
-(before the thank-you page) and category (orders) already match the IPN
-handler. The generated SHA512 passphrase ends up in the `.env` as
+is updated (duplicates removed), otherwise a new one is created. So the same
+call is both the setup and the update — **only the `domain_id` decides which**:
+keep it and the connection is updated, change it and a second connection comes
+into being. The defaults for events
+(payment/refund/chargeback/payment_missed/last_paid_day), timing (before the
+thank-you page) and category (orders) already match the IPN handler. The
+generated SHA512 passphrase ends up in the `.env` as
 `DIGISTORE_IPN_PASSPHRASE`; if one is already set there, it is reused.
+
+### The `domain_id` has to be unique — hence the random tail
+
+Digistore24 finds a connection by **(merchant, API key, `domain_id`)** and
+updates the row it finds. A generic value — `test-local-1`, `local-app`,
+`myapp` — is therefore not a name but a **collision**: two of the vendor's own
+projects that pick the same one do not get two connections, they take turns
+overwriting one. The second `ds24-sync` re-points the first project's IPN at its
+own address, and from then on the first project's purchases arrive nowhere. Both
+sides report success; nothing anywhere reports the loss.
+
+That is why a **derived** value ends in ten random characters
+(`local-my-app-diw2hvnz73`). The readable part says which app it is, the tail is
+what makes it unique. A value passed with `--domain`, or one already sitting in
+the `.env`, is taken exactly as it is — **if you choose one by hand, put
+something random in it yourself.**
+
+### Which products the connection covers (`product_ids`)
+
+`ipnSetup` takes `product_ids`, comma-separated: `product_ids=111,222,333`.
+Digistore24's own default is `all` (the whole account).
+
+`--auto` sends the **ids from the registry** (`config/digistore-products.json`,
+after the product sync has written them back), because a vendor's account
+usually holds more than this app: an older funnel, a second app, somebody else's
+launch. Naming the ids keeps every connection to its own products — which is
+what lets two apps of the same vendor be connected at the same time.
+
+`all` is legitimate and is the fallback while nothing is synced yet: this app
+records an order for an unknown product and **grants nothing** for it
+(`resolveProduct()` in `lib/digistore/payment-event.ts` returns `null`), so
+foreign purchases are ignored rather than mis-granted. What `all` costs is the
+separation, not the safety.
+
+```bash
+node scripts/ds24/ipn-setup.mjs --auto --products 111,222,333 --apply
+node scripts/ds24/ipn-setup.mjs --auto --products all --apply
+```
 
 IPN needs a **public https URL** (DS24 checks it with a GET for HTTP 200 — the
 IPN route answers GET with "OK"; it refuses a 301/302 too, which is why the

@@ -90,8 +90,12 @@ Notes:
   to sign in locally. The tunnel address goes to `ipn-setup.mjs` directly.
 - The tunnel URL **changes on every start** — the next `node run.mjs ds24-tunnel` registers
   the new one by itself. The `domain_id` stays stable through that
-  (`local-<projectname>`, in the `.env`), so the connection is updated instead
-  of multiplied.
+  (`local-<projectname>-<random>`, in the `.env`), so the connection is updated
+  instead of multiplied. The random tail is not decoration: Digistore24 finds a
+  connection by (merchant, API key, `domain_id`), so two of your own projects
+  that both call themselves `local-app` overwrite each other's IPN — silently,
+  and the loser's purchases then arrive nowhere. See
+  `docs/digistore-integration.md`.
 - A brand-new address takes half a minute or so to be reachable worldwide.
   Until then Digistore24 answers "http error 0" — `node run.mjs ds24-tunnel` knows that and
   simply tries again.

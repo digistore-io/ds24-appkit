@@ -166,7 +166,13 @@ reports server errors; see `CLAUDE.md` → *Never ship a broken page*. Only afte
 this do you say the machine is ready.
 
 If `smoke` reports a 5xx, look at `node run.mjs logs` for the real stack trace.
-A `307` to `/login` is correct, not an error: those pages are protected.
+
+A `307` to `/login` is correct, not an error: those pages are protected. `smoke`
+then calls them a second time signed in as the owner — and on a machine that has
+just been set up it usually cannot, because there is no `owner` account yet. It
+says so in one line with the reason, and that is a normal state here, not a
+finding. The account comes into being in `build-app` (step 3b) or with
+`node run.mjs user-create`.
 
 ### 7. Hand over
 

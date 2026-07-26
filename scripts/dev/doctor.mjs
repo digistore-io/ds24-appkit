@@ -46,6 +46,7 @@ import { capture, hasCommand, isWindows } from "../lib/proc.mjs";
 import { configuredDriver, dbDriver } from "../db/driver.mjs";
 import { depsFresh } from "./deps.mjs";
 import { portInUse, urlPort } from "./ports.mjs";
+import { writeStamp } from "./setup-stamp.mjs";
 
 export const PLATFORMS = ["linux", "darwin", "win32"];
 
@@ -470,6 +471,17 @@ export async function doctor(args = []) {
   }
 
   const checks = await inspect();
+
+  // Nothing blocking → note it down. This is the FULL run, the one that asked
+  // the Docker daemon, so it is worth remembering: the greeting can then say
+  // when the machine was last checked, and the skill `build-app` can make its
+  // precondition a lookup instead of another second of waiting.
+  //
+  // Only the good case is recorded. A blocked machine writes nothing — a stamp
+  // saying "checked, and broken" would be a stamp somebody has to interpret,
+  // and the whole value of this file is that its presence means one thing.
+  if (blockers(checks).length === 0) writeStamp();
+
   if (args.includes("--json")) {
     console.log(
       JSON.stringify(
