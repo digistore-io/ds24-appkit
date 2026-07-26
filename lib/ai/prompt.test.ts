@@ -10,7 +10,14 @@ import {
 import type { PromptBlock } from "./retriever";
 import { buildSystem as buildAnthropicSystem } from "./providers/anthropic";
 
-const PERSONA = { assistantName: "Lia", appName: "Acme" };
+const PERSONA = {
+  assistantName: "Lia",
+  appName: "Acme",
+  menus: [
+    { locale: "de" as const, languageLabel: "Deutsch", labels: ["Übersicht", "Mein Konto"] },
+    { locale: "en" as const, languageLabel: "English", labels: ["Overview", "My account"] },
+  ],
+};
 const HANDBOOK: PromptBlock[] = [{ text: "# The handbook\n\nEverything.", cacheable: true }];
 
 function input(overrides: Partial<PromptInput> = {}): PromptInput {
@@ -183,6 +190,27 @@ describe("the persona", () => {
 
   it("refuses credentials", () => {
     expect(text).toMatch(/password/i);
+  });
+
+  it("names the menu in every language, and forbids inventing a label", () => {
+    // The bug: the shipped handbook said "Account", the sidebar says "Mein
+    // Konto", and she repeated the handbook at German customers. A label is
+    // per-language and gets renamed; the handbook is neither.
+    expect(text).toContain("Deutsch: Übersicht · Mein Konto");
+    expect(text).toContain("English: Overview · My account");
+    expect(text).toMatch(/never translate a label/i);
+  });
+
+  it("names the formatting the window can actually render", () => {
+    // `lib/ai/markdown.ts` renders exactly this much and shows the rest
+    // literally, so a table she writes reaches the customer as pipes.
+    expect(text).toMatch(/bold/i);
+    expect(text).toMatch(/numbered lists/i);
+  });
+
+  it("stays out of the operator's half of the menu", () => {
+    // She answers customers. "Admin" is a dead end for them.
+    expect(text).not.toContain("Admin");
   });
 });
 

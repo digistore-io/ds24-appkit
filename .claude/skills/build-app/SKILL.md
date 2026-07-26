@@ -247,6 +247,57 @@ node run.mjs smoke                # opens every page, reports server errors
 Only then tell the user that they can take a look — and write down what they
 will see and at which address.
 
+## Step 4b — Write down what you built (`docs/app.md`)
+
+**Create `docs/app.md` now, with the first feature in it.** This is the app's own
+notebook, and the reason it exists is that a session is short and a project is
+not: whoever adds the fifth feature was not there for the first four. CLAUDE.md
+says what the *template* is; `docs/app.md` says what *this app* is. What is not
+in there gets invented a second time — a second table beside the first, a second
+way of gating access, a page that does what one two folders over already did.
+
+The shape — keep it, so every entry reads the same:
+
+```markdown
+# <App name> — what this app is
+
+_What was built on top of the template. The template's own rules are in
+CLAUDE.md; this file is only what came after. One entry per feature, written the
+moment the feature works._
+
+## The product
+
+- **Sells:** <what a customer buys>
+- **For:** <who>
+- **Archetype:** <from step 1>
+
+## Features
+
+### Reports — `/dashboard/reports`
+
+- **Does:** turns a member's entries into a monthly PDF.
+- **Access:** `hasPlan(memberId, "basis_monatlich")`
+- **Data:** tables `reports`, `report_runs` (`db/schema.ts`)
+- **Costs tokens:** 5 per run (`spendTokens`)
+- **Tests:** `lib/reports/rules.test.ts`
+
+## Decisions worth remembering
+
+- <what was decided against, and why — this is the part nobody reconstructs>
+```
+
+Two rules about it:
+
+- **Access is quoted, not described.** `hasPlan(memberId, "basis_monatlich")`, not
+  "only for paying customers". The next session has to be able to read the gate
+  off the line without opening the page.
+- **The decisions section is the valuable half.** A feature can be read out of
+  the code; the reason something is *not* built cannot, and that is what gets
+  proposed again three sessions later.
+
+The greeting checks this by itself: a page under `app/dashboard/` that
+`docs/app.md` does not mention is named at the next session start.
+
 ## Step 5 — Connect payment
 
 Run the skill **`setup-digistore`**. It connects product ID, API key, IPN

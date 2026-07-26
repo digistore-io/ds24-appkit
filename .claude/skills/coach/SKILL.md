@@ -30,20 +30,29 @@ you get to?" is a question the coach should rarely have to ask.
 | Does the machine work? | the session-start line `[Setup: ok]` / `[Setup: blocked — …]`, otherwise `node run.mjs doctor` | blocked → **`setup-machine`**, before anything else |
 | Is there an idea? | `docs/product-brief.md` | missing and the user cannot say in two sentences what the app does → **`market-research`** |
 | Is there an app of their own? | folders under `app/dashboard/` beyond `account`, `admin`, `billing`, `chat`; own tables in `db/schema.ts` | nothing of their own → **`build-app`** |
+| What has been built so far? | `docs/app.md` — the app's own notebook, one entry per feature | pages under `app/dashboard/` that it does not mention → the last session did not write its entry; add it before building anything new (**`build-app`** step 4b holds the shape) |
 | Is payment connected? | `DIGISTORE_API_KEY` in `.env`; a `productId` on the products in `config/digistore-products.json`; `DIGISTORE_IPN_PASSPHRASE` + `DIGISTORE_IPN_DOMAIN_ID` | key but no `productId` → the sync never ran; no passphrase → no IPN, so purchases arrive nowhere → **`setup-digistore`** |
 | What does it sell? | `"billingMode"` in `config/digistore-products.json` | still `"both"` on an app that sells one of them → **`build-app`** (step 1) sets it; the models themselves are **`billing-modes`** |
 | Is the assistant on? | `"enabled"` in `config/ai-chat.json`, then `node run.mjs ai-check` | on but with a thin `content/knowledge/` → **`ai-chat-knowledge`** |
 | Is there an AI interface? | `"enabled"` in `config/mcp.json` (ships **off**) | wanted → **`mcp-server`** |
+| Has it been checked for security? | the newest `docs/reports/security-*.md` | none → **`security-gateway`**; one with an open CRITICAL or HIGH → fix those before anything else; one older than the last big change → run it again |
+| Has it been measured under load? | the newest `docs/reports/performance-*.md` | none before a launch → **`performance-gateway`** |
 | Are the legal pages there? | routes `app/impressum`, `app/datenschutz` (`app/agb`, `app/widerruf` depending on the seller role) | missing before selling → **`compliance-check`** |
 | Is it live? | `APP_URL` and `APP_ENV` in `.env` | still `localhost` → **`go-live`**, which starts with **`setup-hosting`** |
 | Is there a host at all? | `node run.mjs doctor --deploy` — is a hosting CLI installed and logged in? | nothing there and the app is meant to go online → **`setup-hosting`** |
 
-**Three steps leave no trace, and pretending otherwise is the trap.**
-`security-gateway`, `performance-gateway` and `go-to-market` write no file that
-proves they ran. Do not infer them from anything — ask, in one sentence, and
-when the answer is a maybe, offer to run it. A second security scan on an app
-that has not changed costs a few minutes; a skipped one costs a live app with a
-hole in it.
+**Two of the steps do leave a trace, and one does not.** `security-gateway` and
+`performance-gateway` each write a dated report into `docs/reports/` —
+`security-2026-07-26.md`, `performance-2026-07-26.md`. Read the newest one: it
+says which checks ran, what was found and what is still open. A report older
+than the last big change is worth as much as no report, so compare its date
+against `git log -1 --format=%cd`; an open CRITICAL or HIGH in it is the next
+step, whatever else the table says.
+
+`go-to-market` still writes nothing that proves it ran. Do not infer it — ask,
+in one sentence. And when there is no report at all, that is the answer: the
+gateway has not run. A second security scan on an app that has not changed costs
+a few minutes; a skipped one costs a live app with a hole in it.
 
 ## 2. "What is the next step?"
 

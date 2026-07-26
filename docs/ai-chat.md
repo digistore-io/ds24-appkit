@@ -140,7 +140,7 @@ The request is assembled in `lib/ai/prompt.ts` as three blocks:
 
 | # | Block | Cached? |
 |---|---|---|
-| 0 | Who she is, what she must not do | yes |
+| 0 | Who she is, what she must not do, and this app's menu | yes |
 | 1 | The handbook | yes ← **the breakpoint sits here** |
 | 2 | Language and date | never |
 
@@ -257,6 +257,32 @@ The persona also refuses two things you should not remove:
   decline. This is the prompt-injection rule that matters when the surface is a
   support chat.
 
+### The one thing she knows that is not in the handbook
+
+**The menu on the left**, in every language the app speaks, read from
+`messages/*.json` by `lib/ai/nav-labels.ts` and handed to her in block 0.
+
+It is there because a handbook cannot carry it. A handbook is written once, in
+one language, by somebody who naturally types "click *Account*" — and the menu
+is bilingual and gets renamed. The one that shipped with this template said
+*Account* while the sidebar said "Mein Konto" and "My account", so she sent
+German customers hunting for an entry that was not there. Now the label travels
+with the app: rename the entry in `messages/*.json` and her answer changes with
+it. `lib/ai/nav-labels.test.ts` fails the build if a sidebar entry is added,
+renamed or reordered without her list following.
+
+Only the member's entries go in. The operator's half of the menu is deliberately
+withheld — she answers customers, and "Admin" is a dead end for them.
+
+### What her formatting does
+
+She may use `**bold**`, `*italic*`, `` `code` `` and bullet or numbered lists.
+`lib/ai/markdown.ts` parses exactly that much and `app/dashboard/chat/answer.tsx`
+renders it as React elements — no `dangerouslySetInnerHTML`, so there is no
+sanitiser to keep current, and anything outside the subset (a table, a heading,
+a link) is shown to the customer literally. That is the safe direction, and the
+persona tells her so rather than pretending the window renders more.
+
 ## Where she appears
 
 Two places, one conversation:
@@ -318,6 +344,8 @@ most visits never open.
 | `lib/ai/knowledge.ts` | Reads `content/knowledge/`, deterministically |
 | `lib/ai/retriever.ts` | The seam: handbook → prompt blocks |
 | `lib/ai/prompt.ts` | The system blocks and the cache breakpoint |
+| `lib/ai/nav-labels.ts` | The menu she may name, per language, from `messages/*.json` |
+| `lib/ai/markdown.ts` | The formatting her answers may use — parsed, not sanitised |
 | `lib/ai/rules.ts` | Pure refusals — message checks, history window, error codes |
 | `lib/ai/conversation.ts` | Reading and writing `chat_messages` |
 | `app/api/chat/route.ts` | The guards, in order, and the stream |

@@ -1,13 +1,13 @@
 ---
 section: reference
 title: The account page
-summary: What the Account page shows and what you can change there yourself.
+summary: What the account page shows and what you can change there yourself.
 updated: 2026-07-24
 ---
 
 ## Where it is
 
-*Account* in the menu on the left, and also behind your name in the top right.
+In the menu on the left, and also behind your name in the top right.
 It is your own page — it shows your account and nobody else's.
 
 ## What it shows

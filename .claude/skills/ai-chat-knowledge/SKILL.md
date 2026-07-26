@@ -110,8 +110,16 @@ What separates a handbook she answers well from one she does not:
 - **The `summary` is load-bearing.** It is what she reads to decide *which*
   document answers a question. "Information about billing" finds nothing;
   "where the cancel link is and what happens to your access" finds itself.
-- **Write the answer, not the feature.** "Click *Billing*, then *cancel*" beats
-  a description of the billing page.
+- **Write the answer, not the feature.** The three steps that cancel a
+  subscription beat a description of the billing page.
+- **Do not spell out the menu labels.** Write "open your account page from the
+  menu on the left", never "click *Account*". She is handed this app's menu
+  separately, in every language it speaks, read from `messages/*.json` — so she
+  names the entry the reader is actually looking at. A label typed into a
+  handbook is a copy in one language that goes stale on the first rename, and
+  the handbook shipped with this template proved it: it said *Account* while the
+  sidebar said "Mein Konto" and "My account", and she sent German customers
+  hunting for an entry that was not there.
 - **Say what does NOT happen.** "Cancelling does not delete your account" is the
   sentence that stops the second support mail.
 - **One topic per file.** Two topics in one file means half of it is retrieved

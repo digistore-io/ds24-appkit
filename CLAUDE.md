@@ -87,8 +87,12 @@ There are guided skills in `.claude/skills/` — use them in this order:
   key in, bind each task to a model and set the prices the cost page reports.
 - **`mcp-server`** — *(optional)* let customers connect Claude to the app: decide
   which capabilities become tools, then switch the MCP interface on.
-- **`security-gateway`** — before the launch: scan for security holes and fix them.
-- **`performance-gateway`** — make sure ~100 parallel users run smoothly.
+- **`security-gateway`** — before the launch: eight checks (access control,
+  money, secrets, packages, endpoints, hosting), each finding with a severity,
+  the serious ones fixed, and a report in `docs/reports/`.
+- **`performance-gateway`** — the same shape for speed: response times, database
+  and indexes, ~100 parallel users, memory, CPU, front end — measured against a
+  production build, fixed, measured again, report in `docs/reports/`.
 - **`compliance-check`** — legal pages (imprint/privacy/terms/withdrawal) & GDPR.
 - **`setup-hosting`** — the server: pick a host (Railway/Render/Fly.io/
   DigitalOcean), say what it costs, install its CLI, authenticate, create app
@@ -117,6 +121,41 @@ to choose the AI company, optional `mcp-server` for the AI interface)* →
 `setup-hosting` — host, database, secrets, domain)* → **(7) Marketing**
 `go-to-market`. Alongside all of it: `guardrails`, and `coach` whenever somebody
 has lost the thread.
+
+### How a skill works — the same way every time
+
+Whoever writes or changes a skill keeps to this, because a user who has found
+their way around one skill has then found their way around all of them:
+
+- **You run the commands.** Through your Bash tool, and you report what came
+  back. Never "run `node run.mjs …` and tell me what it says" — the people here
+  are not developers, and a command handed over is a conversation that stops.
+- **Look before you ask.** Almost everything a skill needs to know is on disk:
+  `.env`, the files under `config/`, the tables in `db/`, the reports in
+  `docs/reports/`. Ask only about what genuinely leaves no trace, and then in
+  one sentence.
+- **Two shapes, and every skill is one of them — numbered either way**, so the
+  user can always see where they are and answer with a number.
+  - A skill that **builds** something is a numbered path: `Step 0` asks whether
+    the thing is wanted or already there, then `Step 1`, `Step 2`… in order.
+    `build-app`, `setup-digistore`, `ai-chat-knowledge`, `setup-hosting`.
+  - A skill that **inspects** something is a numbered menu of independent
+    checks, each with what it looks at and roughly how long it takes. Item 1 is
+    the full run and the default. If the user's request already names one check,
+    start it and skip the menu; otherwise show the menu and **wait**.
+    `security-gateway`, `performance-gateway`.
+- **Point at the reference, do not copy it.** Where a `docs/…` file already
+  explains the thing in full, the skill names it in its first few lines and
+  reads it — it does not restate it. Two copies drift, and the one in the skill
+  is the one nobody updates.
+- **One severity ladder, one shape for a finding.** 🚨 CRITICAL, ❌ HIGH,
+  ⚠️ MEDIUM, ℹ️ LOW, and every finding says *Where · Why · Fix · Evidence* in
+  that order. `security-gateway` and `performance-gateway` are the reference.
+- **Anything that produces a verdict writes it down**, dated, into
+  `docs/reports/` — so that "have we already done that?" has an answer next
+  month. Anything that produces a plan or a text writes it into `docs/`.
+- **End by naming the next skill and offering to start it.** A skill that stops
+  with "you could now…" leaves the user exactly where they were.
 
 ## Rules
 
@@ -421,6 +460,36 @@ Three things `node run.mjs smoke` cannot do:
 7. **`node run.mjs start && node run.mjs smoke && node run.mjs errors`** — call the
    new page up yourself, signed in, and then ask the log. Only then is it done
    (see "Never ship a broken page").
+8. **One entry in `docs/app.md`** — the page's path, the access gate as code, the
+   tables, the tests. See **This app's own notebook** below.
+
+### This app's own notebook — `docs/app.md`
+
+This file is what CLAUDE.md is not: **CLAUDE.md describes the template, which
+every app gets; `docs/app.md` describes THIS app, which nobody else has.** It is
+created by the skill `build-app` (step 4b, which holds the shape) and grown by
+step 8 above — one entry per feature, written the moment the feature works.
+
+It exists because a session is short and a project is not. Whoever adds the
+fifth feature was not there for the first four, and there is no other place to
+read them off: the code says what is there but never why, and a git log of
+forty commits is not an answer to "what can this app do?". What is not in this
+file gets built a second time — a second table beside the first, a second way of
+gating the same content, a page that does what one two folders over already did.
+
+Two rules keep it worth reading:
+
+- **Quote the access gate, do not describe it.**
+  `hasPlan(memberId, "basis_monatlich")`, never "only for paying customers".
+- **Write down what was decided *against*, and why.** The features can be read
+  out of the code; the rejected alternative cannot, and it is what gets proposed
+  again three sessions later.
+
+The session greeting names any page under `app/dashboard/` that the file does
+not mention (`.claude/hooks/session-start.mjs`, logic and tests in
+`scripts/dev/app-notes.mjs`). It is a hint and not an error — somebody may be
+mid-build — but it is the one that decides whether session twenty knows what
+session three did.
 
 ### Dates and raw SQL
 
@@ -1255,12 +1324,53 @@ overview). Arguments go straight through — there is no `ARGS="…"` wrapping.
   on it, so a real purchase reaches your machine (runs in the background;
   `node run.mjs status` shows it, `node run.mjs stop` ends it)
 - `node run.mjs build` — production build
+- `node run.mjs update` — bring the **guidance** up to date: this file, `docs/`
+  and `.claude/skills/`, nothing else. See **This app is a copy** below.
 
 The npm scripts behind them (`npm run dev`, `npm run db:migrate`, …) remain
 usable; when in doubt name the `node run.mjs` command, that one is meant for
 non-developers — and it is the one that works on all three systems (see **Three
 systems**). There is still a `Makefile`, but it only forwards here; never point
 the user at `make`, it is missing on Windows.
+
+## This app is a copy — keep its guidance current
+
+The template this app came out of keeps being worked on. The code here is the
+customer's and nobody changes it behind their back; **this file, `docs/` and
+`.claude/skills/` are a different matter** — they are how you know what the app
+can already do. Six-month-old copies of them are how a feature that shipped long
+ago gets rebuilt by hand, worse, next to the one that was already there.
+
+```bash
+node run.mjs update           # what would change — writes nothing
+node run.mjs update --apply   # write it
+```
+
+Four properties, and knowing them is enough to use it correctly:
+
+- **Text only.** `CLAUDE.md`, `README.md`, `docs/*.md`, `.claude/skills/**`.
+  Never `app/`, `lib/`, `db/`, `config/`, `messages/`, `scripts/` — a doc cannot
+  collide with a page somebody built, a `lib/` file can.
+- **A file that was edited here is left alone.** `.template-version` holds the
+  hash each file had when this app was created; only files that still match get
+  replaced, and the rest are reported as `keep`. So house rules written into this
+  file survive an update. **Do not "fix" that by overwriting them anyway.**
+- **A skill that declares `requires:` above this app's `package.json` version is
+  refused.** Knowledge without its code is worse than none — you would describe
+  a feature and then find nothing of it.
+- **Nothing is deleted.** A withdrawn skill is reported and stays.
+
+Everything comes from the public repo this app was cloned out of
+(`github.com/digistore-io/ds24-appkit`), and the manifest is that repo's own
+`.template-version` — so there is no second copy of the truth to drift. The
+greeting checks once a day and says one line when something is new
+(`scripts/dev/update-check.mjs`); it is one GET of one public file, reaches no
+server of ours, and is switched off with `TEMPLATE_UPDATE_CHECK=off`.
+
+**Do not run `--apply` on your own initiative.** Show the user what would change,
+say in a sentence what it is about, let them decide. "Update the template" is
+them deciding. The whole reasoning, including what the update refuses and why, is
+in **[`docs/updates.md`](docs/updates.md)**.
 
 ## Three systems
 

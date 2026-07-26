@@ -410,7 +410,7 @@
   },
   "chat": {
     "title": "{name} fragen",
-    "subtitle": "Antworten aus dem Handbuch dieser App — rund um die Uhr.",
+    "subtitle": "Antworten auf alle Fragen zu dieser App — rund um die Uhr.",
     "placeholder": "Frage eingeben …",
     "send": "Senden",
     "open": "{name} fragen",
@@ -418,7 +418,7 @@
     "loading": "Verlauf wird geladen …",
     "sending": "{name} schreibt …",
     "emptyTitle": "Was möchtest du wissen?",
-    "emptyBody": "{name} kennt das Handbuch dieser App und antwortet daraus. Sie sieht dein Konto nicht — Guthaben, Käufe und Einstellungen bleiben ihr verborgen.",
+    "emptyBody": "{name} kennt diese App in- und auswendig und beantwortet gerne alle Fragen. Sie sieht dein Konto nicht — Guthaben, Käufe und Einstellungen bleiben ihr verborgen.",
     "disclaimer": "{name} ist eine KI. Sie kann sich irren — bei Geld und Zugang lieber den Support fragen.",
     "clear": "Verlauf löschen",
     "clearTitle": "Verlauf löschen?",

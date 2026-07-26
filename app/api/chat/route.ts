@@ -31,6 +31,7 @@ import { chatConfig, isChatEnabled } from "@/lib/ai/chat-config";
 import { appendTurn, listConversation } from "@/lib/ai/conversation";
 import { loadKnowledge } from "@/lib/ai/knowledge";
 import { buildSystemBlocks } from "@/lib/ai/prompt";
+import { navMenus } from "@/lib/ai/nav-labels";
 import { streamTask } from "@/lib/ai/run";
 import { retriever } from "@/lib/ai/retriever";
 import {
@@ -123,7 +124,10 @@ export async function POST(request: Request): Promise<Response> {
 
   const locale = await getUserLocale();
   const system = buildSystemBlocks({
-    persona: { assistantName: config.name, appName: APP_NAME },
+    // The menu she is allowed to point at, in every language the app speaks —
+    // read from `messages/*.json`, not from the handbook, which is written
+    // once and in one language. Static, so it stays in the cached half.
+    persona: { assistantName: config.name, appName: APP_NAME, menus: navMenus() },
     // The handbook read at step 3, not a second read of it.
     knowledge: await retriever(knowledge).blocks(checked.text),
     context: {

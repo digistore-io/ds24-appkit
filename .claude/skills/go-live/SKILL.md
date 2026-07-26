@@ -109,8 +109,10 @@ Once, before selling:
 ## 6. Checking security & performance against LIVE
 
 - Run **`security-gateway`** and **`performance-gateway`** once more against the
-  live instance (a real load test against the live URL, `-c 100`).
-  Only when that is green is "live" really finished.
+  live instance — the full pass in each, and this time the `host` check has
+  something to look at and the load test runs against the live URL at `-c 100`.
+  Both write a dated report into `docs/reports/`; that pair is the record that
+  the launch was checked. Only when they are green is "live" really finished.
 
 ## 7. Safeguards
 

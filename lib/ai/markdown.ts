@@ -1,0 +1,146 @@
+// The little bit of Markdown a language model actually writes — and nothing else.
+//
+// ── Why this exists ────────────────────────────────────────────────────────
+// Models write Markdown whether or not you ask them to. Told to answer with a
+// numbered list, they answer with a numbered list *in Markdown*, and a chat
+// window that renders plain text shows the customer `*Übersicht*`, asterisks
+// and all. Telling her not to would work until the next model, so the window
+// reads what she writes instead.
+//
+// ── Why not a Markdown library ─────────────────────────────────────────────
+// This parses the five things that turn up in a support answer — bold, italic,
+// inline code, bullet lists, numbered lists — and treats everything else as
+// text. A full CommonMark parser would also give her links, images, raw HTML
+// and tables: a much larger surface, rendered from text a customer can steer
+// with their question, for formatting a two-sentence answer never uses. What
+// this file cannot express, it shows literally, which is the safe direction.
+//
+// The output is DATA, not HTML. `app/dashboard/chat/answer.tsx` turns it into
+// React elements, so there is no `dangerouslySetInnerHTML` anywhere in the
+// chat and no sanitiser to keep up to date. Being pure is also why the parser
+// lives in `lib/` — it is unit-tested, where the component could not be
+// (vitest runs with `environment: "node"` and this repo has no DOM).
+
+/** A run of text inside one line. */
+export type Inline =
+  | { kind: "text"; text: string }
+  | { kind: "strong"; text: string }
+  | { kind: "em"; text: string }
+  | { kind: "code"; text: string };
+
+/** A paragraph keeps its soft line breaks; `lines` is one entry per line. */
+export type Block =
+  | { kind: "paragraph"; lines: Inline[][] }
+  | { kind: "list"; ordered: boolean; start: number; items: Inline[][] };
+
+/**
+ * The inline markers, tried in this order.
+ *
+ * Two deliberate omissions, both of which eat text somebody meant literally:
+ *
+ *  - **`_` is not a delimiter.** `ai_usage_rows` would lose its middle, and
+ *    an answer naming a column, a file or an env var is exactly the answer
+ *    where that happens.
+ *  - **A marker must hug its text.** `*` followed by a space is arithmetic
+ *    ("2 * 3 * 4"), not emphasis — hence `\S` on both ends. This is the same
+ *    rule CommonMark calls flanking, written the short way.
+ *
+ * Nothing spans a line: the parser feeds one line at a time, so an unclosed
+ * `**` stays literal instead of swallowing the rest of the answer. That is
+ * also what makes the half-streamed state readable — mid-stream the closing
+ * stars have not arrived yet.
+ */
+const INLINE = /`([^`\n]+)`|\*\*(\S|\S[^*\n]*\S)\*\*|\*(\S|\S[^*\n]*\S)\*/g;
+
+const BULLET = /^ {0,3}[-*•] +(.*)$/;
+const ORDERED = /^ {0,3}(\d{1,3})[.)] +(.*)$/;
+const HEADING = /^ {0,3}#{1,6} +(.*)$/;
+
+/** One line of text, split into its marked-up runs. Exported for the tests. */
+export function parseInline(line: string): Inline[] {
+  const parts: Inline[] = [];
+  let plain = 0;
+
+  const flush = (upTo: number) => {
+    if (upTo > plain) parts.push({ kind: "text", text: line.slice(plain, upTo) });
+  };
+
+  INLINE.lastIndex = 0;
+  for (let match = INLINE.exec(line); match; match = INLINE.exec(line)) {
+    const [whole, code, strong, em] = match;
+    flush(match.index);
+    if (code !== undefined) parts.push({ kind: "code", text: code });
+    else if (strong !== undefined) parts.push({ kind: "strong", text: strong });
+    else parts.push({ kind: "em", text: em });
+    plain = match.index + whole.length;
+  }
+  flush(line.length);
+
+  return parts;
+}
+
+/**
+ * One answer, split into blocks.
+ *
+ * Line-based on purpose: a blank line ends whatever was open, a list marker
+ * opens a list, everything else is a paragraph line. Block structure is decided
+ * before inline markers are read, which is why `* Übersicht` is a bullet and
+ * `*Übersicht*` is emphasis — the difference is the space, and it is the one
+ * ambiguity in this subset.
+ */
+export function parseAnswer(text: string): Block[] {
+  const blocks: Block[] = [];
+  let paragraph: Inline[][] = [];
+  let list: { ordered: boolean; start: number; items: Inline[][] } | null = null;
+
+  const closeParagraph = () => {
+    if (paragraph.length > 0) blocks.push({ kind: "paragraph", lines: paragraph });
+    paragraph = [];
+  };
+  const closeList = () => {
+    if (list) blocks.push({ kind: "list", ...list });
+    list = null;
+  };
+
+  for (const raw of text.split("\n")) {
+    const line = raw.replace(/\s+$/, "");
+
+    if (line.trim() === "") {
+      closeParagraph();
+      closeList();
+      continue;
+    }
+
+    const bullet = BULLET.exec(line);
+    const ordered = bullet ? null : ORDERED.exec(line);
+
+    if (bullet || ordered) {
+      closeParagraph();
+      const wantsOrdered = Boolean(ordered);
+      // A bullet list and a numbered list are two blocks even when they touch:
+      // an <ul> whose items are numbered would number them twice.
+      if (list && list.ordered !== wantsOrdered) closeList();
+      const item = parseInline(bullet ? bullet[1] : ordered![2]);
+      if (!list) {
+        list = {
+          ordered: wantsOrdered,
+          start: ordered ? Number(ordered[1]) : 1,
+          items: [item],
+        };
+      } else {
+        list.items.push(item);
+      }
+      continue;
+    }
+
+    closeList();
+    const heading = HEADING.exec(line);
+    // She is told to be brief, so a heading should not appear at all. If one
+    // does, it becomes a bold line — the hashes must not reach the customer.
+    paragraph.push(heading ? [{ kind: "strong", text: heading[1] }] : parseInline(line));
+  }
+
+  closeParagraph();
+  closeList();
+  return blocks;
+}

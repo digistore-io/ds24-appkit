@@ -334,6 +334,11 @@ const TASKS = {
     help: "Ensure .env exists (create it + generate AUTH_SECRET)",
     run: () => ensureEnv(),
   },
+  update: {
+    group: "Setup",
+    help: "Bring the guidance up to date (CLAUDE.md, docs/, skills) — --apply writes",
+    run: (args) => script("scripts/dev/update.mjs", args),
+  },
   help: {
     group: "Setup",
     help: "Show this overview",

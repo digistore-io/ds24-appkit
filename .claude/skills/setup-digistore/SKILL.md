@@ -157,6 +157,14 @@ deliberately no interface for entering or generating a key.
 3. **Check the connection:** as soon as the IPN is set up, the user can trigger
    "Test connection" in Digistore24. A validly signed IPN is answered with
    `200`; with an invalid signature it's `403`.
+
+   **On a `403`, do not start guessing** — `node run.mjs ds24-ipn-verify` answers
+   it. The IPN log keeps the raw body of every call, so the script recomputes the
+   signature over exactly what arrived: once with our canonical rule
+   (`lib/digistore/ipn.ts`) and once with each known variant. The variant that
+   matches names the rule Digistore24 actually used; if none matches, the
+   passphrase is the suspect and not the code. `--order ABC123` picks a specific
+   purchase, `--all` walks every rejected one.
 4. **Test a purchase from the app (before the approval):** new products are
    initially **not approved** at Digistore24 — then only **test purchases** are
    possible. So that the vendor can run through the real checkout from within

@@ -12,7 +12,7 @@ your email address and follow the link we send you.
 
 ## Setting one
 
-1. Open *Account* from the menu on the left.
+1. Open your account page from the menu on the left.
 2. Scroll to the sign-in section.
 3. Enter the new password twice and save.
 

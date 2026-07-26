@@ -410,7 +410,7 @@
   },
   "chat": {
     "title": "Ask {name}",
-    "subtitle": "Answers from this app's handbook — around the clock.",
+    "subtitle": "Answers to any question about this app — around the clock.",
     "placeholder": "Type your question …",
     "send": "Send",
     "open": "Ask {name}",
@@ -418,7 +418,7 @@
     "loading": "Loading the conversation …",
     "sending": "{name} is writing …",
     "emptyTitle": "What would you like to know?",
-    "emptyBody": "{name} knows this app's handbook and answers from it. She cannot see your account — your balance, purchases and settings stay hidden from her.",
+    "emptyBody": "{name} knows this app inside out and is happy to answer any question. She cannot see your account — your balance, purchases and settings stay hidden from her.",
     "disclaimer": "{name} is an AI. She can be wrong — for anything about money or access, ask support.",
     "clear": "Delete history",
     "clearTitle": "Delete the history?",

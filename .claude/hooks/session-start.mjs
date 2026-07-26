@@ -10,8 +10,10 @@
 //
 // Note: when a freshly cloned project is opened for the first time, Claude Code
 // asks whether it should trust the project folder. Only after that does this hook run.
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { blockers, inspect } from "../../scripts/dev/doctor.mjs";
+import { readNotes, unwrittenPages } from "../../scripts/dev/app-notes.mjs";
+import { describe as describeUpdate, updateAvailable } from "../../scripts/dev/update-check.mjs";
 
 const hasEnv = existsSync(".env");
 const hasBrief = existsSync("docs/product-brief.md");
@@ -41,14 +43,25 @@ try {
 // instead of the one line the whole README points at ("Build my app").
 // `scripts/session-start.test.ts` fails the build when the two drift apart.
 const SHIPPED = new Set(["account", "admin", "billing", "chat"]);
-let customPages = 0;
+let ownPages = [];
 try {
-  customPages = readdirSync("app/dashboard", { withFileTypes: true }).filter(
-    (entry) => entry.isDirectory() && !SHIPPED.has(entry.name),
-  ).length;
+  ownPages = readdirSync("app/dashboard", { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && !SHIPPED.has(entry.name))
+    .map((entry) => entry.name);
 } catch {
   /* no dashboard folder yet — then there is nothing of their own either */
 }
+const customPages = ownPages.length;
+
+// Is what they built written down? `docs/app.md` is this app's own notebook, and
+// the next session's only source for what the last one did — see
+// scripts/dev/app-notes.mjs for why this is asked by content and not by date.
+const unwritten = unwrittenPages(ownPages, readNotes((file) => readFileSync(file, "utf8")));
+
+// Has the template been improved since this app was copied out of it? Asked at
+// most once a day, answered from .dev/ the rest of the time, and silent on any
+// problem — see scripts/dev/update-check.mjs, including how to switch it off.
+const updateLine = describeUpdate(await updateAvailable());
 
 const line = "──────────────────────────────────────────────────────────────────";
 console.log(line);
@@ -79,6 +92,13 @@ console.log(line);
 // Context for Claude (the user sees these lines as well, so keep them neutral
 // and terse):
 console.log(`[Project state: .env=${hasEnv}, product-brief=${hasBrief}, own pages=${customPages}]`);
+if (updateLine) console.log(updateLine);
+if (unwritten.length > 0) {
+  console.log(
+    `[App notes: docs/app.md does not cover ${unwritten.join(", ")}. ` +
+      `Write the entry when the feature works — CLAUDE.md → Adding a feature, step 8.]`,
+  );
+}
 if (blocked.length > 0) {
   console.log(
     `[Setup: blocked — ${blocked.map((c) => c.id).join(", ")}. ` +

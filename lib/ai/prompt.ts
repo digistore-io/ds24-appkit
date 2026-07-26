@@ -22,6 +22,7 @@
 // everywhere and has the same caching property, because it sits after the
 // breakpoint.
 import type { PromptBlock } from "./retriever";
+import type { NavMenu } from "./nav-labels";
 
 /**
  * ⚠️ The Anthropic-shaped `SystemBlock` that used to live here is GONE.
@@ -40,6 +41,15 @@ export interface Persona {
   assistantName: string;
   /** The product she works for, from `lib/app.ts`. */
   appName: string;
+  /**
+   * The menu on the left, per language — from `lib/ai/nav-labels.ts`.
+   *
+   * Static for an installation, so it belongs in the cached half. It is here
+   * rather than in the handbook because the handbook is written once, in one
+   * language, and the menu is renamed in two — see that file's header for the
+   * bug this closes.
+   */
+  menus: readonly NavMenu[];
 }
 
 export interface RequestContext {
@@ -82,7 +92,7 @@ export interface RequestContext {
  *    that matters when the surface is a support chat.
  */
 export function personaText(persona: Persona): string {
-  const { assistantName, appName } = persona;
+  const { assistantName, appName, menus } = persona;
   return [
     `You are ${assistantName}, the assistant inside ${appName}.`,
     "",
@@ -91,8 +101,21 @@ export function personaText(persona: Persona): string {
     "How you answer:",
     "- Answer in the language named in the request context, whichever language the handbook happens to be written in.",
     "- Be brief. Two or three sentences for a simple question; a numbered list when the answer is a procedure.",
+    // The window renders exactly this much and shows anything else literally
+    // (`lib/ai/markdown.ts`). Naming the subset is cheaper than a rule saying
+    // "no Markdown", which no model obeys for long.
+    "- You may use **bold**, *italic*, `code` and bullet or numbered lists. Nothing else is formatted: a table, a heading or a link is shown to the person exactly as you typed it, so do not use one.",
     "- The handbook is YOUR knowledge, not a library this person can open. They cannot see it, cannot search it and have no way to look anything up in it. So never name a document, a title, a section or a file, never quote a path, and never say an answer is \"in the handbook\" or \"in the documentation\". Answer as somebody who simply knows.",
     "- If you are sure of part of an answer and not the rest, say which part you are sure of and send them to support for the rest — without explaining where either part came from.",
+    "",
+    // Without this the model reads a menu label off the handbook, which is
+    // written once and in one language, and sends a German customer to an
+    // entry that says something else. See `lib/ai/nav-labels.ts`.
+    "Where things are:",
+    "- These are the entries of the menu on the left, in the order they appear, exactly as each one is labelled:",
+    ...menus.map((menu) => `  - ${menu.languageLabel}: ${menu.labels.join(" · ")}`),
+    "- When you send somebody to one of those places, write the label exactly as it stands above for the language you are answering in. Never translate a label yourself, never shorten it, and never name an entry that is not in that list — somebody hunting the menu for a word that is not on it stops believing the rest of the answer too.",
+    "- The menu holds more entries for the person who runs this app. They are not yours to name.",
     "",
     "What you do not do:",
     "- You do not invent. If the handbook does not answer the question, say so plainly and point the person at support. A confident wrong answer about money or access is worse than no answer.",

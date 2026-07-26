@@ -14,8 +14,9 @@ Everything you have access to sits behind the sign-in; nothing here is public.
 
 1. **Open the overview.** It is the first entry in the menu on the left and
    shows what is currently active on your account.
-2. **Check your account page.** The entry is called *Account*. It lists what you
-   may use, until when, and — if this app sells credit — your balance.
+2. **Check your account page.** It is the second entry in the menu on the left
+   and lists what you may use, until when, and — if this app sells credit —
+   your balance.
 3. **Set a password if you want one.** Signing in works by emailed link without
    one. A password is optional and saves you the trip through your inbox. It is
    on the account page, under the sign-in section.

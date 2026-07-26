@@ -40,8 +40,8 @@ hands over to the next:
 | 2c | **AI assistant** *(optional)* | `ai-chat-knowledge` | switch the in-app chat on, give her a name, and write the handbook she answers your customers from |
 | 2d | **Which AI company** *(optional)* | `ai-providers` | pick OpenAI, Anthropic, Gemini, Mistral or OpenRouter, get the key in, bind each job to a model and set the prices the cost page reports |
 | 2e | **AI interface (MCP)** *(optional)* | `mcp-server` | let your customers connect Claude to your app: decide which capabilities become tools, then switch it on |
-| 3 | **Security** | `security-gateway` | scan the app for security holes and fix them |
-| 4 | **Scaling** | `performance-gateway` | make sure ~100 concurrent users run smoothly |
+| 3 | **Security** | `security-gateway` | eight checks — access control, money, secrets, packages, endpoints, hosting — findings by severity, the serious ones fixed, report in `docs/reports/` |
+| 4 | **Scaling** | `performance-gateway` | measure instead of guess: response times, database and indexes, ~100 concurrent users, memory, CPU, front end — fixed and measured again |
 | 5 | **Legal** | `compliance-check` | imprint/privacy policy/terms/right of withdrawal + GDPR |
 | 5b | **The server** | `setup-hosting` | pick a host (Railway/Render/Fly.io/DigitalOcean), say what it costs, install its CLI, authenticate, app + managed Postgres, secrets, migration in the deploy, domain |
 | 6 | **Live** | `go-live` | put the app online and verify it live — a real test purchase included |
@@ -151,6 +151,7 @@ The most important commands at a glance (`node run.mjs` alone shows them all):
 | `node run.mjs ds24-connect` | fetch the Digistore24 API key (browser) and store it in `.env` |
 | `node run.mjs logs` | follow the log of the running app |
 | `node run.mjs doctor` | check that everything needed is installed |
+| `node run.mjs update` | fetch improved guidance for the AI agent (`CLAUDE.md`, `docs/`, skills) — your code is never touched, see [`docs/updates.md`](docs/updates.md) |
 | `node run.mjs` | show all commands |
 
 Is something already running on port 3000 or 15432 (the database port) on your

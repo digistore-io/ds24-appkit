@@ -38,6 +38,7 @@ import {
 import { useActionToast } from "@/hooks/use-action-toast";
 import { MAX_MESSAGE_CHARS } from "@/lib/ai/rules";
 import { clearChatAction } from "./actions";
+import { AnswerText } from "./answer";
 
 const EMPTY = { error: null, ok: null };
 
@@ -219,8 +220,14 @@ export function ChatWindow({
                         {assistantName.slice(0, 1).toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
-                    <div className="bg-muted min-w-0 rounded-lg px-3 py-2 text-sm whitespace-pre-wrap">
-                      {message.content || (
+                    {/* Her answer arrives as Markdown whether or not she was
+                        asked for it, so it is parsed rather than shown raw —
+                        see `answer.tsx`. The user's own message below is NOT:
+                        what somebody typed is shown as they typed it. */}
+                    <div className="bg-muted min-w-0 rounded-lg px-3 py-2 text-sm">
+                      {message.content ? (
+                        <AnswerText text={message.content} />
+                      ) : (
                         <span className="text-muted-foreground">
                           {t("sending", { name: assistantName })}
                         </span>
