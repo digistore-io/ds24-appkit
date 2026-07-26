@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // The in-app assistant's transcripts.
 //
 // One row per message, the member's own questions and her answers alike. The

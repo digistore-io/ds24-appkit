@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Runs once at server start (Next.js instrumentation hook).
 //
 // Purpose: enforce the environment rules from lib/env-guard.ts BEFORE the app

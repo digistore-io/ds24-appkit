@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // May a purchase in this order status still be claimed?
 //
 // Pure, and separate from claim.ts, for the reason rules.ts:5-9 already gives

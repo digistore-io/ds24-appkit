@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Two things story 3.5 (AC 5) promises the Member, and neither is testable by
 // asserting a return value — both are properties of what the code IMPORTS and
 // RENDERS. So they are asserted on the source, the same way

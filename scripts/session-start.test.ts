@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // The greeting has to greet a beginner as a beginner.
 //
 // `.claude/hooks/session-start.mjs` decides between two texts by counting the

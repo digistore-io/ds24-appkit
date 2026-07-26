@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // What an impersonation looks like inside the session token.
 //
 // PURE, and free of the database and of `auth.ts` on purpose: `auth.config.ts`

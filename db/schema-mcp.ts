@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // The keys an AI client uses to reach this app's MCP server.
 //
 // One row per key a Member issued to themselves on `/dashboard/account`. The

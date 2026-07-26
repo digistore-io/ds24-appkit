@@ -1,3 +1,5 @@
+<!-- Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA — SPDX-License-Identifier: MIT -->
+
 # The MCP server — your app as a tool for AI clients
 
 This app can expose itself over the **Model Context Protocol**: a customer

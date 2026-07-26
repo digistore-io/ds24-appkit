@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Delete AI-usage rows older than the retention window (default 365 days).
 //
 // `ai_usage` is the first table in this template that grows with USAGE rather

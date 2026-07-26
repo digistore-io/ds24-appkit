@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // The system prompt — and the cache boundary that makes the chat affordable.
 //
 // ── Read this before changing anything below ───────────────────────────────

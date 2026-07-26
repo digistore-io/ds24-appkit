@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 import { getRequestConfig } from "next-intl/server";
 import { IntlErrorCode } from "next-intl";
 import { getUserLocale } from "./locale";

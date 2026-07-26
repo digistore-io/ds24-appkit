@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // The in-app assistant — is she there, what is she called, what does she cost.
 //
 // Two switches, and they are deliberately of different kinds, because they

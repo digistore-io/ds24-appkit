@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // The MCP endpoint — this app, as a tool an AI client can use.
 //
 // One route, POST only. What it can do is `lib/mcp/tools.ts`; how the wire

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Read and write single keys in a .env file — shared by the ds24 setup scripts
 // (connect-api-key, ipn-setup) and by the start-up scripts, so that there is
 // exactly one .env writer.

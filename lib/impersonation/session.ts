@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Turning a session into somebody else's, and back again.
 //
 // This is the only file that rewrites the subject of a signed-in token, and

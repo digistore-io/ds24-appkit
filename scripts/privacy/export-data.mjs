@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Everything this app holds about one person, as one JSON file.
 //
 // This is what answers a GDPR subject access request (Art. 15) and a request
@@ -68,6 +71,17 @@ try {
         select "newEmail", "requestedAt", "expiresAt"
         from email_changes where "memberId" = ${memberId}
       `
+    : [];
+
+  // --- What they agreed to ----------------------------------------------------
+  // Append-only, so this is the whole history and not just the current answer:
+  // every yes, every no, every withdrawal, with the version of the wording that
+  // was on screen at the time (db/schema-consent.ts). Empty in an app that
+  // declares no purposes, which is the shipped state.
+  const consents = memberId
+    ? await sql`
+        select purpose, granted, text_version, locale, created_at
+        from consent_records where member_id = ${memberId} order by created_at`
     : [];
 
   // --- Purchases: by account AND by address ----------------------------------
@@ -206,6 +220,7 @@ try {
     account: account ?? null,
     signInMethods,
     pendingEmailChange,
+    consents,
     orders,
     subscriptions,
     invoices,

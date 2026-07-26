@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -17,8 +20,11 @@ import { isEmailLoginEnabled } from "@/lib/email";
 import { mcpConfig, mcpOffReason } from "@/lib/mcp/config";
 import { countLiveKeys, listKeys } from "@/lib/mcp/keys";
 import { MAX_LIVE_KEYS } from "@/lib/mcp/rules";
+import { consentStatusFor } from "@/lib/consent/manage";
+import { countOwners } from "@/lib/users/manage";
 import { SignInCard } from "./ui";
 import { McpCard } from "./mcp-ui";
+import { ConsentCard, DeleteAccountCard, MyDataCard } from "./privacy-ui";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
@@ -186,7 +192,18 @@ export default async function AccountPage() {
   const showAccess =
     sellsPlans() || entitlements.length > 0 || paused.length > 0;
 
+  // What this member agreed to, and whether they are the one owner this
+  // installation has. Both are cheap and both are read unconditionally: an app
+  // with no purposes declared gets an empty array (the shipped state), and the
+  // owner count is one aggregate.
+  const [consentRows, ownerCount] = await Promise.all([
+    consentStatusFor(memberId),
+    countOwners(),
+  ]);
+  const isLastOwner = session.user.role === "owner" && ownerCount <= 1;
+
   const t = await getTranslations("account");
+  const tConsent = await getTranslations("consent");
   const format = await getFormatter();
 
   return (
@@ -374,6 +391,33 @@ export default async function AccountPage() {
                 }
               : null
           }
+        />
+
+        {/* The data-protection controls, last on the page.
+            Findable, not prominent — and never absent, which is the state that
+            turns a right into a support ticket. See privacy-ui.tsx. */}
+        <ConsentCard
+          rows={consentRows.map((row) => ({
+            key: row.purpose.key,
+            // Looked up here rather than in the client component: the keys are
+            // per-app (`consent.<key>.title`), so only an app that declared the
+            // purpose has the text. A client calling `t()` on a key nobody
+            // added renders the key itself at a customer.
+            title: tConsent(`${row.purpose.key}.title`),
+            state: row.state,
+            answeredAt: row.answeredAt
+              ? format.dateTime(row.answeredAt, { dateStyle: "long" })
+              : null,
+          }))}
+        />
+
+        <MyDataCard />
+
+        <DeleteAccountCard
+          // Only to word the warning in the dialog — it never blocks. See the
+          // note on `canDeleteOwnAccount` in lib/users/rules.ts.
+          hasActivePlan={entitlements.length > 0 || paused.length > 0}
+          isLastOwner={isLastOwner}
         />
       </div>
     </>

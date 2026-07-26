@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Which door an address goes through — the branch behind the two-step sign-in
 // dialog on /login.
 //

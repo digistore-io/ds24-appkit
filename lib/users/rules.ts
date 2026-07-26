@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // User management rules — deliberately PURE functions, no database.
 //
 // Why they are separate: these rules keep an operator from locking themselves
@@ -89,6 +92,35 @@ export function canDeleteUser(
   if (actor.role !== "owner") return "notOwner";
   if (actor.id === target.id) return "selfDelete";
   if (target.role === "owner" && ownerCount <= 1) return "lastOwnerDelete";
+  return null;
+}
+
+/**
+ * May this person delete their OWN account?
+ *
+ * A different question from `canDeleteUser`, and deliberately so. That one
+ * refuses self-deletion outright (`selfDelete`) because it guards the Operator's
+ * user list, where deleting yourself is always a mistake — you would be
+ * removing an admin by misclicking a row menu.
+ *
+ * Here it is the point. Art. 17 GDPR gives a person the right to have their data
+ * erased, and an app where the only way out is to email support is an app that
+ * makes exercising a right depend on somebody answering the phone.
+ *
+ * **One refusal survives**: the last remaining owner. Not for their sake but for
+ * the installation's — an app with no admin has no way back in, and no support
+ * desk that could let them. They can hand the role to somebody else first. This
+ * is not a GDPR problem: nothing stops that person deleting the account once
+ * another owner exists, and the refusal is temporary and in their own hands.
+ *
+ * Note what is NOT a reason to refuse: a running subscription. It is a real
+ * problem — billing continues at Digistore24 with no account behind it — but
+ * the answer to it is to say so plainly before the button is pressed, not to
+ * withhold erasure until the customer has tidied up. Refusing would be the
+ * violation; the warning is in `app/dashboard/account/ui.tsx`.
+ */
+export function canDeleteOwnAccount(actor: Actor, ownerCount: number): Denial {
+  if (actor.role === "owner" && ownerCount <= 1) return "lastOwnerDelete";
   return null;
 }
 

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // The greeting's update line is read by everybody who opens this project, so the
 // two ways it can be wrong both cost something real: too often and it becomes
 // noise that gets ignored on the day it matters; never and the whole mechanism

@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Reads .dev/dev.log and reports what actually went wrong while the app was
 // running. The counterpart to `node run.mjs logs`: that one is for a human to
 // watch, this one is for deciding whether the app is broken.

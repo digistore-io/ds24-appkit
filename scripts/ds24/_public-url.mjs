@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // The detour every localhost URL has to take before Digistore24 will accept it.
 //
 // Digistore24 rejects anything that is not public https — the return address of

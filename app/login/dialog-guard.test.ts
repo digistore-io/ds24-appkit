@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // What story 4.1 promises about the sign-in page, asserted on the source.
 //
 // Both promises are properties of the FILES, not of any return value, so there

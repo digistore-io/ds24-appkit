@@ -1,3 +1,5 @@
+<!-- Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA — SPDX-License-Identifier: MIT -->
+
 # Digistore SAAS App Template
 
 A starter template for **SAAS applications that bill through Digistore24** —
@@ -20,7 +22,7 @@ Wired up and ready to use:
   don't use off the pages (no balance stuck at 0, no empty "next payment" card)
 - 💳 **Digistore24 billing**: IPN webhook with **SHA512 signature check**,
   checkout link generation (`createBuyUrl`), API key hookup via
-  `node run.mjs ds24-connect`, GDPR opt-in
+  `node run.mjs ds24-connect`, thank-you page that attaches the purchase
 - 🗄️ **Database** with an order state machine (paid/refunded/chargeback/…)
 - 🩺 Health checks (`/api/healthz`, `/api/readyz`) for easy deployment
 
@@ -42,7 +44,7 @@ hands over to the next:
 | 2e | **AI interface (MCP)** *(optional)* | `mcp-server` | let your customers connect Claude to your app: decide which capabilities become tools, then switch it on |
 | 3 | **Security** | `security-gateway` | eight checks — access control, money, secrets, packages, endpoints, hosting — findings by severity, the serious ones fixed, report in `docs/reports/` |
 | 4 | **Scaling** | `performance-gateway` | measure instead of guess: response times, database and indexes, ~100 concurrent users, memory, CPU, front end — fixed and measured again |
-| 5 | **Legal** | `compliance-check` | imprint/privacy policy/terms/right of withdrawal + GDPR |
+| 5 | **Legal** | `compliance-check` | which EU rules reach your app: imprint, privacy policy, terms — plus the **AI Act**, consent, your customers' rights and the records you have to be able to show |
 | 5b | **The server** | `setup-hosting` | pick a host (Railway/Render/Fly.io/DigitalOcean), say what it costs, install its CLI, authenticate, app + managed Postgres, secrets, migration in the deploy, domain |
 | 6 | **Live** | `go-live` | put the app online and verify it live — a real test purchase included |
 | 7 | **Marketing** | `go-to-market` | positioning, channels, launch plan + ready-made content (landing page, emails, **video scripts**) |
@@ -72,29 +74,31 @@ step by step.
 ## What you need installed
 
 The template runs on **Linux, macOS and Windows** — Claude Code does, so this
-does too. The list is deliberately short:
+does too. **Two things you install yourself**, and to get this far you already
+have both:
 
-| | Linux | macOS | Windows |
-|---|---|---|---|
-| **Node.js ≥ 20** (with npm) | package manager / [nodejs.org](https://nodejs.org) | `brew install node` | `winget install OpenJS.NodeJS` |
-| **git** | usually present | `xcode-select --install` | [Git for Windows](https://git-scm.com/download/win) |
-| **Docker** *(optional)* | [Docker Engine](https://docs.docker.com/engine/install/) | [Docker Desktop](https://www.docker.com/products/docker-desktop/) | [Docker Desktop](https://www.docker.com/products/docker-desktop/) (uses WSL2) |
-| **cloudflared** *(optional)* | [pkg.cloudflare.com](https://pkg.cloudflare.com/) | `brew install cloudflared` | `winget install --id Cloudflare.cloudflared` |
+| | What for |
+|---|---|
+| **Claude Code** | the program you build the app with — [claude.com/claude-code](https://claude.com/claude-code) |
+| **git** | to fetch this repo — [git-scm.com](https://git-scm.com/downloads); on macOS `xcode-select --install` brings it, on Windows it brings Git Bash |
 
-Two things are genuinely needed: **Node.js and git**. The other two are not
-prerequisites — Docker is used for the database *if you have it* (see below),
-and `cloudflared` only if you want to receive real Digistore24 purchases on your
-own machine while developing.
+**Everything else, Claude installs for you.** That includes **Node.js ≥ 20**,
+which the app itself runs on — you do not have to sort that out in advance. Say
+"get my machine ready" in the project folder and the skill `setup-machine` takes
+it from there: it checks what is there, names what is missing, asks before every
+install, and does itself whatever does not need your password.
+
+The list it works through is short. Genuinely required are **Node.js and git**.
+**Docker** and **cloudflared** are not prerequisites — Docker is used for the
+database *if you have it* (see below), and `cloudflared` only if you want to
+receive real Digistore24 purchases on your own machine while developing.
 
 **No `make` is needed** — the commands run through `node run.mjs`, which works
 in every shell. On **Windows** use **Git Bash** or **WSL2** (not PowerShell);
 Git for Windows brings Git Bash with it, and Claude Code needs it there anyway.
 
-**You don't have to install any of it by hand.** Start Claude Code in the
-project folder and it checks the machine at the greeting; if something is
-missing it walks you through it, asks before every install, and takes over the
-parts it can do itself. The table above is only there so you know in advance
-what is coming.
+**No Homebrew is needed on macOS either.** Where you have it, it gets used;
+where you do not, nothing here asks you to install it first.
 
 Want to look for yourself?
 
@@ -102,7 +106,9 @@ Want to look for yourself?
 node run.mjs doctor
 ```
 
-It says what is missing and how to install it on your system.
+It says what is missing and how to install it on your system — that one command
+is where the per-system install commands live, so nothing in this file can go
+stale against it.
 
 **No Docker? Then there is nothing to do.** On the first start the app looks at
 your machine: if Docker is there and running, the database runs in a container —
@@ -187,7 +193,7 @@ The IPN URL is registered at Digistore24 automatically by
 ```
 app/                Next.js App Router (pages + API routes)
   api/ipn/          Digistore24 IPN webhook (signature check + state machine)
-  optin/            public GDPR opt-in page
+  optin/            public thank-you page after a purchase
   plans/            public plan page (renders the product registry)
   dashboard/admin/  admin area including user management (users/)
 config/             product registry (digistore-products.json — plans, source of truth)
@@ -222,3 +228,21 @@ accounts": see [`docs/digistore-integration.md`](docs/digistore-integration.md).
   `matcher` (today `/dashboard/*`). A new page holding customer data is public
   until you add it there. Public by design: home, login, `/plans`, opt-in and
   the IPN endpoint.
+
+## License
+
+Code **and** skills in this template are under the **MIT license** —
+[`LICENSE`](LICENSE) is the binding text; what follows is only the short version.
+
+- **Use it freely.** Copy it, change it, build your own product on it and sell
+  that product — commercially too. No fee, no royalty, nobody to ask.
+- **One condition:** the copyright notice and the license text stay with the
+  parts of the code you take over. What you build on top of them is yours.
+- **No warranty, no liability.** The software is provided **"as is"**. The
+  provider gives no warranty of any kind and is **not liable** for any damage
+  arising from its use — the app you build, operate and sell is yours to test,
+  secure and answer for.
+
+That last point is why steps 3 and 5 above are part of the path:
+`security-gateway` before real money flows, and `compliance-check` before real
+customers do.

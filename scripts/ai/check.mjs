@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Checks the AI layer — which task runs on which model, whether the keys are
 // there, and roughly what a call costs.
 //

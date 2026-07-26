@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 import { describe, it, expect } from "vitest";
 import { isDevLoginAllowed, isLocalUrl, type DevLoginEnv } from "./dev-login";
 

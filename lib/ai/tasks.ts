@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // The task layer, with types on.
 //
 // The rules live in `task-rules.mjs` next door — `scripts/ai/check.mjs` has to

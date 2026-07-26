@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Digistore24 IPN signature check — per the official DS24 example
 // (https://www.digistore24.com/download/ipn/examples/ipn/sha_sign.php).
 //

@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Request the Digistore24 product approval (go-live step).
 //
 // Sets the approval status per product via updateProduct:

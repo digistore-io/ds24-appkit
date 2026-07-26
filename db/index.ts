@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Postgres connection + Drizzle client. For server-side use.
 //
 // The client is created eagerly, but postgres.js only connects on the first

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // The guard that keeps the provider layer a layer.
 //
 // Two rules, and both are the kind that decay quietly: somebody in a hurry

@@ -1,3 +1,5 @@
+<!-- Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA — SPDX-License-Identifier: MIT -->
+
 # Checkout links with `createBuyUrl`
 
 The app creates checkout URLs at runtime via the Digistore24 function

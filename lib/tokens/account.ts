@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Prepaid token accounts: keep a balance, subtract consumption, credit after a
 // paid purchase and top up automatically when needed (auto-recharge).
 //

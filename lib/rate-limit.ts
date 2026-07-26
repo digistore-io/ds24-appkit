@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Sliding-window rate limiting, for the two places in this app that need it.
 //
 // Both are things a stranger can trigger repeatedly and that cost somebody

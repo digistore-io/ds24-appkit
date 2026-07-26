@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // The assistant's endpoint — the one streaming response in this app.
 //
 // ── It guards itself, and it has to ────────────────────────────────────────

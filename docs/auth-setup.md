@@ -1,3 +1,5 @@
+<!-- Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA — SPDX-License-Identifier: MIT -->
+
 # Setting up sign-in
 
 By default the app uses **email token sign-in (magic link)**. The user enters

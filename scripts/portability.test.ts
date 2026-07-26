@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // This app has to run on Linux, macOS and Windows — Claude Code runs on all
 // three, so all three are places where somebody builds their product on it.
 // The app code is never the problem; the tooling is. This test is the guard

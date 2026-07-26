@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // When the Member's next charge falls due — a DISPLAY value, and nothing else.
 //
 // AC 3 is structural, not a matter of review: access is decided by

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 "use server";
 
 import { unstable_rethrow } from "next/navigation";
@@ -193,4 +196,42 @@ export async function removePasswordAction(
   } catch (error) {
     return toState(error);
   }
+}
+
+/**
+ * Deletes the signed-in member's own account — Art. 17 GDPR, self-service.
+ *
+ * ── It takes no id, and the FormData is not read at all ───────────────────
+ * `deleteOwnAccount()` acts on the session and nothing else. Not even a
+ * confirmation string travels here: the confirmation is the AlertDialog, and a
+ * value in the form would be a value somebody can supply directly.
+ *
+ * ── It ends by signing out, and that is not tidiness ──────────────────────
+ * Sessions are JWTs. The row is gone the moment the delete returns, but the
+ * cookie in the browser still says who they were and stays valid until it
+ * expires. Every page would then run its queries against a member id that no
+ * longer resolves — a signed-in user of an account that does not exist, which
+ * is a state nothing in this app is written for.
+ *
+ * `signOut({ redirectTo })` throws a redirect, so nothing after it runs and
+ * this function never returns normally on success. That is why the toast is on
+ * the LANDING page rather than here: there is no page left to show it on.
+ */
+export async function deleteOwnAccountAction(
+  _prev: ActionState,
+  _formData: FormData,
+): Promise<ActionState> {
+  try {
+    const { deleteOwnAccount } = await import("@/lib/users/manage");
+    await deleteOwnAccount();
+  } catch (error) {
+    // `unstable_rethrow` first: `toState` would otherwise swallow the redirect
+    // Next.js throws, and the deletion would look like a failure.
+    unstable_rethrow(error);
+    return toState(error);
+  }
+
+  const { signOut } = await import("@/auth");
+  await signOut({ redirectTo: "/" });
+  return { error: null, ok: null };
 }

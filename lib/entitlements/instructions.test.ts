@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // The instruction layer is part of the contract, so it is tested like one.
 //
 // `CLAUDE.md`, the skills under `.claude/skills/` and the files in `docs/` are

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Shared Digistore24 API client for the setup scripts (plain Node ESM).
 // Auth: header X-DS-API-KEY. Base URL from lib/digistore/config.mjs.
 //

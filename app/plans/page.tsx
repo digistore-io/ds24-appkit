@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 import { getLocale, getTranslations } from "next-intl/server";
 import { Check } from "lucide-react";
 
@@ -23,6 +26,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/utils";
+import { SiteFooter } from "@/components/site-footer";
 
 // Public plans page — fed from config/digistore-products.json.
 //
@@ -273,6 +277,12 @@ export default async function PlansPage({
           </section>
         )}
       </main>
+
+      {/* The legal links. Public pages need them most: § 5 DDG asks for the
+          Impressum to be reachable, and the person deciding whether to sign up
+          is exactly the person who has to be able to read the privacy policy
+          first. */}
+      <SiteFooter />
     </>
   );
 }

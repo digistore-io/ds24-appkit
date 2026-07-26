@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // The command line of this app.
 //
 //   node run.mjs                 show every command
@@ -140,6 +143,14 @@ const TASKS = {
     help: "Check the MCP server (settings) — and with --live really call it once",
     needs: ["env", "node_modules"],
     run: (args) => script("scripts/mcp/check.mjs", args),
+  },
+  "legal-check": {
+    group: "Tests & quality",
+    help: "What is still missing legally — placeholder pages, the AI notice, consent, evidence",
+    // No `needs`: most of it reads files and JSON, and it has to work in a
+    // half-set-up project — which is exactly when somebody asks whether they
+    // may go live. The one check that wants a database says so and skips.
+    run: (args) => script("scripts/legal/check.mjs", args),
   },
   "kb-check": {
     group: "Tests & quality",

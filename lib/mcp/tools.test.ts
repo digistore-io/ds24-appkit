@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // The registry's invariants — the ones that keep a tool from becoming a hole.
 //
 // None of this touches the database. It asserts the SHAPE of the tool list,

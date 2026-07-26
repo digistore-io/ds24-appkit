@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Anthropic, through the SDK that is already a dependency.
 //
 // ── Why native, when three providers share one HTTP adapter ────────────────

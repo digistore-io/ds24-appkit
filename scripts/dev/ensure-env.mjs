@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Makes sure a usable .env exists:
 //   1. if it is missing, it is created from .env.example,
 //   2. an empty AUTH_SECRET is filled with a random value.

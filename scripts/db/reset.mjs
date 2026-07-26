@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Resets the local development database: drop the schema → replay all
 // migrations from drizzle/ → seed (if one exists).
 //

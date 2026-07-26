@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Environment rules: DEV / STAGING / PROD.
 //
 // This template knows three environments (see docs/environments.md). They

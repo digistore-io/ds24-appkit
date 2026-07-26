@@ -2,6 +2,7 @@
 name: ai-chat-knowledge
 description: Builds the knowledge base for the app's in-app AI assistant — interviews the user about the questions their customers actually ask, then writes the handbook under content/knowledge/ in the required format (onboarding, reference, howto, glossary). Use this when the user wants the AI chat, mentions an assistant/support bot, or when the chat is switched on but answers "I do not know". Also the place to switch the chat on and give her a name.
 ---
+<!-- Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA — SPDX-License-Identifier: MIT -->
 
 # The assistant's handbook — write it, then test it
 

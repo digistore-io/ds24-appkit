@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // What AI cost — the reads behind the KI-Kosten page. Nothing here writes.
 //
 // ── Two rules the whole file is shaped by ──────────────────────────────────

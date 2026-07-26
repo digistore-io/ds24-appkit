@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Receive Digistore24 IPNs on your own machine — via a free Cloudflare Quick
 // Tunnel. No Cloudflare account, no domain, no cost.
 //

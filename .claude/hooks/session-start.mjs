@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Greeting when Claude Code starts in this project.
 //
 // Runs as a SessionStart hook (see .claude/settings.json). Whatever lands on

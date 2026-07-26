@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // The scheduled jobs, over HTTP — for a host that would rather do the timing
 // itself.
 //

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Port helpers for the start-up scripts — and the URL surgery that goes with
 // them (`DATABASE_URL`, `APP_URL` follow the port they run on).
 //

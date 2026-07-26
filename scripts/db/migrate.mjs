@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Applies the pending migrations from drizzle/ to the database in DATABASE_URL.
 //
 // Usage:  npm run db:migrate      (or: node run.mjs db-migrate)

@@ -563,7 +563,9 @@
     "providerRefused": "The AI provider turned the request down just now (overloaded, or a limit was reached). Please try again in a few minutes.",
     "providerUnreachable": "The AI provider could not be reached. Please try again later.",
     "requestTooLarge": "The request is too large for this model.",
-    "providerFailed": "The AI request failed. The details are in the log: node run.mjs logs"
+    "providerFailed": "The AI request failed. The details are in the log: node run.mjs logs",
+    "unknownPurpose": "This app does not (or no longer) ask for that consent.",
+    "noPurposes": "This app asks for no consent."
   },
   "confirmEmail": {
     "title": "Confirm your email address",
@@ -720,5 +722,62 @@
     "emptyBody": "When an admin signs in as a customer from the user list, it is recorded here.",
     "hint": "Rows closed automatically say when the session was due to end, not that the admin was present until that moment. Kept for 12 months.",
     "minutes": "{count, plural, one {# minute} other {# minutes}}"
+  },
+  "consent": {
+    "title": "Consents",
+    "description": "What you have said yes or no to. You can change any of it at any time — withdrawing is exactly as easy as agreeing.",
+    "none": "This app asks you for no consent. What it does needs none: the purchase runs on the contract, and the only cookies set are the ones the app needs to work or the ones you switched yourself.",
+    "accept": "Agree",
+    "decline": "Decline",
+    "remaining": "{count} more to answer",
+    "withdrawHint": "You can change this at any time under “Account”.",
+    "recordedGranted": "Consent recorded.",
+    "recordedRefused": "Refusal recorded.",
+    "stateGranted": "Agreed",
+    "stateRefused": "Declined",
+    "stateUnasked": "Not yet asked",
+    "stateStale": "The wording changed",
+    "staleHint": "The text you agreed to has been changed. Until you decide again, no consent applies.",
+    "answeredAt": "on {date}",
+    "grant": "Agree",
+    "withdraw": "Withdraw"
+  },
+  "privacy": {
+    "exportTitle": "Download my data",
+    "exportBody": "A copy of everything this app holds about you — as a JSON file you can also read elsewhere.",
+    "exportCta": "Download my data",
+    "exportHint": "Includes your account, your purchases, your balance with every entry, your chat transcripts and every time an operator signed in to your account. Not included: your password (it cannot be read back) and the raw data from our payment provider, because it can contain details about other people.",
+    "deleteTitle": "Delete account",
+    "deleteBody": "You can delete your account yourself at any time. Some of your data has to be kept for legal reasons — the confirmation says exactly what.",
+    "deleteCta": "Delete account",
+    "deleteConfirmTitle": "Delete your account for good?",
+    "deleteConfirmBody": "This cannot be undone. You will be signed out immediately.",
+    "deleteGoesTitle": "This is deleted",
+    "deleteGoesBody": "Your account and your access, your chat transcripts, your API keys, the plans unlocked for you, any pending address change, and your consents.",
+    "deleteStaysTitle": "This stays",
+    "deleteStaysBody": "Your orders and invoices. They are accounting records we are required to keep (§ 147 AO, § 257 HGB) — and the GDPR exempts exactly those from erasure (Art. 17(3)(b)). The link to your account is removed.",
+    "deleteSubscriptionTitle": "You still have an active plan",
+    "deleteSubscriptionBody": "Deleting your account does NOT cancel your subscription. Billing continues at Digistore24 until you stop it there — cancel there first, or you will keep paying for access you no longer have.",
+    "deleteLastOwnerTitle": "You are the only administrator",
+    "deleteLastOwnerBody": "This app would be left with nobody able to administer it — and nobody who could let you back in. Make somebody else an administrator first, then you can delete your account.",
+    "deleteConfirmCta": "Yes, delete my account"
+  },
+  "legal": {
+    "navLabel": "Legal",
+    "placeholderTitle": "This page has not been filled in yet",
+    "placeholderBody": "The text below is the shipped placeholder, not a valid notice. Run the compliance-check skill to replace it.",
+    "otherLanguage": "This page is not available in your language yet and is shown in the version that exists.",
+    "impressum": {
+      "title": "Legal notice"
+    },
+    "datenschutz": {
+      "title": "Privacy policy"
+    },
+    "agb": {
+      "title": "Terms and conditions"
+    },
+    "widerruf": {
+      "title": "Right of withdrawal"
+    }
   }
 }

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // The timer that makes the whole thing work with no setup at all.
 //
 // ── Why in-process, when the app already had a cron ENDPOINT ──────────────

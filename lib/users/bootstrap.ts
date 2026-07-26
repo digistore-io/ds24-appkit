@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // The first account on a fresh installation becomes the owner.
 //
 // Why this exists: a working copy that has just been created (`make

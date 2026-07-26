@@ -2,6 +2,7 @@
 name: performance-gateway
 description: The performance check for this app. Measures where it is slow and fixes it — response times per route, database queries and missing indexes, N+1 patterns, the connection pool, behaviour under ~100 parallel users, memory leaks, a blocked event loop, bundle size and Core Web Vitals — then writes a report. Use it after the security gateway and before the launch, and whenever somebody says "it is slow", "it times out", "will it hold under load?".
 ---
+<!-- Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA — SPDX-License-Identifier: MIT -->
 
 # Performance gateway — measure, fix, measure again
 

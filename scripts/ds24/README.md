@@ -1,3 +1,5 @@
+<!-- Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA — SPDX-License-Identifier: MIT -->
+
 # Digistore24 setup scripts
 
 One-off, **idempotent** setup tasks that are not part of the app's runtime.

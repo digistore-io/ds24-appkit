@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Billing models beyond one-off and recurring purchases:
 //
 //  - subscriptions:  a customer's recurring subscription. Holds the DS24

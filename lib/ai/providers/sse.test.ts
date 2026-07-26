@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 import { describe, expect, it } from "vitest";
 
 import { parseJson, sseData } from "./sse";

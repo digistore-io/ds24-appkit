@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Running the due jobs — the part that must be right when two app instances
 // wake up in the same second.
 //

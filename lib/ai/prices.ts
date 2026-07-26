@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // The price table, with types on.
 //
 // The arithmetic lives in `pricing.mjs` next door — `scripts/ai/check.mjs`

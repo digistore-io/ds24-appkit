@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // The registry of scheduled jobs. Adding one is adding an entry here.
 //
 // ── Why jobs are TypeScript and run INSIDE the app ────────────────────────

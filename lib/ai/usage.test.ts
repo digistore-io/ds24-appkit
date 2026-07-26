@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // What a usage row looks like, and what it deliberately does not contain.
 //
 // `rowFor` is pure so the shape can be asserted without a database — which

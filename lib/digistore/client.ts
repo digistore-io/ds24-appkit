@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Digistore24 REST API client.
 //
 // Authentication: HTTP header `X-DS-API-KEY` (NOT as a form parameter).

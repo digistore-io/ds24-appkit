@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Does the app's own notebook know what has been built?
 //
 // `docs/app.md` is the one file that describes THIS app — not the template.

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // The MCP server — is it there at all, and who may reach it.
 //
 // One switch, not two. The assistant needs `config/ai-chat.json` AND an

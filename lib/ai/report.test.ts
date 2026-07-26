@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // The pure half of the cost report: periods, time zones and buckets.
 //
 // The queries are not tested here — they need a database, and what they do is

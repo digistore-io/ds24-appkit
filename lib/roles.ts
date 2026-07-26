@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Roles — pure definitions, WITHOUT server dependencies.
 //
 // Why a file of its own: `lib/authz.ts` depends on `auth.ts` (and through it

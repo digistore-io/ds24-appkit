@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Reading a Server-Sent Events stream, with no dependency.
 //
 // Three of the five providers stream over SSE and all three need the same

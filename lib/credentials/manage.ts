@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // The imperative shell for the optional password: it owns the database writes
 // and calls the pure rules (rules.ts) before making any of them.
 //

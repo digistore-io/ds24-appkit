@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Token rules — deliberately PURE functions, no database.
 //
 // Why they are separate: an Operator correcting a balance by hand moves

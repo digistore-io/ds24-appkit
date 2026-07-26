@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // The guide has to know what the app can do.
 //
 // Whoever builds here is guided by an AI agent, and that agent knows exactly

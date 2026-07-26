@@ -1,3 +1,5 @@
+<!-- Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA — SPDX-License-Identifier: MIT -->
+
 # Environments: DEV · STAGING · PROD
 
 The app runs in up to three environments. **All of them use the same live products on

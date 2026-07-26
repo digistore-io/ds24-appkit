@@ -2,6 +2,7 @@
 name: setup-digistore
 description: Sets up Digistore24 billing for the app — fetch the API key into the `.env` via `node run.mjs ds24-connect`, then create products with `node run.mjs ds24-sync` and register the IPN connection (webhook + SHA512 passphrase) via API, test the connection and generate checkout links. The agent runs the commands itself. Use this as soon as the app is meant to receive sales or process completed purchases.
 ---
+<!-- Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA — SPDX-License-Identifier: MIT -->
 
 # Setting up Digistore24 billing
 

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // The operator's Digistore24 credentials.
 //
 // Single-operator model: this app bills through exactly ONE Digistore24

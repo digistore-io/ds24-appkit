@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Storing what was said.
 //
 // One conversation per member — deliberately, and it is the decision most worth

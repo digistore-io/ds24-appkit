@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Database schema (Drizzle ORM / Postgres).
 //
 // Contains:
@@ -138,3 +141,10 @@ export * from "./schema-cron";
 // a customer. Written BEFORE the session changes, because the row is also what
 // authorises the change. See schema-impersonation.ts.
 export * from "./schema-impersonation";
+
+// --- Consent -------------------------------------------------------------------
+// `consent_records` — what a Member agreed to, which wording they read, and
+// when. Append-only: a withdrawal is a new row, never an edit. Empty in an app
+// that declares no purposes in config/consent.json, which is the shipped state.
+// See schema-consent.ts and docs/compliance.md.
+export * from "./schema-consent";

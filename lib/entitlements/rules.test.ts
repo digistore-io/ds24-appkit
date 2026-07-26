@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 import { describe, it, expect } from "vitest";
 import { chooseGrantTransition, grantState, pausedKeys } from "./rules";
 import type { GrantTransitionInput } from "./rules";

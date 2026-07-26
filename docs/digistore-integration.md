@@ -1,3 +1,5 @@
+<!-- Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA — SPDX-License-Identifier: MIT -->
+
 # Digistore24: the integration, and the two shapes of app it serves
 
 Three things connect this app to Digistore24, and they are the same three in

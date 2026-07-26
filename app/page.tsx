@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { KeyRound, ShoppingCart, Sparkles, ArrowRight } from "lucide-react";
@@ -9,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Callout } from "@/components/ui/callout";
+import { SiteFooter } from "@/components/site-footer";
 
 // Public home page. Replace this content with your landing page — though the
 // structure (header, hero, three cards) already carries as it is.
@@ -78,6 +82,12 @@ export default async function Home() {
           </Callout>
         )}
       </main>
+
+      {/* The legal links. Public pages need them most: § 5 DDG asks for the
+          Impressum to be reachable, and the person deciding whether to sign up
+          is exactly the person who has to be able to read the privacy policy
+          first. */}
+      <SiteFooter />
     </>
   );
 }

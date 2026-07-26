@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // The scheduling rules, and the config that feeds them.
 //
 // The runner is not tested here — it needs a database, and what it does is one

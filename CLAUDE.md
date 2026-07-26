@@ -1,3 +1,5 @@
+<!-- Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA — SPDX-License-Identifier: MIT -->
+
 # Guardrails for this app
 
 You (and every AI assistant) are building a **SAAS application with Digistore24
@@ -72,6 +74,17 @@ produces a confident report and a page that never loads. The same applies when a
 command fails with "docker: not found", "npm not found" or "the database does
 not answer": that is a setup problem, not a bug in the app.
 
+**No greeting at all — or a hook error naming `node` — is the same case, and the
+most important one to recognise.** That line is printed by
+`.claude/hooks/session-start.mjs`, which is itself started with `node`. So a
+machine without Node cannot report that it has no Node; it simply says nothing,
+or shows a startup error instead. Claude Code does not need Node, git does not
+need Node, and the app needs it for everything — which makes "Claude Code and
+git installed, Node not yet" the ordinary state of a fresh clone rather than an
+exotic one. It is `setup-machine` again, and its step 0 is written for exactly
+this: it reads `scripts/dev/fixes.json` directly, because every command that
+would have told it what to do starts with `node`.
+
 There are guided skills in `.claude/skills/` — use them in this order:
 - **`setup-machine`** — before everything: install what is missing (Node, git)
   and prepare the project (`.env`, dependencies, database, migrations).
@@ -93,7 +106,8 @@ There are guided skills in `.claude/skills/` — use them in this order:
 - **`performance-gateway`** — the same shape for speed: response times, database
   and indexes, ~100 parallel users, memory, CPU, front end — measured against a
   production build, fixed, measured again, report in `docs/reports/`.
-- **`compliance-check`** — legal pages (imprint/privacy/terms/withdrawal) & GDPR.
+- **`compliance-check`** — the EU rules: which ones reach this app, the legal
+  pages, the AI Act, consent, data-subject rights and the evidence pack.
 - **`setup-hosting`** — the server: pick a host (Railway/Render/Fly.io/
   DigitalOcean), say what it costs, install its CLI, authenticate, create app
   and managed Postgres, set the secrets, wire the migration into the deploy.
@@ -1396,18 +1410,47 @@ Windows who cannot start it has no way around it.
 exists and is not required where it does not (see below), and **cloudflared** is
 only for receiving Digistore24 IPNs on your own machine.
 
+**Of those, a person installs exactly one by hand: git.** Plus Claude Code
+itself, which is a program of its own and needs no Node. Everything after that —
+Node included — is installed *here*, by the agent, through `setup-machine`. That
+split is the whole shape of the first run:
+
+```
+a person:   Claude Code · git · git clone · start Claude Code
+the agent:  Node · dependencies · database · migrations · .env
+```
+
+It matters because the alternative is a checklist on a web page, and a checklist
+is where non-developers stop. Two people can install two tools; nobody should
+have to pick the right Node for their chip before they are allowed to begin.
+
 **The per-system install commands are not written down here, and that is on
-purpose.** They live in exactly one place — the table in
-`scripts/dev/doctor.mjs` — because a list repeated in three documents drifts,
-and the copy that drifts is always the one for the system nobody here runs.
-`node run.mjs doctor` renders it for the machine you are on; `--json` hands the
-same thing to the skill `setup-machine`, which installs it after asking. So:
+purpose.** They live in exactly one place — `scripts/dev/fixes.json`, which
+`scripts/dev/doctor.mjs` reads — because a list repeated in three documents
+drifts, and the copy that drifts is always the one for the system nobody here
+runs. `node run.mjs doctor` renders it for the machine you are on; `--json`
+hands the same thing to the skill `setup-machine`, which installs it after
+asking. So:
 
 - somebody asks what they need → `node run.mjs doctor`
 - something is missing → the skill `setup-machine`
-- a command needs adding or changing → `FIXES` in `scripts/dev/doctor.mjs`,
-  and nowhere else. `scripts/setup.test.ts` fails if an entry loses one of the
-  three systems, or if the skill starts carrying install commands of its own.
+- a command needs adding or changing → `scripts/dev/fixes.json`, and nowhere
+  else. `scripts/setup.test.ts` fails if an entry loses one of the three
+  systems, or if the skill starts carrying install commands of its own.
+
+**Why that table is JSON and not a literal in `doctor.mjs`:** a machine with no
+Node cannot run `doctor` at all, and that is precisely the machine that needs
+the `node` entry. As data the file can be *read* instead of executed, which is
+what `setup-machine` does in its step 0 — so there is still one table, even in
+the one situation where nothing runs.
+
+**macOS does not go through Homebrew.** The `darwin` entries name the way that
+works on a Mac as it comes, and `darwinFix()` in `doctor.mjs` upgrades them to
+`brew install …` at runtime *when brew is already there* — the same move
+`linuxFix()` makes for apt/dnf/pacman. Never turn that around. Homebrew is not
+preinstalled on macOS, it wants sudo and a long download, and on Apple Silicon
+it ends by printing a PATH line the user has to run themselves; a table that
+assumes it hands `brew: command not found` to most Mac users at the first step.
 
 Nothing else. In particular **no `make`** — it is missing on Windows entirely
 and on macOS until someone installs the Xcode CLT, which is why the commands
@@ -1515,6 +1558,52 @@ one — a purchase made without signing in leaves their name and address on an
 order with no member id. Do not "tidy" it into a member-scoped export, and do
 not strip the operator notes from it: hiding those from the customer's own page
 is about tone, not about what a legal request covers.
+
+**There is a second export, and the two must not drift.** The member downloads
+their own copy from `/dashboard/account`
+(`lib/privacy/export.ts` → `app/api/account/export/route.ts`). It differs from
+the command in exactly one documented way: the raw Digistore24 webhook bodies
+are not in it, because they can carry a third party's data and nobody is in
+between to redact them (Art. 15(4)). `lib/privacy/export.test.ts` compares the
+two section by section and fails the build when one grows a table the other
+lacks — which is the realistic failure, not the difference.
+
+## Which EU rules reach this app
+
+**[`docs/compliance.md`](docs/compliance.md) is the map** — which regulation
+applies from when, who is exempt, and what in *this* app triggers it. The skill
+that walks it is `compliance-check`; `node run.mjs legal-check` reports what is
+still missing. Four things are worth knowing before you touch any of it:
+
+- **The AI disclosure is law, not copy.** Art. 50(1) EU AI Act, applicable since
+  2 August 2026: a system that talks to people must say it is a machine, at the
+  latest at the first interaction. In this app that is `chat.disclaimer`,
+  rendered above the transcript in **both** chat variants, and
+  `lib/ai/disclosure.test.ts` fails the build if either language stops naming
+  the assistant as an AI. **The rule is not "the chat carries a notice" — it is
+  "anything here that talks to a person as a machine says so".** Whatever AI
+  feature you add next inherits it.
+- **This app needs no consent from anybody, and that is the shipped answer.** A
+  purchase runs on Art. 6(1)(b) (a contract, not permission), and the only
+  cookies set are the session, the language and the theme. **Do not add a cookie
+  banner.** Under § 25 TDDDG a banner where nothing touches the device is a
+  defect, not caution: it asks for permission the app neither needs nor uses and
+  trains people to click past the one that will matter.
+- **When something DOES need consent** — an analytics tag, a marketing mail —
+  declare a purpose in `config/consent.json`, read through
+  `lib/consent/config.ts` (never by re-reading the JSON), and record the answer
+  with `recordConsent()`. It ships with `{"purposes": []}` and writes no rows
+  until you do. The table is **append-only**: a withdrawal is a new row, never
+  an edit, because a row you overwrote demonstrates nothing and Art. 7(1) asks
+  you to demonstrate. `textVersion` is the load-bearing field — bump it when you
+  change the wording, and every consent given to the old sentence correctly
+  counts as unasked again.
+- **Deleting an account does not delete everything, and the dialog says so.**
+  `deleteOwnAccount()` takes no id (the session's account, always). Orders and
+  `ai_usage` keep their rows with the member link `null`; everything else
+  cascades. A running subscription **warns and does not block** — refusing
+  erasure because it is inconvenient is the violation, and billing that
+  continues at Digistore24 with no account behind it is worth one loud sentence.
 
 ## STOP criteria
 

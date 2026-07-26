@@ -2,6 +2,7 @@
 name: mcp-server
 description: Sets up the app's MCP server — the interface through which customers connect Claude or another AI program to this app. Decides WHICH of the app's capabilities are worth exposing as tools and which must not be, writes them into lib/mcp/tools.ts, and switches the interface on. Use this when the user wants an AI/Claude integration, mentions MCP, a "connector", "Claude should be able to use my app", or an API for AI agents.
 ---
+<!-- Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA — SPDX-License-Identifier: MIT -->
 
 # The MCP server — decide what to expose, then expose it
 

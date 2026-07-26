@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Loads .env into process.env — for the CLI scripts in scripts/.
 //
 // Deliberately solved without a Node flag (`--env-file`): that one exists under

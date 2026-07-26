@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // The guarantees the setup rests on.
 //
 // `portability.test.ts` next door keeps the tooling free of Linux-only

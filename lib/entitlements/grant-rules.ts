@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // What the OPERATOR may do to a grant by hand (Epic 3).
 //
 // PURE — no database, no I/O, no session. The lookups happen in

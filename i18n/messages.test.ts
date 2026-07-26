@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 import { describe, it, expect } from "vitest";
 import { LOCALES, DEFAULT_LOCALE, matchLocale, isLocale } from "./config";
 import { USER_ERROR_CODES } from "@/lib/users/rules";
@@ -8,6 +11,8 @@ import { EMAIL_CHANGE_ERROR_CODES } from "@/lib/email-change/rules";
 import { CHAT_ERROR_CODES } from "@/lib/ai/rules";
 import { MCP_ERROR_CODES } from "@/lib/mcp/rules";
 import { PROVIDER_ERROR_CODES } from "@/lib/ai/providers/types";
+import { CONSENT_ERROR_CODES } from "@/lib/consent/rules";
+import { consentPurposes } from "@/lib/consent/config";
 import { CREDENTIAL_CHANGES } from "@/lib/email";
 import de from "@/messages/de.json";
 import en from "@/messages/en.json";
@@ -105,6 +110,7 @@ const ERROR_CODE_UNIONS: Record<string, readonly string[]> = {
   "lib/ai/rules.ts": CHAT_ERROR_CODES,
   "lib/mcp/rules.ts": MCP_ERROR_CODES,
   "lib/ai/providers/types.ts": PROVIDER_ERROR_CODES,
+  "lib/consent/rules.ts": CONSENT_ERROR_CODES,
 };
 
 describe("Error codes", () => {
@@ -131,6 +137,41 @@ describe("Error codes", () => {
 // and the notice went out with the literal string
 // "email.credentialSubject_emailChanged" where its subject should have been.
 // Every test was green. This walks the union instead.
+// Consent purposes are looked up with a COMPUTED key too — `consent.${key}.title`
+// and `.body`, where `key` comes out of `config/consent.json` rather than out of
+// the code. The parity test cannot see them: an operator who declares a purpose
+// and forgets the wording has both files agreeing perfectly while the dialog
+// renders the literal string "consent.marketing_email.title" — at a customer, in
+// the one dialog whose whole purpose is to be understood before it is answered.
+//
+// Vacuous as shipped, deliberately: this template declares no purposes, because
+// it needs none. It stops being vacuous the moment somebody adds one, which is
+// exactly when it is needed.
+describe("Consent purpose texts", () => {
+  const purposes = consentPurposes();
+
+  for (const locale of LOCALES) {
+    for (const purpose of purposes) {
+      for (const part of ["title", "body"] as const) {
+        it(`${locale}: has consent.${purpose.key}.${part}`, () => {
+          expect(
+            messageAt(ALL_MESSAGES[locale], `consent.${purpose.key}.${part}`),
+            `${locale}: consent.${purpose.key}.${part} — a purpose declared in ` +
+              `config/consent.json with no wording behind it`,
+          ).toBeTypeOf("string");
+        });
+      }
+    }
+  }
+
+  it("knows how many purposes it checked", () => {
+    // Non-vacuity marker rather than an assertion about the count: if this ever
+    // reads a number and the loops above produced no tests, the config reader
+    // broke rather than the config being empty.
+    expect(Array.isArray(purposes)).toBe(true);
+  });
+});
+
 describe("Credential-change mail texts", () => {
   for (const locale of LOCALES) {
     it(`${locale}: has a subject and a body for every credential change`, () => {

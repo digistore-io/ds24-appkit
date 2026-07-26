@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Provider id → adapter + credential. **The only file in this app that reads an
 // AI provider's API key.**
 //

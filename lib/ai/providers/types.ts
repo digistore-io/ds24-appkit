@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // The contract every provider adapter satisfies — and the only file the rest of
 // the app is allowed to know about.
 //

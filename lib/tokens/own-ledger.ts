@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // The Member's own view of their token journal — the reader behind the
 // "Tokens" tab on /dashboard/billing.
 //

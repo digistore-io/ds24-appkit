@@ -1,3 +1,5 @@
+<!-- Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA — SPDX-License-Identifier: MIT -->
+
 # Keeping the guidance up to date
 
 This app is a **copy** of a template that is still being worked on. The code is

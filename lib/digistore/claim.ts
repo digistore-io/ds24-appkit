@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Attaching purchases to the Member who made them.
 //
 // Two callers, one body: the sign-in event (all unattributed orders for the

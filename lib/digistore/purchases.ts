@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Every purchase, and the Operator's hand-attach — the data behind the
 // purchases screen.
 //

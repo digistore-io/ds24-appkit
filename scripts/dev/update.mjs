@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Bring this app's GUIDANCE up to date — CLAUDE.md, docs/ and .claude/skills/.
 //
 //   node run.mjs update            what would change (nothing is written)

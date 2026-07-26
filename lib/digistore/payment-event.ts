@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // What happens when Digistore24 reports a payment event.
 //
 // The route (app/api/ipn/route.ts) does exactly two things before calling in

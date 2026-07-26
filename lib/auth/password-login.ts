@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Password sign-in — the optional second door.
 //
 // Unlike the development login next to it (lib/auth/dev-login.ts), this is NOT

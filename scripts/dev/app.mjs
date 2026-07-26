@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Start, stop, watch the dev server — the part that used to live as bash in the
 // Makefile and only ever worked on Linux (setsid, pgrep, ps -o pgid=, kill -PGID).
 //

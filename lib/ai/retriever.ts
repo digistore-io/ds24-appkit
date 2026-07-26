@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // How the handbook reaches the model — and the seam to change it later.
 //
 // The default hands over the WHOLE handbook, marked cacheable, on every

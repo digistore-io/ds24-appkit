@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Calls every page of the app once and reports which ones are broken. Catches
 // exactly what tests and `npm run build` do NOT catch: errors that only show up
 // when rendering with a real database and a real .env — the classic "Internal

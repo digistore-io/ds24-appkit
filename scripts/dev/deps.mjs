@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Are the installed dependencies still current?
 //
 // The rule comes from the Makefile this project used to have, where

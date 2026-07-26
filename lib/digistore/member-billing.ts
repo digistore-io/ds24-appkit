@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // The member's own billing view: their purchases, the invoices Digistore24
 // issued for each payment, and the DS24-hosted links to cancel a subscription
 // or update payment details.

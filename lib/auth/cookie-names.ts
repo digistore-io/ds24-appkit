@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Custom cookie names for local development.
 //
 // The problem: cookies know nothing about ports. If a second app from this

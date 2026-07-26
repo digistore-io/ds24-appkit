@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Picks the port that `node run.mjs start` will start the app on.
 //
 // If the wanted port is taken (another project, a second app), the next free

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // One adapter, three providers: OpenAI, Mistral and OpenRouter.
 //
 // All three accept a `POST /chat/completions` in OpenAI's shape and answer in

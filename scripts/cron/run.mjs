@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // The scheduled jobs, from the terminal.
 //
 //   node run.mjs cron              # run everything that is due, now

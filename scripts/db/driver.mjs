@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Which database this machine runs on locally: Docker, or one of our own.
 //
 // There are exactly two values:

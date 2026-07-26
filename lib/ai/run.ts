@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // The one entry point. Everything in this app that wants a model comes here.
 //
 //   const answer = await runTask("chat", { system, messages, memberId });

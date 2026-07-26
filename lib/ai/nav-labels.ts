@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // What the menu on the left is actually called — for the assistant.
 //
 // ── Why the model has to be told ───────────────────────────────────────────

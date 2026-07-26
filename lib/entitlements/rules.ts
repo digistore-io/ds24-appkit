@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // What a Digistore24 event does to a Grant.
 //
 // PURE — no database, no I/O. The lookups happen in lib/entitlements/manage.ts

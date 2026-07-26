@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Route protection in front of the app — up to Next.js 15 this file was called
 // `middleware.ts`; since 16 the convention is `proxy.ts`.
 //

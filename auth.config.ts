@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Slim auth configuration (NO database import, NO nodemailer!).
 // Used by proxy.ts (route protection) AND by the full auth.ts.
 //

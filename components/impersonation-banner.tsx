@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // "You are signed in as somebody else" — on every page, until it ends.
 //
 // ── Why it is in the ROOT layout ───────────────────────────────────────────

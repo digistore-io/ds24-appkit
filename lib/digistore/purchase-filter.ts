@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // What the Operator's purchases screen is looking at — as pure values.
 //
 // Story 3.7. The page lists EVERY purchase (paid, refunded, charged back,

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // The local Postgres without Docker (DB_DRIVER=local).
 //
 // Docker stays the documented way — it is the one that matches production, and

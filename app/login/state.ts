@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // The shape passed between the sign-in dialog and its server actions.
 //
 // It lives in a file of its own for a reason that costs an hour to rediscover:

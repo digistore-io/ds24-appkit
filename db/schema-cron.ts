@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // One row per scheduled job. The app's own memory of what it has run.
 //
 // ── Why a table rather than a timer and a hope ─────────────────────────────

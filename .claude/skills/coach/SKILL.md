@@ -2,6 +2,7 @@
 name: coach
 description: The guide through the project — works out where this app stands and which skill comes next, and routes a concrete problem to the place that solves it. Use this when the user asks "what is the next step?", "how do I solve XY?", "where am I?", "which skill do I need?", "I am stuck", or when they describe a symptom (an error page, a purchase that never arrived, the assistant answering "I do not know") without naming a skill.
 ---
+<!-- Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA — SPDX-License-Identifier: MIT -->
 
 # The coach — which step, which skill, which command
 
@@ -90,7 +91,11 @@ below.
 | "Claude should be able to use my app" | **`mcp-server`**, `node run.mjs mcp-check` |
 | Slow, timing out, will it hold under load | **`performance-gateway`** |
 | Is this safe? Is this route protected? Is there a secret in the code? | **`security-gateway`** |
-| Imprint, privacy policy, GDPR, "what does the app store about people?" | **`compliance-check`**; the inventory it reads from is `docs/data-protection.md` |
+| Imprint, privacy policy, GDPR, "what does the app store about people?" | **`compliance-check`**, `node run.mjs legal-check`; the inventory it reads from is `docs/data-protection.md` |
+| "Do I need a cookie banner?" | **`compliance-check`** (check `consent`). The shipped answer is **no** — this app sets no tracking cookie, and a banner without tracking is itself a defect under § 25 TDDDG |
+| "Does the AI Act apply to me?", "must my chatbot say it is a bot?", a letter about KI-Verordnung | **`compliance-check`** (check `ai`). Art. 50 has applied since 2 August 2026; the map is `docs/compliance.md` |
+| "Can my customers delete their account?", a subject access request, somebody wants their data | **`compliance-check`** (check `rights`). Both already exist: `/dashboard/account` for the member, `node run.mjs data-export --email …` for the operator |
+| A warning letter (Abmahnung), a data protection authority writes, "am I allowed to sell this yet?" | **`compliance-check`** — and read its STOP section: several of these are for a lawyer, not for an agent |
 | Which host, what does hosting cost, an account, a CLI, an API token | **`setup-hosting`**, `docs/DEPLOY.md` |
 | The whole launch: deploy, live products, IPN on the real domain, test purchase | **`go-live`** — it starts by handing the hosting to `setup-hosting` |
 | It runs locally but not at the host: `✗ Startup aborted`, "the environment is not ready" | almost always the missing mail transport — in STAGING/PROD it is mandatory (`lib/env-guard.ts`). `node run.mjs mail-setup`, then the values into the host's secrets |

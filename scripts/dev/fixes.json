@@ -1,0 +1,137 @@
+{
+  "_comment": [
+    "How a missing tool is installed on Linux, macOS and Windows. THE one table —",
+    "scripts/dev/doctor.mjs reads it, and nothing else may carry a copy.",
+    "",
+    "Why JSON and not a literal in doctor.mjs: on a machine with no Node, doctor",
+    "cannot run — and that is exactly the machine somebody needs the `node` entry",
+    "on. As data this file can be READ (the skill setup-machine does that in its",
+    "step 0) instead of executed, so there is still one table and not two.",
+    "",
+    "`fixes` is per platform: { command?, url?, admin?, gui?, restart?, note? }",
+    "  admin    needs sudo/Administrator — the agent cannot answer that prompt",
+    "  gui      an installer with a window — a person has to click",
+    "  restart  the machine has to be restarted afterwards",
+    "  note     an extra step that goes with it — always passed on",
+    "",
+    "`brew` is NOT a fourth platform. It is the better command for a Mac that",
+    "already has Homebrew, and doctor.mjs upgrades `darwin` to it at runtime when",
+    "`brew` answers — the same way it upgrades `linux` once it knows the package",
+    "manager. What stands under `darwin` is therefore the Homebrew-FREE way, on",
+    "purpose: Homebrew is a long install that wants sudo and, on Apple Silicon,",
+    "leaves its own PATH line to the user to run. Putting that in front of",
+    "somebody's first Node is how a Mac setup ends before it has started. A tool",
+    "missing from `brew` simply has no better answer there."
+  ],
+
+  "fixes": {
+    "node": {
+      "linux": {
+        "url": "https://nodejs.org",
+        "admin": true,
+        "note": "distribution packages are often older than 20"
+      },
+      "darwin": {
+        "url": "https://nodejs.org",
+        "gui": true,
+        "admin": true,
+        "note": "the macOS installer (.pkg) from that page — afterwards open a NEW terminal"
+      },
+      "win32": {
+        "command": "winget install OpenJS.NodeJS",
+        "admin": true,
+        "note": "afterwards open a NEW terminal — the PATH is only set there"
+      }
+    },
+    "git": {
+      "linux": { "url": "https://git-scm.com/downloads", "admin": true },
+      "darwin": {
+        "command": "xcode-select --install",
+        "gui": true,
+        "note": "this installs the Xcode Command Line Tools, not the full Xcode — a click in the window that opens, and git comes with them"
+      },
+      "win32": {
+        "command": "winget install Git.Git",
+        "note": "Claude Code needs it here anyway"
+      }
+    },
+    "docker": {
+      "linux": { "url": "https://docs.docker.com/engine/install/", "admin": true },
+      "darwin": {
+        "url": "https://www.docker.com/products/docker-desktop/",
+        "gui": true,
+        "note": "start Docker Desktop once afterwards"
+      },
+      "win32": {
+        "command": "winget install Docker.DockerDesktop",
+        "gui": true,
+        "restart": true,
+        "note": "uses WSL2"
+      }
+    },
+    "cloudflared": {
+      "linux": { "url": "https://pkg.cloudflare.com/", "admin": true },
+      "darwin": {
+        "url": "https://github.com/cloudflare/cloudflared/releases",
+        "gui": true,
+        "note": "the .pkg for your chip — arm64 for Apple Silicon, amd64 for Intel"
+      },
+      "win32": { "command": "winget install --id Cloudflare.cloudflared" }
+    },
+    "shell": {
+      "linux": { "note": "nothing to do — any shell works here" },
+      "darwin": { "note": "nothing to do — any shell works here" },
+      "win32": {
+        "note": "open Git Bash (it comes with Git for Windows) or a WSL2 shell, and run the commands there"
+      }
+    },
+
+    "railway": {
+      "linux": { "command": "npm install -g @railway/cli" },
+      "darwin": { "command": "npm install -g @railway/cli" },
+      "win32": { "command": "npm install -g @railway/cli" }
+    },
+    "flyctl": {
+      "linux": {
+        "url": "https://fly.io/docs/flyctl/install/",
+        "note": "the page names the command for your distribution"
+      },
+      "darwin": {
+        "url": "https://fly.io/docs/flyctl/install/",
+        "note": "the install script from that page"
+      },
+      "win32": {
+        "url": "https://fly.io/docs/flyctl/install/",
+        "note": "the PowerShell one-liner from that page"
+      }
+    },
+    "doctl": {
+      "linux": {
+        "command": "sudo snap install doctl",
+        "admin": true,
+        "note": "without snap: https://docs.digitalocean.com/reference/doctl/how-to/install/"
+      },
+      "darwin": {
+        "url": "https://docs.digitalocean.com/reference/doctl/how-to/install/",
+        "note": "download the archive and put doctl on the PATH"
+      },
+      "win32": {
+        "url": "https://docs.digitalocean.com/reference/doctl/how-to/install/",
+        "note": "download the archive and put doctl.exe on the PATH"
+      }
+    }
+  },
+
+  "brew": {
+    "node": { "command": "brew install node" },
+    "docker": {
+      "command": "brew install --cask docker",
+      "gui": true,
+      "note": "start Docker Desktop once afterwards"
+    },
+    "cloudflared": { "command": "brew install cloudflared" },
+    "railway": { "command": "brew install railway" },
+    "flyctl": { "command": "brew install flyctl" },
+    "doctl": { "command": "brew install doctl" }
+  }
+}

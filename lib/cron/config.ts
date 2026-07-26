@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // `config/cron.json`, read through one function.
 //
 // The same shape `lib/billing-mode.ts` and `lib/ai/chat-config.ts` use: a JSON

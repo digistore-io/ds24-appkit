@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // The system prompt, as five providers need to see it. Pure.
 //
 // Two providers take a list of blocks (Anthropic keeps them, so it can put a

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // The registry, and the contract every adapter satisfies.
 //
 // The contract test is the one that matters when a sixth provider is added:

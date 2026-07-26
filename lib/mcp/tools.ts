@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // What this app lets an AI client DO. The whole product surface of the MCP
 // server is this one list.
 //

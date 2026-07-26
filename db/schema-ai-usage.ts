@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // One row per model call. The table the AI-costs page is built from.
 //
 // ── What it is for ─────────────────────────────────────────────────────────

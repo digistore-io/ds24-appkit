@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // ESLint flat config.
 //
 // Since Next.js 16 there is no `next lint` any more — `npm run lint` calls

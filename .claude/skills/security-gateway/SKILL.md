@@ -2,6 +2,7 @@
 name: security-gateway
 description: The security check for this app. Scans it for holes — unprotected routes, access to other people's data (IDOR), secrets in the code, a bypassed IPN signature, an MCP tool that hands out too much, XSS, vulnerable packages, a misconfigured host — judges each finding by severity, fixes what has to be fixed and writes a report. Use it before the app processes real payments and customer data, after larger changes, and whenever somebody asks "is this safe?", "is this route protected?", "is there a secret in the code?".
 ---
+<!-- Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA — SPDX-License-Identifier: MIT -->
 
 # Security gateway — scan, judge, fix
 
@@ -124,8 +125,13 @@ Only the paths in `proxy.ts`'s `matcher` are guarded — today `/dashboard/:path
 neither list is public by accident, not by design.**
 
 Public on purpose, and this list is exhaustive: the home page, `/login`,
-`/plans`, `/optin/*`, `/account/confirm-email`, `/api/ipn`, `/api/mcp`,
-`/api/healthz`, `/api/readyz`, `/api/cron`.
+`/plans`, `/optin/*`, `/account/confirm-email`, the legal pages
+(`/impressum`, `/datenschutz`, and `/agb` / `/widerruf` where they exist),
+`/api/ipn`, `/api/mcp`, `/api/healthz`, `/api/readyz`, `/api/cron`.
+
+The legal pages are public **because they have to be** — § 5 DDG wants the
+Impressum easily reachable, and a privacy policy behind a sign-in cannot be read
+by the person deciding whether to sign in. Do not "fix" them into the matcher.
 
 So: list every route in `app/`, subtract the matcher, subtract that list. What
 is left is a finding — **HIGH**, and **CRITICAL** if it renders customer data.

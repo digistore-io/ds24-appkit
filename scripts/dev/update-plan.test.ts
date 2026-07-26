@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // The update decides what may be overwritten in somebody else's repo. Every one
 // of these cases is a way to get that wrong, and the expensive direction is
 // always the permissive one: a file wrongly left alone costs a manual copy, a

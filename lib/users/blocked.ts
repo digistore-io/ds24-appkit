@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Enforcement of the account block.
 //
 // A block that only stops the next sign-in is not a block: this app's sessions

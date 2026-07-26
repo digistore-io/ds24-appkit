@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 import { describe, it, expect } from "vitest";
 import { isLocalhostUrl, publicUrlFor } from "./public-url";
 import { DIGISTORE_REDIR_URL as DEFAULT_REDIR_URL } from "./config.mjs";

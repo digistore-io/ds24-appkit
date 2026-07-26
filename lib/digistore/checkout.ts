@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // From a registry entry to a working checkout link.
 //
 // This is the bridge between config/digistore-products.json (what you sell)

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // The app's key facts in one place.
 //
 // Change the name here — it appears in the sidebar, in the browser tab and on

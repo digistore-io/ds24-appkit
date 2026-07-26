@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Shared helpers for the user management scripts (plain Node ESM).
 //
 // Access to the same Postgres as the app — connection via DATABASE_URL

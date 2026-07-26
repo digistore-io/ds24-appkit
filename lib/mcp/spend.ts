@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Charging a Member for an MCP tool call.
 //
 // ── Why this is not `spendTokens` ──────────────────────────────────────────

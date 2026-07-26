@@ -1,3 +1,5 @@
+<!-- Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA — SPDX-License-Identifier: MIT -->
+
 # Entitlements: what a Member may use
 
 One question, one answer: **`lib/entitlements/manage.ts`**. Everything on this

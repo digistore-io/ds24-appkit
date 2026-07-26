@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Set up mail delivery for the sign-in — interactive.
 //
 // Asks for the credentials, writes them into .env (which is gitignored) and

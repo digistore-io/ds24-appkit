@@ -1,3 +1,5 @@
+<!-- Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA — SPDX-License-Identifier: MIT -->
+
 # The AI assistant
 
 An in-app chat that answers questions about **your** app out of a handbook you

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 import { describe, it, expect } from "vitest";
 import { MAX_EMAIL_LENGTH } from "./rules";
 
@@ -33,6 +36,7 @@ describe("normalizeEmail — length bound", () => {
 });
 import {
   canDeleteUser,
+  canDeleteOwnAccount,
   canChangeRole,
   canCreateUser,
   canBlockUser,
@@ -54,6 +58,38 @@ const blockedCustomer = {
   email: "blocked@example.com",
   blockedAt: new Date("2026-01-01"),
 };
+
+describe("canDeleteOwnAccount", () => {
+  // The Art. 17 self-service path. The neighbouring `canDeleteUser` refuses
+  // self-deletion outright; here it is the entire point, and mixing the two up
+  // is the mistake this pair of describes exists to prevent.
+  it("lets a customer delete themselves", () => {
+    expect(canDeleteOwnAccount(customer, 1)).toBeNull();
+  });
+
+  it("lets an admin delete themselves while another admin remains", () => {
+    expect(canDeleteOwnAccount(admin, 2)).toBeNull();
+  });
+
+  it("refuses the last admin", () => {
+    // Not for their sake — for the installation's. An app with no owner has no
+    // way back in and no support desk that could let anyone in. The refusal is
+    // temporary and in their own hands: promote somebody, then leave.
+    expect(canDeleteOwnAccount(admin, 1)).toBe("lastOwnerDelete");
+  });
+
+  it("does not refuse a customer just because one admin exists", () => {
+    // The owner count is about owners. A member is never the last one.
+    expect(canDeleteOwnAccount(customer, 1)).toBeNull();
+  });
+
+  it("is not canDeleteUser with the same arguments", () => {
+    // Belt and braces on the distinction: the admin-facing rule says no to
+    // exactly the case this one says yes to.
+    expect(canDeleteUser(customer, customer, 2)).not.toBeNull();
+    expect(canDeleteOwnAccount(customer, 2)).toBeNull();
+  });
+});
 
 describe("canDeleteUser", () => {
   it("lets an admin delete a customer", () => {

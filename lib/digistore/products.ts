@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Central product registry: ONE Digistore24 product per offering (subscription
 // plan or token package). The source of truth is the config file
 // `config/digistore-products.json`.

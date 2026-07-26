@@ -2,6 +2,7 @@
 name: go-live
 description: Brings the app online and proves that a purchase really unlocks access. Runs the pre-flight check, hands the hosting itself to setup-hosting (host, CLI, secrets, managed Postgres, migration hook, domain), then does the live part — Digistore products and approval, the IPN on the live domain, a smoke test, a test purchase and a re-check of security/performance against the live instance. Use this when the app is built, secured and scaled — before marketing.
 ---
+<!-- Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA — SPDX-License-Identifier: MIT -->
 
 # Go-Live — putting it online and verifying it
 
@@ -23,8 +24,16 @@ does it really sell once it is up.
   not exist there and nobody could sign in. `node run.mjs mail-setup` if it is
   missing. This is the single most common reason a first deploy fails.
 - **Migrations ready:** `drizzle/` up to date (`npm run db:generate` after schema changes).
-- **Legal pages there?** If `compliance-check` has not run, it belongs before
-  the launch, not after.
+- **Legally ready:** `node run.mjs legal-check`. It exits non-zero on the things
+  that must not meet a customer — an Impressum still carrying the shipped
+  placeholder (§ 5 DDG), a privacy policy that has not been written (Art. 13
+  GDPR), an assistant switched on without the AI notice (Art. 50 EU AI Act,
+  applicable since 2 August 2026). It also says whether the retention jobs have
+  actually run: *"last run: never"* means the retention period in your privacy
+  policy is not describing your app.
+  **Run it before the deploy, not after.** A placeholder Impressum on a live
+  domain is both a legal problem and the first thing a visitor reads. What fixes
+  it is the skill **`compliance-check`**.
 
 ## 2. Hosting → **`setup-hosting`**
 

@@ -1,3 +1,5 @@
+<!-- Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA — SPDX-License-Identifier: MIT -->
+
 # Scheduled jobs — things the app does without being asked
 
 Some work has no request behind it. Deleting data that has aged out, sending a

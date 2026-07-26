@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Delete IPN-log rows older than the retention window (default 60 days).
 //
 // The IPN log (ipn_events) keeps the full raw payload for diagnostics, which is

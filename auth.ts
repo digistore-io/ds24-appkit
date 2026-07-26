@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Full Auth.js setup (Node runtime) — with the database adapter.
 // Builds on the slim auth.config.ts and adds the Drizzle adapter (users,
 // OAuth accounts, email verification tokens) plus the email magic-link

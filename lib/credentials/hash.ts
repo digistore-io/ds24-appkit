@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Password hashing — the only file in this app that turns a password into
 // something storable, and the only one that reads it back.
 //

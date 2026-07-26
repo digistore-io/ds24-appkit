@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // `node run.mjs errors` is only worth having if it is trusted, and trust here
 // breaks in two directions. Miss a real error and the agent ships a broken page
 // believing the log was clean; flag the dev-login banner and the command cries

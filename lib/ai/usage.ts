@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Writing down what a model call consumed.
 //
 // ── The one rule ───────────────────────────────────────────────────────────

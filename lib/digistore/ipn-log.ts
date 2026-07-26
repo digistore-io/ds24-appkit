@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // The IPN log: record every incoming IPN at the edge, and read it back for the
 // Operator's "IPN-Log" tab (app/dashboard/admin/purchases).
 //

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Which Member does an incoming payment belong to?
 //
 // PURE — no database, no I/O. The lookups happen in lib/digistore/payment-event.ts

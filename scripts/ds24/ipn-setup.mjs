@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Set up/update the Digistore24 IPN connection (idempotent).
 //
 // Idempotency rests on a STABLE domain_id and on DELETE-THEN-CREATE: any

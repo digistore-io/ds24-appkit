@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 "use client";
 
 import { useEffect, useState } from "react";
@@ -14,8 +17,10 @@ import { Callout } from "@/components/ui/callout";
 // the order (lib/digistore/payment-event.ts). So on the first render the order
 // does not exist yet. Instead of telling the buyer to reload by hand, we poll:
 // router.refresh() re-runs the server component every few seconds. The moment
-// the IPN has landed and the order exists, the parent renders the consent form
-// instead of this component — it unmounts and the interval is cleared.
+// the IPN has landed and the order exists, the parent renders the way onward
+// instead of this component — it unmounts and the interval is cleared. (There
+// is no consent form here and never was: a purchase runs on Art. 6(1)(b), and
+// this page prompts for nothing. See `page.tsx`.)
 //
 // The poll is capped at maxWaitMs. Refreshing forever hides a genuinely stuck
 // purchase (a dead IPN endpoint — tunnel down, wrong URL registered) behind an

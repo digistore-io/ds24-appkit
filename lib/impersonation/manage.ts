@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // The database side of signing in as a user.
 //
 // The pure rules are in `lib/users/rules.ts` (`canImpersonate`,

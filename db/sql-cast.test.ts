@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // `sql<T>` is a promise TypeScript believes and nobody keeps.
 //
 // Drizzle converts a COLUMN reference: `grants.createdAt` runs through

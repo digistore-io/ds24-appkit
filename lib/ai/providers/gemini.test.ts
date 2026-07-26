@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // The four traps of Gemini's native API, each asserted.
 //
 // Every one of them fails silently or plausibly rather than loudly, which is

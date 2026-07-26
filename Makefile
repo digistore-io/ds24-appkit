@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+# SPDX-License-Identifier: MIT
+
 # An alias, nothing more.
 #
 # The commands of this app live in run.mjs, because that one runs on Linux,

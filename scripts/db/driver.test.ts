@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // The database driver decides itself — these are the cases it has to get right.
 //
 // Why this is worth a test file of its own: the decision is invisible. Every

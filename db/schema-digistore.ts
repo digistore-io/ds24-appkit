@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Digistore24-specific tables (kept domain-neutral).
 //
 // orders:           every order billed through Digistore24 plus its status
@@ -68,9 +71,20 @@ export const orders = pgTable("orders", {
   buyerLastName: text("buyer_last_name"),
   amount: numeric("amount", { precision: 12, scale: 2 }),
   currency: text("currency"),
-  // GDPR: is_gdpr_country=Y → consent required; set once the opt-in happened.
+  // Whether Digistore24 placed this buyer in a GDPR country (`is_gdpr_country`
+  // in the IPN body, Y/N, `null` when the field was absent). Written from the
+  // payload; nothing in the app decides anything on it today. It is worth
+  // keeping because it answers "was this person in the EEA at the time of the
+  // purchase" from the record itself rather than from a guess about the address.
+  //
+  // There used to be a `gdpr_consent_at` beside it, described as "set once the
+  // opt-in happened". Nothing ever set it: this template's thank-you page is a
+  // router and deliberately prompts for nothing (`app/optin/[orderId]/page.tsx`).
+  // A consent now belongs in `consent_records` (`db/schema-consent.ts`), which
+  // records WHICH purpose and WHICH text version was agreed to and can be
+  // withdrawn — none of which a lone timestamp on an order can express. Two
+  // stores for one question is how they end up disagreeing.
   isGdprCountry: boolean("is_gdpr_country"),
-  gdprConsentAt: timestamp("gdpr_consent_at"),
   // Digistore24-hosted management links from the IPN payload, shown to the
   // member on /dashboard/billing. Per-order (per-subscription) and stable-ish;
   // the latest non-empty value wins. NOT money and NOT an access decision —

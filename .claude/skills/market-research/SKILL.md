@@ -2,6 +2,7 @@
 name: market-research
 description: Start here if you do NOT yet have a clear SAAS idea (or want to sharpen it). Interviews you about expertise, interests and existing reach, suggests target audiences, researches their situation and challenges and derives from that a concrete SAAS product idea that can be sold through Digistore24. Leads into a product brief and hands over to build-app.
 ---
+<!-- Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA — SPDX-License-Identifier: MIT -->
 
 # From the idea to a product proposal (market research)
 

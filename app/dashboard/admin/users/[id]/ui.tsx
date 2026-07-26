@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 "use client";
 
 // Presentation for one Member's billing state. The page (page.tsx) does the

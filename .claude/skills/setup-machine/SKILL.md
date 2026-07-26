@@ -1,7 +1,9 @@
 ---
 name: setup-machine
-description: Gets this machine ready to develop the app — checks what is missing (Node, git, optionally Docker and cloudflared), installs it after asking, and prepares the project (.env, dependencies, database, migrations). Works the same on Linux, macOS and Windows. Use this on the first run in a fresh clone, whenever the session start reports `setup=blocked`, and whenever a command fails with something like "docker: not found", "npm not found", "the database does not answer" or "cannot connect".
+description: Gets this machine ready to develop the app — checks what is missing (Node, git, optionally Docker and cloudflared), installs it after asking, and prepares the project (.env, dependencies, database, migrations). Works the same on Linux, macOS and Windows. Use this on the first run in a fresh clone, whenever the session start reports `setup=blocked`, and whenever a command fails with something like "node: command not found", "docker: not found", "npm not found", "the database does not answer" or "cannot connect". Also use it when there is NO session greeting at all, or a startup hook error mentioning `node` — that is a machine without Node, and this skill installs it.
+requires: 0.2.0
 ---
+<!-- Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA — SPDX-License-Identifier: MIT -->
 
 # Getting this machine ready
 
@@ -24,10 +26,17 @@ node run.mjs doctor --json
 
 That is the **only** source of install commands. Never type one out of your own
 knowledge, never adapt one from another project, never pipe a script off the
-internet into a shell. `scripts/dev/doctor.mjs` holds the table for all three
-systems; this file deliberately holds none, so there is nothing here that can go
-out of date. If a fix is missing from the JSON, that is a bug in `doctor.mjs` —
-fix it there, do not work around it here.
+internet into a shell. `scripts/dev/fixes.json` holds the table for all three
+systems and `scripts/dev/doctor.mjs` reads it; this file deliberately holds
+none, so there is nothing here that can go out of date. If a fix is missing from
+the JSON, that is a bug in `fixes.json` — fix it there, do not work around it
+here.
+
+**There is exactly one exception, and it is step 0 below**: on a machine with no
+Node, `doctor` cannot run, because it is a Node program itself. Then you read
+`scripts/dev/fixes.json` with your file tool instead. That is the same table —
+you are still reading it rather than knowing it, which is the whole point of the
+rule.
 
 The JSON gives you, per check:
 
@@ -44,6 +53,37 @@ The JSON gives you, per check:
 | `fix.note` | an extra step that goes with it — pass it on, it is there for a reason |
 
 ## The walkthrough
+
+### 0. Is there a Node here at all?
+
+```bash
+node --version
+```
+
+An answer → skip straight to step 1, this step is not for you. **Most machines
+answer.**
+
+No answer — "command not found", "not recognized" — then this is the one case
+the rest of this file cannot handle, because every command in it starts with
+`node`. It is also the normal state of a machine somebody just installed Claude
+Code and git on, so treat it as a starting point and not as a fault:
+
+1. Read `scripts/dev/fixes.json` with your file tool.
+2. Take `fixes` → `node` → the entry for this system (`linux`, `darwin` for
+   macOS, `win32` for Windows).
+3. Hand it over by the flags exactly as in step 3 below. On all three systems
+   this one is `admin` or `gui`, so **the user installs it, not you** — say what
+   it is, why it is needed, and wait.
+4. `node --version` again. Then start at step 1.
+
+Two things worth saying out loud while you wait, because both cost people an
+hour otherwise:
+
+- **A new terminal is needed afterwards.** The installer puts Node on the PATH,
+  and a shell that was already open does not have it. In Claude Code that means
+  the session has to be restarted.
+- On **macOS** the `.pkg` from nodejs.org is the whole job — there is no
+  Homebrew to install first, and you should not suggest one.
 
 ### 1. Look
 
@@ -141,18 +181,28 @@ what the user originally wanted.
   is the single writer; hand-editing loses comments and duplicates keys.
 - **Never install anything the JSON did not name.** No global npm packages, no
   version managers, no "while we're at it". This is somebody's machine.
+- **Never install a package manager to install something else with.** On macOS
+  that is Homebrew and the temptation is real, because most instructions on the
+  internet start there. The JSON already names a way that does not need it, and
+  where Homebrew *is* present the JSON hands you the Homebrew command by itself
+  — so there is never a reason to add one. Installing it uninvited costs the
+  user a long download, a password prompt and a PATH they have to fix by hand.
 - **Never change `DATABASE_URL`, `DB_PORT` or `APP_URL` to make something fit.**
   Occupied ports resolve themselves (`node run.mjs start` steps to the next free
   one and writes it down). A hand-picked port that disagrees with the running
   database is the one failure mode nobody finds afterwards.
 - **Never claim it works without having run `smoke`.**
 
-## Two things that surprise people
+## Three things that surprise people
 
-- **Node.js can only ever be reported as "too old", never as "missing".** If
-  Node were absent, `run.mjs` could not have run at all — and Claude Code needs
-  it anyway. So on a machine that got this far, the realistic gaps are git,
-  Docker and cloudflared.
+- **`doctor` can only ever report Node as "too old", never as "missing".** If
+  Node were absent, `run.mjs` could not have run at all — the check would not
+  exist to fail. That is not a gap in the report, it is the shape of the
+  problem, and step 0 is where it is handled.
+- **Claude Code does not need Node, so a machine can very well have one and not
+  the other.** It ships as its own program. What the *app* needs is Node, and
+  the normal first run is exactly this: Claude Code and git installed by hand,
+  everything after that installed here.
 - **On Windows the commands belong in Git Bash or WSL2**, not in PowerShell or
   cmd. The `shell` check says so when it applies. Git Bash comes with Git for
   Windows, which Claude Code needs there regardless.

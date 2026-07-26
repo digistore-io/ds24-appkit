@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Usage-based and subscription billing through Digistore24, beyond
 // createBuyUrl:
 //

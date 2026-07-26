@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Role-based access control.
 //
 // The role lives in the session (see auth.config.ts → session.user.role).

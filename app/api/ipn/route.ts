@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Digistore24 IPN webhook: POST /api/ipn
 //
 // Single-operator model: there is exactly one Digistore24 account per

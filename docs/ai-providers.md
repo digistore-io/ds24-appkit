@@ -1,3 +1,5 @@
+<!-- Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA — SPDX-License-Identifier: MIT -->
+
 # The AI layer — one way to call a model, five companies behind it
 
 Everything in this app that talks to a language model goes through one call, and

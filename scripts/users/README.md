@@ -1,3 +1,5 @@
+<!-- Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA — SPDX-License-Identifier: MIT -->
+
 # Users & roles — CLI
 
 Small, **idempotent** scripts for creating app users and assigning roles.

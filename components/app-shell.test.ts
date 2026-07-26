@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // The user menu, asserted on the source.
 //
 // Nothing here can be called: `app-shell.tsx` is a client component and this

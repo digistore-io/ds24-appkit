@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+# SPDX-License-Identifier: MIT
+
 # gitleaks — configuration for secret scans.
 #
 # The default rules stay fully active; all that is here is one single,

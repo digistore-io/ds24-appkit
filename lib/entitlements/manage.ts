@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // The entitlement layer — the ONE call an app makes to ask what a Member may
 // use.
 //

@@ -1,3 +1,5 @@
+<!-- Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA — SPDX-License-Identifier: MIT -->
+
 # Deployment — putting the app on a server
 
 This is the reference. The guided way through it is the skill **`setup-hosting`**

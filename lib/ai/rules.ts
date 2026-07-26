@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Chat rules — deliberately PURE functions, no database, no API client.
 //
 // Why they are separate: every one of these decisions is made on an endpoint a

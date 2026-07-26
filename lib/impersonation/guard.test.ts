@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // The invariants of signing in as a user, asserted on the SOURCE TEXT.
 //
 // Three of them, and each one guards a change that would look entirely

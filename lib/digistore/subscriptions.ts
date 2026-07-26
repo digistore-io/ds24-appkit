@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // The Member's own view of their subscription mirror.
 //
 // Read-only, and DISPLAY ONLY. Nothing here decides what anybody may use —

@@ -2,6 +2,7 @@
 name: guardrails
 description: Security and due-diligence rules for this Digistore SAAS. Read this before you change anything around money/billing, secrets/API keys, personal customer data (GDPR) or external systems. Names the stop criteria at which you should involve a human.
 ---
+<!-- Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA — SPDX-License-Identifier: MIT -->
 
 # Guardrails — before something goes wrong
 
@@ -122,10 +123,18 @@ Server Action, and both refuse without a written reason.
 
 ## Customer data & GDPR
 
-- Only collect what is needed. Record the consent via the opt-in page
-  (`orders.gdprConsentAt`), mind the `is_gdpr_country` flag.
+- Only collect what is needed.
+- **A purchase needs no consent, and asking for one is the mistake here.** It
+  runs on Art. 6(1)(b) — performance of a contract. The thank-you page
+  deliberately prompts for nothing. What *does* need consent is anything on top:
+  tracking that touches the device (§ 25 TDDDG), a marketing mail (§ 7 UWG).
+  Those go through `lib/consent/`, which records the purpose and the version of
+  the text that was agreed to, and can be withdrawn again — see
+  `docs/compliance.md`. Never invent a second consent store beside it.
+- `orders.isGdprCountry` says whether Digistore24 placed the buyer in the EEA.
+  It is a fact from the payload, not a permission.
 - Do not pass buyer data on to third parties/external services without a clear
-  purpose and consent.
+  purpose and a legal basis.
 
 ## Signing in as a user
 

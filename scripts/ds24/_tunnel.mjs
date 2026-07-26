@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // State of the local IPN tunnel — shared by `tunnel.mjs` (which manages it) and
 // `ipn-setup.mjs` (which wants to know whether one is running).
 //
@@ -26,6 +29,7 @@
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { FIXES, fixFor, fixLine } from "../dev/doctor.mjs";
 
 export const DEV_DIR = ".dev";
 export const URL_FILE = join(DEV_DIR, "tunnel.url");
@@ -110,12 +114,16 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const TUNNEL_RE = /https:\/\/[a-z0-9-]+\.trycloudflare\.com/;
 
+// Built from the table rather than written out here. This message used to carry
+// its own list of install commands, one per system — a second copy that nobody
+// maintained, on systems nobody here runs. `scripts/dev/fixes.json` is the one
+// place; see the header of `scripts/dev/doctor.mjs`.
+//
+// Only the line for THIS machine is printed: whoever reads this is standing on
+// one of the three systems, and the other two are noise in front of the answer.
 export const CLOUDFLARED_MISSING = `cloudflared is not installed. Installation (one-time):
 
-  macOS:         brew install cloudflared
-  Linux (deb):   https://pkg.cloudflare.com/  (cloudflared package)
-  Windows:       winget install --id Cloudflare.cloudflared
-  Direct binary: https://github.com/cloudflare/cloudflared/releases`;
+  ${fixLine(fixFor({ fix: FIXES.cloudflared }))}`;
 
 /** The port `node run.mjs start` settled on — it moves out of the way of busy ports. */
 export function appPort(argPort) {

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { ds24ApiKey, ds24IpnPassphrase } from "./settings";
 

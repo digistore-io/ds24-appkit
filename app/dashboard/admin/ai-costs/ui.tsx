@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // The KI-Kosten page, rendered.
 //
 // Server components throughout — there is nothing interactive here. Every

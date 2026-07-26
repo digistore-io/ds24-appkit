@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Diagnose a failed IPN signature from the stored payload.
 //
 // The IPN log (app/dashboard/admin/purchases → IPN-Log) keeps the full raw body

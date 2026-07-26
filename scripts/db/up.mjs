@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Starts the local Postgres (docker compose) — with a safety net.
 //
 // Why this module exists: if the database port is already taken by ANOTHER

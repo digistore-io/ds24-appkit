@@ -563,7 +563,9 @@
     "providerRefused": "Der KI-Anbieter hat die Anfrage gerade abgelehnt (überlastet oder Limit erreicht). Bitte in ein paar Minuten noch einmal versuchen.",
     "providerUnreachable": "Der KI-Anbieter war nicht erreichbar. Bitte später noch einmal versuchen.",
     "requestTooLarge": "Die Anfrage ist zu groß für dieses Modell.",
-    "providerFailed": "Die KI-Anfrage ist fehlgeschlagen. Details stehen im Log: node run.mjs logs"
+    "providerFailed": "Die KI-Anfrage ist fehlgeschlagen. Details stehen im Log: node run.mjs logs",
+    "unknownPurpose": "Diese Einwilligung gibt es in dieser App nicht (mehr).",
+    "noPurposes": "Diese App fragt um keine Einwilligung."
   },
   "confirmEmail": {
     "title": "E-Mail-Adresse bestätigen",
@@ -720,5 +722,62 @@
     "emptyBody": "Sobald ein Admin sich aus der Benutzerliste heraus als Kunde anmeldet, steht es hier.",
     "hint": "Automatisch geschlossene Zeilen nennen das Ende der erlaubten Zeit, nicht dass der Admin bis dahin da war. Aufbewahrung: 12 Monate.",
     "minutes": "{count, plural, one {# Minute} other {# Minuten}}"
+  },
+  "consent": {
+    "title": "Einwilligungen",
+    "description": "Wozu du Ja oder Nein gesagt hast. Du kannst jede Entscheidung jederzeit ändern — ein Widerruf ist genauso einfach wie die Zustimmung.",
+    "none": "Diese App fragt dich um keine Einwilligung. Was sie tut, braucht keine: der Kauf läuft über den Vertrag, und gesetzt werden nur die Cookies, die die App zum Funktionieren braucht oder die du selbst umgeschaltet hast.",
+    "accept": "Zustimmen",
+    "decline": "Ablehnen",
+    "remaining": "Noch {count} Fragen",
+    "withdrawHint": "Du kannst das später jederzeit unter „Konto“ ändern.",
+    "recordedGranted": "Zustimmung gespeichert.",
+    "recordedRefused": "Ablehnung gespeichert.",
+    "stateGranted": "Zugestimmt",
+    "stateRefused": "Abgelehnt",
+    "stateUnasked": "Noch nicht gefragt",
+    "stateStale": "Text hat sich geändert",
+    "staleHint": "Der Text, dem du zugestimmt hast, wurde geändert. Bis du neu entscheidest, gilt keine Zustimmung.",
+    "answeredAt": "am {date}",
+    "grant": "Zustimmen",
+    "withdraw": "Widerrufen"
+  },
+  "privacy": {
+    "exportTitle": "Meine Daten herunterladen",
+    "exportBody": "Eine Kopie von allem, was diese App über dich gespeichert hat — als JSON-Datei, die du auch woanders einlesen kannst.",
+    "exportCta": "Daten herunterladen",
+    "exportHint": "Enthält dein Konto, deine Käufe, dein Guthaben mit allen Buchungen, deine Chatverläufe und jeden Zugriff eines Betreibers auf dein Konto. Nicht enthalten sind dein Kennwort (es ist nicht rücklesbar) und die Rohdaten unseres Zahlungsanbieters, weil darin Angaben zu anderen Personen stehen können.",
+    "deleteTitle": "Konto löschen",
+    "deleteBody": "Du kannst dein Konto jederzeit selbst löschen. Ein Teil deiner Daten muss aus gesetzlichen Gründen erhalten bleiben — was genau, steht in der Rückfrage.",
+    "deleteCta": "Konto löschen",
+    "deleteConfirmTitle": "Konto endgültig löschen?",
+    "deleteConfirmBody": "Das lässt sich nicht rückgängig machen. Du wirst sofort abgemeldet.",
+    "deleteGoesTitle": "Das wird gelöscht",
+    "deleteGoesBody": "Dein Konto und dein Zugang, deine Chatverläufe, deine API-Schlüssel, deine freigeschalteten Tarife, offene Adressänderungen und deine Einwilligungen.",
+    "deleteStaysTitle": "Das bleibt bestehen",
+    "deleteStaysBody": "Deine Bestellungen und Rechnungen. Sie sind Buchungsbelege, die wir gesetzlich aufbewahren müssen (§ 147 AO, § 257 HGB) — die DSGVO nimmt genau diese vom Löschanspruch aus (Art. 17 Abs. 3 lit. b). Die Verknüpfung zu deinem Konto wird entfernt.",
+    "deleteSubscriptionTitle": "Du hast noch einen laufenden Tarif",
+    "deleteSubscriptionBody": "Das Löschen des Kontos kündigt dein Abo NICHT. Die Abrechnung läuft bei Digistore24 weiter, bis du sie dort beendest — kündige zuerst dort, sonst zahlst du für einen Zugang, den du nicht mehr hast.",
+    "deleteLastOwnerTitle": "Du bist der einzige Administrator",
+    "deleteLastOwnerBody": "Diese App hätte danach niemanden mehr, der sie verwalten kann — und niemanden, der dich wieder hereinlassen könnte. Mache zuerst eine andere Person zum Administrator, danach kannst du dein Konto löschen.",
+    "deleteConfirmCta": "Ja, Konto endgültig löschen"
+  },
+  "legal": {
+    "navLabel": "Rechtliches",
+    "placeholderTitle": "Diese Seite ist noch nicht ausgefüllt",
+    "placeholderBody": "Der Text unten ist der ausgelieferte Platzhalter, keine gültige Erklärung. Starte den Skill compliance-check, um ihn zu ersetzen.",
+    "otherLanguage": "Diese Seite liegt noch nicht in deiner Sprache vor und wird in der verfügbaren Fassung angezeigt.",
+    "impressum": {
+      "title": "Impressum"
+    },
+    "datenschutz": {
+      "title": "Datenschutzerklärung"
+    },
+    "agb": {
+      "title": "AGB"
+    },
+    "widerruf": {
+      "title": "Widerrufsbelehrung"
+    }
   }
 }

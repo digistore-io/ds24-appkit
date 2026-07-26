@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // The MCP server's decisions, as pure functions.
 //
 // Everything here is testable without a database and without a request, which

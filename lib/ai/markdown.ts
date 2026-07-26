@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // The little bit of Markdown a language model actually writes — and nothing else.
 //
 // ── Why this exists ────────────────────────────────────────────────────────

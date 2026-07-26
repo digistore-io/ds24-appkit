@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // "Is there anything newer for this app?" — asked once a day, by the greeting.
 //
 // This is the half of the update mechanism that works without anybody knowing it

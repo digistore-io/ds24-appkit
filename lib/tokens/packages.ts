@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Token packages (prepaid credit) — derived from the central product registry
 // (`config/digistore-products.json`, kind = "token"). One package = one DS24
 // product; the `productId` comes from the registry (via

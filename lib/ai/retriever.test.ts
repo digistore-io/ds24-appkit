@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // The handbook, as the model receives it.
 //
 // The fences are a structured container around text somebody else wrote, and

@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Creates an app user or sets their role (idempotent, keyed by email).
 //
 // Purpose: the operator needs a sign-in with an elevated role ("owner" = admin)

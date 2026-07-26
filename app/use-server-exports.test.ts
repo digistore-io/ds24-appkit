@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // What a `"use server"` file is allowed to export.
 //
 // The rule is Next's, not ours: **a `"use server"` file may export async

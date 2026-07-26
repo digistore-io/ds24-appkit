@@ -1,3 +1,5 @@
+<!-- Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA — SPDX-License-Identifier: MIT -->
+
 # What this app stores about people
 
 **This is not legal advice.** It is a factual inventory, written so that whoever
@@ -39,7 +41,7 @@ Two things about it worth saying out loud in a privacy policy:
 
 | Where | What |
 |---|---|
-| `orders` | buyer email, first and last name, amounts, currency, Digistore24 order/purchase ids, status, `gdpr_consent_at`, `is_gdpr_country`, and the member it belongs to once attributed |
+| `orders` | buyer email, first and last name, amounts, currency, Digistore24 order/purchase ids, status, `is_gdpr_country`, and the member it belongs to once attributed |
 | `subscriptions`, `invoices` | billing state and Digistore24-hosted invoice links |
 | `token_accounts`, `token_ledger` | prepaid balance and every movement of it |
 | `grants` | which plan a member holds, and where it came from |
@@ -95,7 +97,7 @@ Digistore24, whose role depends on your contract with them.
 | **Digistore24** | Everything about a purchase. Where they act as **reseller**, they are the buyer's contractual partner and a controller in their own right for parts of it — check your contract, it changes what your policy has to say. |
 | **The mail provider** (Postmark or your SMTP host) | Recipient address and the content of every sign-in link, confirmation link and credential notice. |
 | **The host** (Railway, Render, Fly, …) | Everything, by virtue of running the database and the app. |
-| **Anthropic** — only with the AI assistant switched on | What a member types into the chat, plus the handbook. No name, address, balance or purchase. See §8. |
+| **An AI company** — only with the AI assistant switched on | What a member types into the chat, plus the handbook. No name, address, balance or purchase. **Which company it is, is the Operator's choice** (`config/ai-models.json`, five candidates, shipped as `"auto"` = whichever key is in the `.env`) — so this row cannot name one for you, and a privacy policy that guesses is wrong for most installations. `node run.mjs ai-check` says which it is. See §8. |
 
 No analytics, no tracking pixels, no advertising SDKs ship with this template.
 **If you add none, you need no cookie banner** — the only cookies set are the
@@ -125,9 +127,22 @@ What genuinely remains open, and what an operator should decide with advice:
    `buyer_last_name` come from Digistore24 and the app never uses them for
    anything. Data minimisation asks why they are stored — a fair answer may be
    "the invoice needs them", but it should be an answer, not an accident.
-3. **Deletion.** There is no deletion function beyond deleting a user account,
-   which cascades to sessions but deliberately **not** to orders (see above).
-   Answering an *access* request is solved — see §7.
+3. **Deletion is solved for the account, not for the aftermath.** A member
+   deletes their own from `/dashboard/account` (Art. 17, no support ticket
+   needed), and an Operator can delete one from the user list. Both cascade to
+   sessions, chat transcripts, MCP keys, grants, pending address changes,
+   consent records and impersonation rows — and both deliberately leave
+   `orders`, `subscriptions`, `token_ledger` and `ai_usage` standing with the
+   member link set to `null`, for the reason above. The dialog names both halves
+   before the button, because "delete my account" reads as "delete everything"
+   and here it is not.
+
+   The refusal worth knowing: the **last remaining owner** cannot delete
+   themselves. Not a GDPR problem — it is temporary and in their own hands
+   (promote somebody, then leave) — but an app with no admin has no way back in.
+
+   What is still open is the same thing as point 1: nothing deletes an order
+   once its retention period has actually run out.
 
 Everything else has a shape already: `ipn_events` 60 days, `email_changes` 24
 hours, IP addresses fifteen minutes, sessions until they expire, and
@@ -138,7 +153,17 @@ hours, IP addresses fifteen minutes, sessions until they expire, and
 
 Somebody writes and asks what you hold about them. You have **one month**
 (GDPR Art. 15; Art. 20 adds the right to get it in a machine-readable form).
-One command produces it:
+
+**Most of the time nobody writes, because they can help themselves.** A signed-in
+member downloads their own copy from `/dashboard/account` — the same data, minus
+the raw webhook payloads (see the review warnings below: those can carry a third
+party's details, and a self-service download has nobody in between to redact
+them, which Art. 15(4) cares about). The two exports are held together by
+`lib/privacy/export.test.ts`, so adding a table to one and forgetting the other
+fails the build.
+
+The command below is for the rest: somebody who never had an account, somebody
+who asks by email, and the case where you need the payloads too.
 
 ```bash
 node run.mjs data-export --email kunde@example.de
@@ -185,9 +210,10 @@ path, so it needs a paragraph in your privacy policy of its own.**
 |---|---|
 | `chat_messages` | every question a member typed and every answer she gave, with the member id and a timestamp |
 
-**What leaves the app, and what does not.** Each question is sent to Anthropic
-together with the previous few turns of the same conversation and the handbook
-from `content/knowledge/`. Deliberately **not** sent: name, email address,
+**What leaves the app, and what does not.** Each question is sent to the
+provider bound to the `chat` task together with the previous few turns of the
+same conversation and the handbook from `content/knowledge/`. Deliberately
+**not** sent: name, email address,
 balance, orders, plans, role — nothing about the person. That is why the
 assistant is told she cannot see the account (`lib/ai/prompt.ts`), and it is
 also the answer when a customer asks whether "the AI can see my data". It cannot.
@@ -203,11 +229,15 @@ that must be kept). There is no automatic pruning; if you want one, it belongs
 next to the IPN-log prune (`node run.mjs db-prune-ipn`) and is a decision to
 make deliberately rather than to inherit.
 
-**Anthropic's own terms.** API traffic is not used to train models, and the
-retention that applies to it is set by your agreement with Anthropic — read it,
-and note that Anthropic is in the USA, so the transfer needs the usual basis.
-You need a data processing agreement with them exactly as with the mail
-provider.
+**That company's own terms are yours to read.** All five candidates state that
+API traffic is not used to train models, but the retention that applies to it is
+set by *your* agreement with *them* — and four of the five (OpenAI, Anthropic,
+Gemini, OpenRouter) are in the USA, so the transfer needs the usual basis
+(standard contractual clauses, or the EU-US Data Privacy Framework where the
+company is certified). Mistral is in France, which is the one case where no
+third-country transfer arises at all. You need a data processing agreement with
+whichever one you use, exactly as with the mail provider — `avv-register.md`
+under `docs/compliance/` is where `compliance-check` writes the list down.
 
 **Switching it off removes all of it.** An app that leaves `"enabled": false`
 sends nothing, stores nothing and needs none of the above in its policy.
@@ -361,7 +391,48 @@ with more than one admin, the generic answer is no answer.
 the server action refuses. The record of sessions that already happened stays
 readable, which is the point.
 
-## 13. What this app does not do
+## 13. Consent records
+
+`consent_records` — what a member agreed to, which wording they read, and when.
+**Empty in an app that declares no purposes in `config/consent.json`, which is
+what ships**, because this app needs consent from nobody: a purchase runs on
+Art. 6(1)(b) and the three cookies it sets are strictly necessary or set by the
+user's own click (§5). The table exists for the day the app grows something that
+does need one — a marketing mail, an analytics tag.
+
+| Column | What it holds |
+| --- | --- |
+| `purpose` | which question, as declared in `config/consent.json` |
+| `granted` | `true` = agreed, `false` = refused **or** withdrawn |
+| `text_version` | which version of the wording they read |
+| `locale` | which language they read it in |
+| `created_at` | when |
+
+**It is append-only.** A withdrawal is a NEW row, never an edit of the old one —
+Art. 7(1) asks you to be able to *demonstrate* that consent was given, and a row
+you overwrote demonstrates nothing. So the current answer for a purpose is
+simply its newest row, and refusals are kept alongside the agreements: a refusal
+is the evidence that "no" was honoured, and it is what stops the dialog asking
+again tomorrow.
+
+**`text_version` is why a boolean was not enough.** Somebody who agreed to *"we
+mail you when your invoice is ready"* has not agreed to *"we mail you offers
+from our partners"*. Bump the version when you edit the sentence and every
+consent given to the old one correctly counts as unasked again.
+
+**No IP address, deliberately.** Consent logs in the wild routinely store one
+"as proof"; it proves very little, this app stores none anywhere (§4), and
+Art. 7(1) does not ask for one. Adding it would introduce a new category of
+personal data in the name of data protection.
+
+**Retention:** goes with the account (`on delete cascade`), like the chat
+transcripts and unlike the orders. Once the person is gone, so is the processing
+their consent permitted, and keeping the record would be keeping personal data
+for its own sake.
+
+It appears in a subject access request as `consents[]` — in both exports.
+
+## 14. What this app does not do
 
 Worth stating, because a privacy policy that claims less is easier to keep true:
 

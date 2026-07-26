@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 import { getTranslations } from "next-intl/server";
 
 import { PageHeader } from "@/components/page-header";

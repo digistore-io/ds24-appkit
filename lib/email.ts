@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Email delivery for the magic-link sign-in. Two transports, chosen by env:
 //   1) Postmark  — POSTMARK_SERVER_TOKEN + POSTMARK_SENDER (verified sender)
 //   2) SMTP      — SMTP_HOST/PORT/USER/PASSWORD (+ optional SMTP_SECURE, SMTP_FROM)

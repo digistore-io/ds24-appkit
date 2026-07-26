@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // The record of an Operator having signed in as one of their customers.
 //
 // One row per impersonation session: who, whom, from when, until when. It is

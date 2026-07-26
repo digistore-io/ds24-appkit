@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Entitlements — the app's own answer to "may this person use this".
 //
 // Deliberately NOT in schema-digistore.ts. That file is the Digistore24

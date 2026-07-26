@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // May an Operator sign in as one of their customers at all?
 //
 // One switch, a property of the PRODUCT — the same answer in DEV, STAGING and

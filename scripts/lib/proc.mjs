@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Starting other programs — the one place that knows the Windows quirks.
 //
 // Two rules, and they are the whole reason this file exists (CLAUDE.md →

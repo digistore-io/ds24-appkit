@@ -1,3 +1,5 @@
+<!-- Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA — SPDX-License-Identifier: MIT -->
+
 # Database & migrations
 
 The app uses **Postgres** with **Drizzle ORM**. The schema lives in

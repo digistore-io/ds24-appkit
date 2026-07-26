@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Digistore24 resellers (= marketplace/siteowner IDs for the product approval).
 //
 // The IDs are stable (source: https://www.digistore24.com/support/resellers.json)

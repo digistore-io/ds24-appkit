@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // The wire format: JSON-RPC 2.0 as the Model Context Protocol uses it.
 //
 // Pure. Nothing here reads a database, a session or a request — it turns bytes

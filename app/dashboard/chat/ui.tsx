@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 "use client";
 
 // The chat window.
@@ -193,6 +196,27 @@ export function ChatWindow({
 
   const conversation = (
     <div className="space-y-4">
+          {/* THE AI DISCLOSURE — Article 50(1) EU AI Act, applicable since
+              2 August 2026. This is not a UX nicety and it is not a disclaimer
+              about accuracy; it is the legally required notice that the person
+              is talking to a machine, and it has to be given "at the latest at
+              the time of the first interaction".
+
+              That is why it sits ABOVE the transcript rather than under the
+              input box where it used to be: below the fold of a short panel is
+              not "at the first interaction". It renders in BOTH variants
+              because it is outside the `panel ?` branch below — keep it that
+              way.
+
+              Do not reword it into something friendlier. `lib/ai/disclosure.test.ts`
+              fails the build if either language stops naming the assistant as an
+              AI, and `docs/compliance.md` says why. An assistant with a human
+              name and a face is exactly the case the law has in mind: nothing
+              about her is obviously a machine. */}
+          <p className="text-muted-foreground border-b pb-3 text-xs">
+            {t("disclaimer", { name: assistantName })}
+          </p>
+
           <div
             className={
               panel
@@ -298,11 +322,9 @@ export function ChatWindow({
         </Card>
       )}
 
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-muted-foreground text-xs">
-          {t("disclaimer", { name: assistantName })}
-        </p>
-
+      {/* The disclosure used to sit here. It is now the first line of
+          `conversation` above — see the note there before moving it back. */}
+      <div className="flex flex-wrap items-center justify-end gap-2">
         {messages.length > 0 && (
           <AlertDialog>
             <AlertDialogTrigger asChild>

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // What may an update touch, and what must it leave alone?
 //
 // This app is a COPY of a template that keeps being worked on. The code is the

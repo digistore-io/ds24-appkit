@@ -2,6 +2,7 @@
 name: go-to-market
 description: Advises the user on bringing their finished SAAS product to market. Works out positioning and price, picks channels that fit the reach they already have (including Digistore affiliates), creates a simple launch plan and delivers ready-made content — landing page copy, an e-mail sequence, social posts and video scripts (hook → problem → solution → CTA). Use this when the app is done and is meant to be sold.
 ---
+<!-- Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA — SPDX-License-Identifier: MIT -->
 
 # From product to market (go-to-market)
 

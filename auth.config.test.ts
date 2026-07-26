@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // The cookie names from lib/auth/cookie-names.ts only help if they actually
 // reach Auth.js. They did not for a long time: `devCookies(...)` was computed
 // in auth.config.ts and then never handed to the exported config — so locally

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // User management — database layer.
 //
 // Every writing function checks the rules from ./rules.ts FIRST and throws a
@@ -11,11 +14,13 @@
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { eq, count, asc } from "drizzle-orm";
+import { requireActiveUser } from "@/lib/authz";
 import type { Role } from "@/lib/roles";
 import {
   canCreateUser,
   canChangeRole,
   canDeleteUser,
+  canDeleteOwnAccount,
   canBlockUser,
   canChangeEmail,
   canSendLoginLink,
@@ -207,6 +212,46 @@ export async function deleteUser(actor: Actor, targetId: string): Promise<void> 
   const denial = canDeleteUser(actor, target, await countOwners());
   if (denial) throw new UserError(denial);
   await db.delete(users).where(eq(users.id, targetId));
+}
+
+/**
+ * Deletes the SIGNED-IN member's own account — the Art. 17 self-service path.
+ *
+ * ── It takes no id, and must never start taking one ───────────────────────
+ * The account deleted is always the session's own, the same guarantee
+ * `spendTokens()` gives. A Server Action is an HTTP endpoint of its own, so an
+ * id arriving in a `FormData` would let anybody delete anybody — the most
+ * destructive IDOR this app could have, and an irreversible one. That is also
+ * why this does not simply call `deleteUser(actor, actorId)`: that function
+ * refuses self-deletion by design, and "fixing" it to allow the case would
+ * remove the guard that stops an Operator wiping themselves off their own user
+ * list.
+ *
+ * ── What survives, and why the caller has to say so ───────────────────────
+ * `db/schema*.ts` decides this, not this function. Going with the account
+ * (`cascade`): sessions, OAuth links, chat transcripts, MCP keys, grants,
+ * pending address changes, consent records, and the impersonation rows that
+ * name this member. Staying with the member link set to `null`: `orders`,
+ * `subscriptions`, `token_ledger`, `ai_usage` — accounting records that
+ * § 147 AO and § 257 HGB require to be kept and that Art. 17(3)(b) exempts from
+ * erasure while that obligation runs.
+ *
+ * **Deleting them on request would be the violation, not the remedy.** The
+ * dialog has to name this before the button is pressed; a person who believed
+ * "delete" meant "everything" was not informed.
+ */
+export async function deleteOwnAccount(): Promise<void> {
+  const session = await requireActiveUser();
+
+  const actor: Actor = {
+    id: session.user.id as string,
+    role: session.user.role as string,
+  };
+
+  const denial = canDeleteOwnAccount(actor, await countOwners());
+  if (denial) throw new UserError(denial);
+
+  await db.delete(users).where(eq(users.id, actor.id));
 }
 
 /**

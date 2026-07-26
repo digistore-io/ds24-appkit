@@ -1,7 +1,10 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // What this machine needs, what it has, and what to do about the difference.
 //
-// This file is the ONE place that knows how a missing tool is installed on
-// Linux, macOS and Windows. Everything else reads it:
+// The install commands themselves live next door in `fixes.json`. This file is
+// what reads them, and everything else reads this file:
 //
 //   node run.mjs doctor          the text a person reads
 //   node run.mjs doctor --json   the same facts for the agent (skill setup-machine)
@@ -12,6 +15,12 @@
 // per system — drift, and the copy that drifts is always the one for the system
 // nobody here runs. So the skill reads `fix[platform]` and says what it finds;
 // `scripts/setup.test.ts` holds it to that.
+//
+// Why a separate JSON and not a literal down here: a machine with no Node
+// cannot run this file at all, and that is precisely the machine somebody needs
+// the `node` entry on. `fixes.json` can be READ instead of executed, which is
+// what `setup-machine` does in its step 0 — so the table stays single even in
+// the one situation where nothing can run.
 //
 // A check is one object:
 //
@@ -31,7 +40,7 @@
 // Those three flags are the whole point of the shape: they are what decides
 // whether the agent may run the command itself or has to hand it over, and that
 // decision is a fact about the command, not a judgement to be re-made in prose.
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { readEnvValue } from "../lib/env-write.mjs";
 import { capture, hasCommand, isWindows } from "../lib/proc.mjs";
 import { configuredDriver, dbDriver } from "../db/driver.mjs";
@@ -50,61 +59,17 @@ const everywhere = (fix) => Object.fromEntries(PLATFORMS.map((p) => [p, fix]));
 const RUN_SETUP = everywhere({ command: "node run.mjs setup" });
 
 // ── how a missing tool is installed ─────────────────────────────────────────
-// The Linux entries are the conservative fallback; `inspect()` upgrades them to
-// a concrete command once it knows which package manager is present.
+// From `fixes.json` — see the header, and that file's own `_comment` for the
+// shape. The `linux` and `darwin` entries are the conservative fallback;
+// `inspect()` upgrades them to a concrete command once it knows which package
+// manager is present (apt/dnf/pacman there, Homebrew here).
 
-export const FIXES = {
-  node: {
-    linux: { url: "https://nodejs.org", note: "distribution packages are often older than 20" },
-    darwin: { command: "brew install node" },
-    win32: { command: "winget install OpenJS.NodeJS" },
-  },
-  git: {
-    linux: { url: "https://git-scm.com/downloads", admin: true },
-    darwin: { command: "xcode-select --install", gui: true },
-    win32: { command: "winget install Git.Git", note: "Claude Code needs it here anyway" },
-  },
-  docker: {
-    linux: { url: "https://docs.docker.com/engine/install/", admin: true },
-    darwin: { command: "brew install --cask docker", gui: true, note: "start Docker Desktop once afterwards" },
-    win32: { command: "winget install Docker.DockerDesktop", gui: true, restart: true, note: "uses WSL2" },
-  },
-  cloudflared: {
-    linux: { url: "https://pkg.cloudflare.com/", admin: true },
-    darwin: { command: "brew install cloudflared" },
-    win32: { command: "winget install --id Cloudflare.cloudflared" },
-  },
-  shell: {
-    linux: { note: "nothing to do — any shell works here" },
-    darwin: { note: "nothing to do — any shell works here" },
-    win32: { note: "open Git Bash (it comes with Git for Windows) or a WSL2 shell, and run the commands there" },
-  },
+const TABLE = JSON.parse(readFileSync(new URL("fixes.json", import.meta.url), "utf8"));
 
-  // ── the hosting CLIs ──────────────────────────────────────────────────────
-  // None of these belongs on a development machine, which is why they are not
-  // among the checks above: they are needed once, by whoever is putting the app
-  // online, and only for the host that person picked. `--deploy` asks for them
-  // (see deployChecks below), the skill `setup-hosting` reads the answer.
-  //
-  // They are in this table anyway, and not in that skill's prose, for the same
-  // reason as everything else here: an install command written into a skill is
-  // a command nobody maintains, on a system nobody here runs.
-  railway: {
-    linux: { command: "npm install -g @railway/cli" },
-    darwin: { command: "brew install railway" },
-    win32: { command: "npm install -g @railway/cli" },
-  },
-  flyctl: {
-    linux: { url: "https://fly.io/docs/flyctl/install/", note: "the page names the command for your distribution" },
-    darwin: { command: "brew install flyctl" },
-    win32: { url: "https://fly.io/docs/flyctl/install/", note: "the PowerShell one-liner from that page" },
-  },
-  doctl: {
-    linux: { command: "sudo snap install doctl", admin: true, note: "without snap: https://docs.digitalocean.com/reference/doctl/how-to/install/" },
-    darwin: { command: "brew install doctl" },
-    win32: { url: "https://docs.digitalocean.com/reference/doctl/how-to/install/", note: "download the archive and put doctl.exe on the PATH" },
-  },
-};
+export const FIXES = TABLE.fixes;
+
+/** The better macOS command where Homebrew is already there. Not a platform. */
+const BREW_FIXES = TABLE.brew;
 
 // The hosts this template is documented for (docs/DEPLOY.md), and how you ask
 // their CLI two questions: is it there, and does it know who I am.
@@ -170,6 +135,28 @@ async function linuxFix(id) {
   return null;
 }
 
+/**
+ * A better macOS command for `id`, if this Mac already has Homebrew.
+ *
+ * The same move as `linuxFix` one platform over, and the direction matters:
+ * `fixes.json` holds the Homebrew-FREE way and this upgrades it, never the
+ * reverse. A table full of `brew install …` reads as correct on the Mac of
+ * whoever wrote it and hands `brew: command not found` to everybody else —
+ * which on macOS is most people, because nothing installs Homebrew for them.
+ *
+ * So Homebrew is used where it is and worked around where it is not, exactly
+ * as Docker is (see `scripts/db/driver.mjs`). What is never done is talking
+ * somebody into installing it first: it wants sudo, it takes a while, and on
+ * Apple Silicon it finishes by printing a PATH line the user has to run
+ * themselves — three chances to lose somebody before their first `node`.
+ */
+let brewThere = null; // asked once — four checks want the answer, it cannot change mid-run
+async function darwinFix(id) {
+  if (!Object.hasOwn(BREW_FIXES, id)) return null;
+  brewThere ??= hasCommand("brew");
+  return (await brewThere) ? BREW_FIXES[id] : null;
+}
+
 // ── the checks ──────────────────────────────────────────────────────────────
 
 /**
@@ -189,14 +176,19 @@ export async function inspect({ quick = false } = {}) {
 
   // ── Node itself ───────────────────────────────────────────────────────────
   // This can only ever report "too old", never "missing": a missing Node could
-  // not have run this file. Worth knowing when reading the output.
+  // not have run this file. Worth knowing when reading the output — and the
+  // reason the skill `setup-machine` opens by reading `fixes.json` directly
+  // rather than by asking here.
   const major = Number(process.versions.node.split(".")[0]);
   add({
     id: "node",
     label: `Node.js ${process.version}`,
     ok: major >= MIN_NODE,
     detail: major >= MIN_NODE ? "" : `needs ${MIN_NODE} or newer`,
-    fix: FIXES.node,
+    // Static on the quick path: `withPlatformFix` probes for a package manager,
+    // and the variant the SessionStart hook runs starts no processes. Nothing
+    // reads the fix there anyway — the hook prints ids.
+    fix: quick ? FIXES.node : await withPlatformFix("node"),
   });
 
   // ── the project's own state ───────────────────────────────────────────────
@@ -256,8 +248,8 @@ export async function inspect({ quick = false } = {}) {
   if (quick) return checks;
 
   // ── the tools ─────────────────────────────────────────────────────────────
-  add({ id: "npm", label: "npm", ok: await hasCommand("npm"), detail: "comes with Node.js", fix: FIXES.node });
-  add({ id: "git", label: "git", ok: await hasCommand("git"), fix: await withLinuxFix("git") });
+  add({ id: "npm", label: "npm", ok: await hasCommand("npm"), detail: "comes with Node.js", fix: await withPlatformFix("node") });
+  add({ id: "git", label: "git", ok: await hasCommand("git"), fix: await withPlatformFix("git") });
 
   // Which database this machine ends up running — and, on the first run, the
   // moment that gets decided and written into .env (scripts/db/driver.mjs).
@@ -276,7 +268,7 @@ export async function inspect({ quick = false } = {}) {
       ok: false,
       detail: "not installed — the database runs without it",
       severity: "optional",
-      fix: await withLinuxFix("docker"),
+      fix: await withPlatformFix("docker"),
     });
   } else {
     // Installed is not the same as running — ask the daemon, don't assume.
@@ -290,7 +282,7 @@ export async function inspect({ quick = false } = {}) {
           ? "installed, but not running — start Docker Desktop"
           : "installed, but not running — the database runs without it",
       severity: "optional",
-      fix: await withLinuxFix("docker"),
+      fix: await withPlatformFix("docker"),
     });
     if (info.code === 0) {
       const compose = await capture("docker", ["compose", "version"]);
@@ -300,7 +292,7 @@ export async function inspect({ quick = false } = {}) {
         ok: compose.code === 0,
         detail: "update Docker",
         severity: driver === "docker" ? "blocker" : "optional",
-        fix: await withLinuxFix("docker"),
+        fix: await withPlatformFix("docker"),
       });
     }
   }
@@ -323,7 +315,7 @@ export async function inspect({ quick = false } = {}) {
     label: "cloudflared (only for local IPNs)",
     ok: await hasCommand("cloudflared"),
     severity: "optional",
-    fix: FIXES.cloudflared,
+    fix: await withPlatformFix("cloudflared"),
   });
 
   // On Windows the commands belong in Git Bash or WSL2. Git Bash sets MSYSTEM,
@@ -374,7 +366,7 @@ export async function deployChecks(only = null) {
         ok: false,
         severity: "optional",
         detail: "not installed",
-        fix: FIXES[id],
+        fix: await withPlatformFix(id),
       });
       continue;
     }
@@ -397,10 +389,20 @@ export async function deployChecks(only = null) {
   return checks;
 }
 
-/** The static table, with the Linux entry upgraded to a real command if we can. */
-async function withLinuxFix(id) {
-  const found = await linuxFix(id);
-  return found ? { ...FIXES[id], linux: found } : FIXES[id];
+/**
+ * The static table for `id`, with the entry for whichever system we are on
+ * upgraded to a better command if this machine allows one.
+ *
+ * Both upgrades are computed, not just the one for `process.platform`: the JSON
+ * is handed to the agent whole, and a check whose macOS entry depended on
+ * having *run* on a Mac would be a table that reads differently depending on
+ * who asked. Each probe is a `--version` call that fails fast when the tool is
+ * absent, and on the machine's own platform it is the one being asked for.
+ */
+async function withPlatformFix(id) {
+  const [linux, darwin] = await Promise.all([linuxFix(id), darwinFix(id)]);
+  if (!linux && !darwin) return FIXES[id];
+  return { ...FIXES[id], ...(linux && { linux }), ...(darwin && { darwin }) };
 }
 
 // ── output ──────────────────────────────────────────────────────────────────

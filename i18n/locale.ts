@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 import { cookies, headers } from "next/headers";
 import {
   DEFAULT_LOCALE,

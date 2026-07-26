@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // A timeout that measures SILENCE, not total duration.
 //
 // ── Why this is not `AbortSignal.timeout` ──────────────────────────────────

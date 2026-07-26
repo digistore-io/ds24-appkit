@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Shared helpers for the product registry (config/digistore-products.json).
 // Reading/writing the config, so that sync-products & request-approval use the
 // same source as the app (lib/digistore/products.ts).

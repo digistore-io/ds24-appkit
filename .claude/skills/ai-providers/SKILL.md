@@ -2,6 +2,7 @@
 name: ai-providers
 description: Chooses which AI company this app pays and what it may spend — picks a provider (OpenAI, Anthropic, Gemini, Mistral or OpenRouter), gets the key into .env, binds each task to a model, fills in the price table and explains what the AI-costs page will show. Use this when the user asks which AI to use, wants to switch provider, mentions an OpenAI/Gemini/Mistral/OpenRouter key, asks what AI costs them, or when `node run.mjs ai-check` reports a problem.
 ---
+<!-- Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA — SPDX-License-Identifier: MIT -->
 
 # Which AI company does this app pay?
 

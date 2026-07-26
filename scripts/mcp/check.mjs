@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Checks the MCP server — settings, and (with --live) a real round-trip.
 //
 //   node run.mjs mcp-check

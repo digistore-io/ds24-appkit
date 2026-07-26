@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Issuing, checking and revoking the keys an AI client authenticates with.
 //
 // The imperative shell around `lib/mcp/rules.ts`: this file owns the writes and

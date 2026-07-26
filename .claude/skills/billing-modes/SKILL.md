@@ -2,6 +2,7 @@
 name: billing-modes
 description: Sets up the billing models beyond the one-off purchase — fixed subscriptions (monthly/yearly), usage-based prepaid tokens with auto top-up (createBillingOnDemand) as well as subscription self-service for customers (cancel, change payment details, view invoices). Use this after setup-digistore, when the app is meant to bill recurring or by usage (e.g. tokens for AI usage).
 ---
+<!-- Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA — SPDX-License-Identifier: MIT -->
 
 # Billing models: subscriptions & prepaid tokens
 

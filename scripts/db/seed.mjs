@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Seed — starting data for local development.
 //
 // Runs automatically at the end of `node run.mjs db-reset` and on its own via `node run.mjs db-seed`.

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // The assistant's handbook — the Markdown under `content/knowledge/`.
 //
 // This is the whole retrieval layer of the chat, and it is deliberately not a

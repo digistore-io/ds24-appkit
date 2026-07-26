@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // The greeting's hint about docs/app.md has to be right on the two occasions it
 // is read: a fresh clone (no notes, no pages — say nothing) and a project under
 // way (pages built, notes behind — name exactly the ones missing).

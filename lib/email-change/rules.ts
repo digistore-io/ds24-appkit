@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 // Rules for changing the account address — deliberately PURE functions, no
 // database and no crypto.
 //

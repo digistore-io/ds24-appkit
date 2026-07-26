@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
 import { signOut } from "@/auth";
 import { requireActiveUser } from "@/lib/authz";
 import { AppShell } from "@/components/app-shell";
@@ -7,6 +10,7 @@ import { chatNavVisible, mayUseChat } from "@/lib/ai/rules";
 import { isOwner } from "@/lib/roles";
 import { hasPlan } from "@/lib/entitlements/manage";
 import { ChatLauncher } from "@/app/dashboard/chat/launcher";
+import { SiteFooter } from "@/components/site-footer";
 
 // The frame around ALL pages under /dashboard — sidebar, header, user menu.
 // New protected pages are simply created as `app/dashboard/…/page.tsx` and get
@@ -94,6 +98,16 @@ export default async function DashboardLayout({
         signOutAction={signOutAction}
       >
         {children}
+
+        {/* Inside the shell, below the page. § 5 DDG asks for the Impressum to
+            be reachable from every page, and "every" includes the ones behind
+            the sign-in — a customer looking for who they are actually dealing
+            with is usually somebody who has already signed up. Rendered here
+            rather than in AppShell so the shell stays a layout component with
+            no filesystem read in it. */}
+        <div className="mt-10">
+          <SiteFooter />
+        </div>
       </AppShell>
 
       {/* Beside the shell, not inside it. The launcher is `position: fixed`,
