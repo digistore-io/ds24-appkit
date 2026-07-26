@@ -11,7 +11,8 @@ every app built on this template:
 
 What differs between apps is **whose Digistore24 account the money lands in**,
 and that is a fork with consequences all the way down to the database. Decide it
-before you build billing, not after.
+before you build billing, not after. Both answers are written out here so that
+neither of them has to be researched.
 
 ## Pick the shape first
 
@@ -28,20 +29,44 @@ before you build billing, not after.
 shape A. Someone signing up is a *customer*, and customers do not sell anything.
 Build shape B only when the app's own users need to take money from *their*
 customers — a course platform, a booking tool for coaches, a shop builder. If in
-doubt, ask the one question that settles it: *does anyone other than you get
-paid?* No → shape A.
+doubt, ask the one question that settles it: *does anyone other than the operator
+get paid?* No → shape A.
 
 Do not build shape B "just in case". It multiplies the API key, the IPN
 passphrase, the product list and the order table by the number of tenants, and
 every one of those is money-relevant.
 
+## The words
+
+Six roles, and two of them are routinely confused into a money bug. Read this
+once; the rest of the doc uses these terms exactly.
+
+| Term | Who | In shape A | In shape B |
+|---|---|---|---|
+| **operator** | whoever runs this installation — usually the developer reading this | the one and only seller | runs the platform, sells nothing through it |
+| **vendor** | whoever's Digistore24 account is being called or paid | the operator | a user of the app who connected their own account |
+| **buyer** | whoever hands over money | a customer of the operator | a customer of *that vendor* |
+| **Member** | a signed-in user of this app (`users`, `orders.memberId`) | the same person as the buyer | the **vendor**, or the buyer, or neither — see below |
+| **developer key** | identifies the *calling application*, grants no account access | the one the app kit ships with | **your own** |
+| **API key** | grants access to one Digistore24 account (`writable` here) | one, in the `.env` | one per vendor, in the database |
+
+Two consequences of that table, both worth pinning down before writing code:
+
+- **"vendor" is relative, not absolute.** Wherever this doc or the API reference
+  says "the vendor's key", in shape A that simply *is* `ds24ApiKey()` from the
+  `.env`. Nothing is missing there.
+- **In shape B, buyer and Member come apart.** A vendor's buyer usually has no
+  account in your app at all, while the vendor does. `orders.memberId` means
+  *buyer* everywhere in this template, so the vendor needs a column of its own —
+  shape B, step 1.
+
 ---
 
-# Shared mechanics
+## Shared mechanics
 
 True in both shapes; read this once.
 
-## The API
+### The API
 
 Base `https://www.digistore24.com/api/call/<function>/format/json`, POST,
 form-urlencoded, the key in the **`X-DS-API-KEY` header** — not as a parameter.
@@ -49,7 +74,7 @@ A response is only a success when `result === "success"`; anything else throws.
 `lib/digistore/client.ts` (app) and `scripts/ds24/_client.mjs` (scripts) are the
 only two places that speak HTTP to Digistore24. Do not add a third.
 
-Two traps that have both already cost a day here:
+Two traps, each of which has already cost a day here:
 
 - **Booleans arrive as the strings `"Y"` / `"N"`.** Both are truthy in
   JavaScript, so `if (res.created)` is true even when nothing was created. Use
@@ -59,9 +84,10 @@ Two traps that have both already cost a day here:
   logs.
 
 Full function reference: <https://www.digistore24.com/api/docs/index.html>
-(Swagger; the machine-readable spec is `openapi.yaml` next to it).
+(Swagger; the machine-readable spec is `openapi.yaml` next to it). Look a field
+name up there rather than guessing it.
 
-## How an API key comes into being
+### How an API key comes into being
 
 Digistore24 has no client-secret handshake. Instead there is an interactive flow
 that a **developer key** starts on behalf of a vendor. A developer key carries no
@@ -98,7 +124,7 @@ retrieveApiKey(token = request_token)          ← authenticated with the DEVELO
 
 Reference: [How to generate an API key interactively](https://dev.digistore24.com/hc/en-us/articles/32486158815121-How-to-generate-an-API-key-interactively).
 
-## The IPN
+### The IPN
 
 `app/api/ipn/route.ts` does three things and nothing else: verify the SHA512
 signature, answer the connection test with `OK`, hand a verified payload to
@@ -124,11 +150,11 @@ Fields worth knowing before you design anything:
 | `merchant_id`, `merchant_name` | **who sold.** The vendor's numeric id and Digistore24 name |
 | `ipn_config_api_key_id` | the numeric prefix of the API key whose connection this is — for key `12345-xxxx`, `12345`. **Present on order events, absent on the connection test** |
 | `ipn_config_domain_id` | the `domain_id` passed to `ipnSetup` |
-| `custom` | whatever the app sent as `tracking[custom]`, returned on *every* later event for that purchase. **`string(63)` — the whole budget** |
+| `custom` | whatever the app sent as `tracking[custom]`, returned on *every* later event for that purchase. Documented as `string(63)`, and the identity pairs already fill most of it |
 | `api_mode` | `live` or `test`. Test purchases of unapproved products arrive as `test` |
 | `order_id` | stable across all transactions of one order → the idempotency key |
 
-## The checkout
+### The checkout
 
 One base product per offer at Digistore24; **the price does not live there**.
 The API discards `data[amount]`, so `priceCents`, `currency` and
@@ -140,12 +166,12 @@ Details: `docs/digistore-createbuyurl.md`, `docs/digistore-billing-modes.md`.
 
 ---
 
-# Shape A — the developer is the only vendor
+## Shape A — the operator is the only vendor
 
 **This is what the template already is.** There is nothing to design, and the
 work is three commands. Do not rebuild any of it.
 
-## Set it up
+### Set it up
 
 ```bash
 node run.mjs ds24-connect    # browser approval → DIGISTORE_API_KEY into .env
@@ -156,8 +182,10 @@ node run.mjs ds24-approval --apply   # go-live only: request product approval
 The agent runs these itself — see the skill **`setup-digistore`**, which is the
 step-by-step guide including the local-tunnel and thank-you-page details. The
 only step that cannot be automated is the vendor's single click in the browser.
+All three commands are shape-A commands: they assume one key in the `.env` and
+one IPN connection.
 
-## What "one vendor" means in the code
+### What "one vendor" means in the code
 
 These are load-bearing decisions, not accidents:
 
@@ -181,34 +209,42 @@ These are load-bearing decisions, not accidents:
   but never credited — it is claimed at the buyer's first sign-in, or attached by
   hand under `/dashboard/admin/purchases`.
 
-## The shipped developer key
+### When someone asks for a "connect Digistore" button
+
+That request is shape B, and it is the one place where the two get mixed up in
+practice. **Do not bolt an API-key field onto shape A** — not on an account page,
+not "just for now", not hidden behind an admin role. A key field is a second way
+into the credentials, it is a secret in a form, and it does not solve the actual
+problem: the IPN, the products and the checkout would all still be single-tenant,
+so the second vendor's sales would arrive on the first vendor's connection or not
+at all.
+
+Either the operator is the only seller (then the key is already in the `.env` and
+there is nothing to connect), or the app is a platform — and then read on.
+
+### The shipped developer key
 
 `lib/digistore/config.mjs` carries `DIGISTORE_DEVELOPER_KEY`, the key that makes
 `ds24-connect` work without anybody registering anything. It is openly in the
 code because it is not a secret: it identifies the app kit, and it grants no
 access to any account. **In shape A that is all you need.** In shape B it is not
-(see below).
+(see step 0).
 
 ---
 
-# Shape B — the app is a platform
+## Shape B — the app is a platform
 
 **None of this exists in the template.** What follows is the complete design, so
-that building it is a build and not a research project. Everything in *Shared
-mechanics* above still holds; what changes is that every one of the three moving
-parts becomes per-tenant.
+that building it is a build and not a research project. Everything under *Shared
+mechanics* still holds; what changes is that each of the three moving parts
+becomes per-tenant.
 
-Vocabulary, because conflating these two is the classic error of this shape:
+Before step 0, re-read *The words* above. The error this shape invites is
+treating the vendor as if they were the buyer — the template's `orders.memberId`
+means buyer, and a platform needs a second, independent dimension for the vendor.
+Do not overload the first one.
 
-- a **vendor** — a user of *your* app who connected their Digistore24 account and
-  gets paid;
-- a **buyer** — that vendor's customer. A buyer is usually **not** a user of
-  your app at all.
-
-`orders.memberId` in this template means *buyer*. A platform needs a second,
-independent dimension for the vendor. Do not overload the first one.
-
-## Step 0 — create your own Developer API key
+### Step 0 — create your own Developer API key
 
 At Digistore24, in the vendor view: **Settings → Account access → tab "API
 keys" → "New API key" → API permissions: "Developer" → Save.** The key is then
@@ -223,7 +259,41 @@ what the vendor reads on the approval page: they should name *your* platform.
 A developer key is free, carries no permissions, and is the one piece of setup
 that genuinely cannot be automated away.
 
-## Step 1 — the connect flow, in the app
+### Step 1 — the table everything else hangs off
+
+One row per connected Digistore24 account. Sketch, in this template's idiom
+(`db/schema-digistore.ts` for the conventions):
+
+```ts
+export const ds24Connections = pgTable("ds24_connections", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  // The VENDOR — a Member of this app who sells. Not the buyer.
+  vendorId: text("vendor_id").notNull().references(() => users.id),
+  // Path segment of this connection's own IPN URL. Opaque and unguessable:
+  // it is what tells the endpoint whose passphrase to verify against.
+  connectionId: text("connection_id").notNull().unique(),
+  // Secrets. Encrypted at rest, never rendered, never logged.
+  apiKey: text("api_key"),               // null once disconnected
+  ipnPassphrase: text("ipn_passphrase"), // null once disconnected
+  // Not a secret: the numeric prefix of the api key ("12345-xxxx" → "12345").
+  // Cross-check against ipn_config_api_key_id on incoming order events.
+  apiKeyId: text("api_key_id"),
+  status: text("status").notNull(),      // pending | connected | disconnected
+  requestToken: text("request_token"),   // one-shot, only while pending
+  requestedAt: timestamp("requested_at"),
+  connectedAt: timestamp("connected_at"),
+});
+```
+
+**The row is created before the browser ever leaves for Digistore24**, in
+`status: "pending"` — that is what makes the ordering in step 3 work, and it is
+where the `request_token` lives while the vendor is away.
+
+**The row outlives the connection.** On disconnect the secrets are nulled and the
+status flips; the row itself stays, because `orders` and everything downstream
+reference it. Deleting it would orphan financial records (see step 6).
+
+### Step 2 — the connect flow, in the app
 
 Replace the terminal script with two server-side steps. Read
 `scripts/ds24/connect-api-key.mjs` first — it is the same flow, and its comments
@@ -231,12 +301,13 @@ name the mistakes already made once.
 
 **Start (a server action on a "Connect Digistore24" button):**
 
-1. `requestApiKey` with the **developer key**:
-   `permissions=writable`, `return_url` = a page of your app, `cancel_url`,
-   `site_url` = your platform, `comment` = something the vendor will recognise.
-2. Store `request_token` against the signed-in user, with a timestamp. It is a
-   one-shot credential — it stops working once used, aborted or stale.
-3. Redirect the user to `request_url`.
+1. Create the connection row (`status: "pending"`, a fresh `connectionId`).
+2. `requestApiKey` with the **developer key**: `permissions=writable`,
+   `return_url` = a page of your app, `cancel_url`, `site_url` = your platform,
+   `comment` = something the vendor will recognise.
+3. Store `request_token` on the row. It is a one-shot credential — it stops
+   working once used, aborted or stale.
+4. Redirect the vendor to `request_url`.
 
 **Finish.** Two ways, and you want both:
 
@@ -244,43 +315,70 @@ name the mistakes already made once.
   and finish immediately in the common case;
 - and a **background retry** for the vendor who approved but never came back
   (closed the tab, lost the redirect). `pending` simply means "ask again later";
-  `aborted` means give up and clear the request. Do not rely on the redirect
-  alone — that is the single most likely way a platform ends up with vendors who
-  approved and are still shown as unconnected.
+  `aborted` means give up and clear the row. Do not rely on the redirect alone —
+  that is the single most likely way a platform ends up with vendors who approved
+  and are still shown as unconnected. `lib/cron/jobs.ts` is where a retry job
+  belongs (`docs/cron.md`).
 
-**Store the key encrypted at rest**, per vendor, and never render it — not in a
-form, not masked, not in a log line, not in an error message. Note the shape
-`<numericId>-<secret>`: the prefix is not a secret and is worth storing
-separately, because it is what `ipn_config_api_key_id` matches (step 2).
+On `completed`: store the key **encrypted at rest**, store its numeric prefix
+separately, and never render the key — not in a form, not masked, not in a log
+line, not in an error message. Then go straight to step 3; a connected vendor
+without an IPN connection receives no events, which looks exactly like a broken
+integration.
 
 `APP_URL` must be a public https address for any of this to work. Locally,
 `return_url` needs the same redirect detour every other localhost URL takes
-here — see `lib/digistore/public-url.ts` and
-`scripts/ds24/_public-url.mjs`.
+here — see `lib/digistore/public-url.ts` and `scripts/ds24/_public-url.mjs`.
 
-## Step 2 — one IPN connection per vendor, with its own URL
+### Step 3 — one IPN connection per vendor, with its own URL
 
-Call `ipnSetup` **with that vendor's key** right after their key is stored.
-Scoping is entirely by which key you authenticate with, so `domain_id` may stay a
-constant (your platform's slug): it is unique *within* the vendor's account, and
+Order matters, because the URL has to exist before the connection can be
+registered against it:
+
+1. take the `connectionId` from the row (it already exists — step 1);
+2. `ipnSetup` **with that vendor's key**: `ipn_url =
+   https://YOUR-PLATFORM/api/ipn/c/<connectionId>`, `name` = your platform,
+   `domain_id` = your platform's slug, `sha_passphrase: "random"`;
+3. store the `sha_passphrase` Digistore24 returns on the row, and flip the status
+   to `connected`.
+
+`domain_id` may stay a constant. Scoping is entirely by which key you
+authenticate with, so the value is unique *within* the vendor's account, and
 reusing it means a reconnect replaces that vendor's connection instead of adding
-a second one. `sha_passphrase: "random"` makes Digistore24 generate the
-passphrase and return it; store it with the connection.
+a second one.
 
-**Give each connection its own IPN URL** — `/api/ipn/c/<connectionId>`, with an
-opaque, unguessable `connectionId`. The route then knows which passphrase to
-verify against before it looks at the payload at all.
+**Each connection gets its own IPN URL**, with an opaque, unguessable
+`connectionId`. The route then knows which passphrase to verify against before it
+looks at the payload at all:
+
+```ts
+// app/api/ipn/c/[connectionId]/route.ts — the shape, not the whole thing
+export async function POST(request: Request, { params }) {
+  const conn = await connectionByPublicId((await params).connectionId);
+  // Unknown or disconnected → 403. Fail closed, exactly as today.
+  if (!conn || conn.status !== "connected") return new Response("…", { status: 403 });
+
+  const body = Object.fromEntries(new URLSearchParams(await request.text()));
+  if (!verifyIpnSignature(body, await ipnPassphraseFor(conn))) {
+    return new Response("Invalid signature", { status: 403 });
+  }
+  // Only now is the payload trustworthy — and the vendor is conn.vendorId,
+  // taken from the row. Never from merchant_id in the payload.
+  await onPaymentEvent(body, { vendorId: conn.vendorId });
+  return new Response("OK");
+}
+```
 
 The alternative — one shared `/api/ipn` that routes on `ipn_config_api_key_id`
 — looks tidier and does not work:
 
 - **The connection test carries no `ipn_config_*` fields.** Its payload is
   `merchant_id`, `merchant_name`, `product_ids` and the signature, so a shared
-  route has no signed way to pick a passphrase and every vendor's "Test
+  route has no signed way to pick a passphrase, and every vendor's "Test
   connection" button fails.
-- **`custom` cannot rescue it either.** It is `string(63)` and the buyer identity
-  already uses roughly fifty of those; a vendor id does not fit. And it is absent
-  from non-order events entirely.
+- **`custom` cannot rescue it either.** It is documented as `string(63)`, the
+  buyer identity already fills most of that (`lib/digistore/custom.ts`), and it
+  is absent from non-order events entirely.
 
 So: **route by URL, verify with that connection's passphrase, and attribute the
 sale to the vendor that connection belongs to.** Never to `merchant_id` out of
@@ -294,22 +392,22 @@ vendor B's sale — granting access, crediting tokens, or moving a subscription 
 an account they do not own. Per-connection URL plus per-connection passphrase
 plus attribution-by-connection makes that forgery structurally impossible rather
 than merely unlikely. `ipn_config_api_key_id` is still worth checking against the
-connection's stored key prefix on order events — as a cheap consistency check,
-not as the routing decision.
+row's stored prefix on order events — as a cheap consistency check, not as the
+routing decision.
 
-## Step 3 — products belong to the vendor, not to the app
+### Step 4 — products belong to the vendor, not to the app
 
 `config/digistore-products.json` holds one global `productId` per offer, written
 back by `ds24-sync`. In a platform that is wrong by construction: each vendor's
 products live in *their* account and have *their* ids. The registry stays the
 source of truth for shape and price; the `productId` moves to a per-connection
-table, and `ds24-sync` becomes a per-vendor operation triggered when a vendor
+table, and syncing becomes a per-vendor operation triggered when a vendor
 connects (or edits their offers), not a one-off command.
 
 `productByDs24Id()` (`lib/digistore/products.ts`) has to become
 per-vendor-scoped too, or two vendors with the same product id collide.
 
-## Step 4 — checkout with the vendor's key
+### Step 5 — checkout with the vendor's key
 
 `createBuyUrl` called with vendor X's key produces a checkout that pays vendor X.
 So `checkoutLinksFor` / `getOrCreateBuyUrl` need the vendor's key threaded
@@ -317,32 +415,38 @@ through, and the `buy_url_cache` key must include the vendor — **a cached URL
 leaking across tenants sends money to the wrong account.** That is the single
 most expensive bug available in this shape; write the test for it first.
 
-## Step 5 — disconnect
+### Step 6 — disconnect
 
 Offer it, and mean it: call `unregister` with the vendor's key (which deletes the
-key *and* its IPN connections at Digistore24), then delete your stored key,
-passphrase and connection row. Keep the historical `orders` — they are financial
-records. A vendor who cannot disconnect will do it from the Digistore24 side
-instead, and then your app holds a dead key and quietly stops receiving events.
+key *and* its IPN connections at Digistore24), then null the stored key and
+passphrase and set the row to `disconnected`.
 
-## What has to change in the template
+**Keep the row and keep the `orders`** — they are financial records, and they
+reference the connection. A reconnect later is a *new* row with a new
+`connectionId` and a new URL; the old one stays behind as history. A vendor who
+cannot disconnect in your app will do it from the Digistore24 side instead, and
+then your app holds a dead key and quietly stops receiving events — so treat "the
+key stopped working" as a state to detect and show, not as an impossibility.
+
+### What has to change in the template
 
 | Today | Shape B |
 |---|---|
-| `DIGISTORE_API_KEY` in `.env` | `connections` table: vendor → encrypted key, key id prefix, passphrase, `connectionId`, status |
-| `ds24ApiKey()` reads the env | `ds24ApiKeyFor(vendorId)` reads the table; the env holds only the developer key |
+| `DIGISTORE_API_KEY` in `.env` | `ds24_connections` (step 1); the env holds only the developer key |
+| `ds24ApiKey()` reads the env | `ds24ApiKeyFor(vendorId)` reads the table |
 | no key-entry UI, on purpose | a connect/disconnect UI — still no key *input*, the browser flow stays the only way in |
 | one `/api/ipn`, one passphrase | `/api/ipn/c/<connectionId>`, passphrase per connection |
 | `orders` has no vendor column | `orders`, `subscriptions`, `token*` and `buy_url_cache` all carry the vendor |
 | `productId` in the registry JSON | `productId` per connection |
 | `/dashboard/admin/*` = the operator's view of everything | two levels: platform admin, and each vendor's own view of their own sales |
+| `node run.mjs ds24-connect` / `ds24-sync` | per-vendor operations in the app; the CLI commands stay shape-A only |
 
 Everything else the template already does stays as it is and stays valuable: the
 signature verification, the event→status mapping, idempotency by `order_id`, the
 claim/attribution logic, the IPN log, the entitlement layer. None of it is
 single-tenant by nature; it only needs the vendor threaded through.
 
-## Two things this doc will not decide for you
+### Two things this doc will not decide for you
 
 - **How the platform earns.** The money goes to the vendor's account. Digistore24
   has affiliate commissions and Joint Venture / Cross Upsell shares (the IPN
@@ -356,7 +460,10 @@ single-tenant by nature; it only needs the vendor threaded through.
 
 ---
 
-# Reference
+## Reference
+
+Which key each function needs. "The vendor's key" is `ds24ApiKey()` from the
+`.env` in shape A, and the connected vendor's stored key in shape B.
 
 | Function | Authenticated with | Purpose |
 |---|---|---|
