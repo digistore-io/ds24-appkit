@@ -6,10 +6,32 @@
 // always the permissive one: a file wrongly left alone costs a manual copy, a
 // file wrongly overwritten costs whatever the customer had written in it.
 import { describe, expect, it } from "vitest";
-import { planUpdate, requiresFrom, versionAtLeast, writable } from "./update-plan.mjs";
+import { createHash } from "node:crypto";
+import { normalizeText, planUpdate, requiresFrom, versionAtLeast, writable } from "./update-plan.mjs";
 
 const action = (plan: ReturnType<typeof planUpdate>, path: string) =>
   plan.find((entry) => entry.path === path)?.action;
+
+describe("normalizeText", () => {
+  const sha = (text: string) => createHash("sha256").update(normalizeText(text), "utf8").digest("hex");
+
+  it("hashes the content, not the line endings it is stored with", () => {
+    // The whole point. Git for Windows checks out CRLF, and without this every
+    // guidance file in such a clone looks "edited in this app" — the update
+    // then refuses to write anything, for ever, to somebody who touched nothing.
+    expect(sha("# Title\r\n\r\nBody\r\n")).toBe(sha("# Title\n\nBody\n"));
+  });
+
+  it("still tells two different texts apart", () => {
+    expect(sha("Body\n")).not.toBe(sha("Body!\n"));
+  });
+
+  it("changes nothing about an LF file", () => {
+    // Which is why re-stamping on Linux or macOS produces the same values.
+    const text = "# Title\n\nBody\n";
+    expect(normalizeText(text)).toBe(text);
+  });
+});
 
 describe("versionAtLeast", () => {
   it("compares numerically, not as text", () => {

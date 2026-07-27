@@ -34,7 +34,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { planUpdate, writable } from "./update-plan.mjs";
+import { normalizeText, planUpdate, writable } from "./update-plan.mjs";
 
 const STAMP = ".template-version";
 const args = process.argv.slice(2);
@@ -42,7 +42,9 @@ const apply = args.includes("--apply");
 const fromIndex = args.indexOf("--from");
 const override = fromIndex !== -1 ? args[fromIndex + 1] : null;
 
-const sha256 = (text) => createHash("sha256").update(text, "utf8").digest("hex");
+// normalizeText: the hash describes the CONTENT, not the line endings this
+// machine happens to store it with — see update-plan.mjs.
+const sha256 = (text) => createHash("sha256").update(normalizeText(text), "utf8").digest("hex");
 const label = { new: "new      ", update: "update   ", withdrawn: "withdrawn" };
 
 function readJson(file) {

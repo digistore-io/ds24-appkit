@@ -10,11 +10,16 @@
 // Rules: environment variables that are already set win (so that
 // `DATABASE_URL=… npm run db:seed` keeps working), comments and empty lines
 // are ignored, surrounding quotes are stripped.
+//
+// Split on `\r?\n` and not on `\n`: the .env is gitignored, so .gitattributes
+// never sees it, and on Windows it may well carry CRLF. The `.trim()` below
+// would take the stray `\r` with it — but by accident, and the next change to
+// this function would not know that. See scripts/lib/env-write.mjs.
 import { readFileSync, existsSync } from "node:fs";
 
 export function loadEnv(file = ".env") {
   if (!existsSync(file)) return;
-  for (const raw of readFileSync(file, "utf8").split("\n")) {
+  for (const raw of readFileSync(file, "utf8").split(/\r?\n/)) {
     const line = raw.trim();
     if (!line || line.startsWith("#")) continue;
     const eq = line.indexOf("=");

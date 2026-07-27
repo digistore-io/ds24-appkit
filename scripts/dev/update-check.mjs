@@ -26,7 +26,7 @@
 // second, looser notion of "new" would eventually contradict the first.
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { planUpdate, writable } from "./update-plan.mjs";
+import { normalizeText, planUpdate, writable } from "./update-plan.mjs";
 
 const CACHE = ".dev/update-check.json";
 const DAY = 24 * 60 * 60 * 1000;
@@ -60,7 +60,9 @@ export function describe(result) {
   );
 }
 
-const sha256 = (text) => createHash("sha256").update(text, "utf8").digest("hex");
+// normalizeText: the hash describes the CONTENT, not the line endings this
+// machine happens to store it with — see update-plan.mjs.
+const sha256 = (text) => createHash("sha256").update(normalizeText(text), "utf8").digest("hex");
 
 function readJson(file) {
   return JSON.parse(readFileSync(file, "utf8"));

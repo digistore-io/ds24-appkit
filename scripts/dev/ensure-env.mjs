@@ -14,9 +14,9 @@
 // your host (see docs/DEPLOY.md).
 //
 // Called by `node run.mjs env`, and as a prerequisite of nearly every other task.
-import { copyFileSync, existsSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { randomBytes } from "node:crypto";
-import { readEnvValue, setEnvValue } from "../lib/env-write.mjs";
+import { readEnvValue, seedEnvFile, setEnvValue } from "../lib/env-write.mjs";
 
 const ENV_FILE = ".env";
 
@@ -25,7 +25,9 @@ export function ensureEnv() {
     if (!existsSync(".env.example")) {
       throw new Error("neither .env nor .env.example is present.");
     }
-    copyFileSync(".env.example", ENV_FILE);
+    // Not copyFileSync: the example gives the content, not the line endings of
+    // the machine it was checked out on. See scripts/lib/env-write.mjs.
+    seedEnvFile(ENV_FILE);
     console.log("→ .env created from .env.example.");
   }
 

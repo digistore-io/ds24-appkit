@@ -20,7 +20,8 @@ if (!url) {
   process.exit(2);
 }
 
-// The admin address is free to choose:  SEED_OWNER_EMAIL=me@example.com node run.mjs db-seed
+// The admin address is free to choose: put SEED_OWNER_EMAIL in .env (not as a
+// command-line prefix — PowerShell has no such syntax; see docs/database.md).
 const ownerEmail = (process.env.SEED_OWNER_EMAIL ?? "owner@example.com")
   .trim()
   .toLowerCase();

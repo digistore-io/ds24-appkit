@@ -15,7 +15,7 @@
 //
 // Usage:  node scripts/dev/mail-setup.mjs   (or: node run.mjs mail-setup)
 import { createInterface } from "node:readline/promises";
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { commentEnvValue, setEnvValue } from "../lib/env-write.mjs";
 import "../lib/env.mjs";
 
 const ENV_FILE = ".env";
@@ -40,30 +40,17 @@ async function askRequired(text, fallback = "") {
 /**
  * Writes values into .env: existing lines (commented-out ones too) are
  * replaced, missing ones are appended. The rest of the file stays untouched.
+ *
+ * This used to be a copy of scripts/lib/env-write.mjs and carried its bugs a
+ * second time — there is exactly one .env writer, and this is not it.
  */
 function writeEnv(values) {
-  if (!existsSync(ENV_FILE)) {
-    writeFileSync(ENV_FILE, existsSync(".env.example") ? readFileSync(".env.example", "utf8") : "");
-  }
-  let content = readFileSync(ENV_FILE, "utf8");
-  for (const [key, value] of Object.entries(values)) {
-    const re = new RegExp(`^#?\\s*${key}=.*$`, "m");
-    const line = `${key}=${value}`;
-    content = re.test(content)
-      ? content.replace(re, line)
-      : content.replace(/\n*$/, "\n") + line + "\n";
-  }
-  writeFileSync(ENV_FILE, content);
+  for (const [key, value] of Object.entries(values)) setEnvValue(ENV_FILE, key, value);
 }
 
 /** Comments out lines so that two transports are never set at the same time. */
 function disable(keys) {
-  if (!existsSync(ENV_FILE)) return;
-  let content = readFileSync(ENV_FILE, "utf8");
-  for (const key of keys) {
-    content = content.replace(new RegExp(`^(${key}=.*)$`, "m"), "# $1");
-  }
-  writeFileSync(ENV_FILE, content);
+  for (const key of keys) commentEnvValue(ENV_FILE, key);
 }
 
 // Sends a test mail with the values just entered (the caller puts them into

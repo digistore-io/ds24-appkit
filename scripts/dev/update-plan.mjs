@@ -25,6 +25,23 @@
 //
 // Pure on purpose: no fetch, no fs, no clock. The shell around it is update.mjs.
 
+/**
+ * The text of a guidance file, with the line endings taken out before it is
+ * hashed.
+ *
+ * A hash here answers one question — "is this file still the one that shipped?"
+ * — and the answer must not depend on how the file happens to sit on this
+ * disk. Git for Windows checks out CRLF by default, and without this every
+ * single guidance file in a Windows clone hashes differently from its entry in
+ * .template-version. The update would then report the whole tree as
+ * `local-change` "edited in this app" and write nothing, for ever, to somebody
+ * who never touched a line. On Linux and macOS it is a no-op.
+ *
+ * template/.gitattributes stops new clones from getting there in the first
+ * place; this keeps the ones that already did from being stuck.
+ */
+export const normalizeText = (text) => String(text ?? "").replace(/\r\n/g, "\n");
+
 /** `"1.10.0"` >= `"1.9.3"` — numerically, not as a string. */
 export function versionAtLeast(have, want) {
   const parse = (v) =>

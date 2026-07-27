@@ -6,9 +6,10 @@
 // The app code is never the problem; the tooling is. This test is the guard
 // that keeps it from quietly rotting back into a Linux-only project.
 //
-// It checks two things:
+// It checks three things:
 //   1. the commands live in .mjs files, not in bash,
-//   2. none of the tools from the table in CLAUDE.md → Three systems is used.
+//   2. none of the tools from the table in CLAUDE.md → Three systems is used,
+//   3. every file ships with LF, and .gitattributes says so.
 //
 // A finding is not a style complaint: every tool below is genuinely missing or
 // genuinely different on one of the three systems, and the replacement is named
@@ -101,5 +102,46 @@ describe("the tooling runs on Linux, macOS and Windows", () => {
     });
 
     expect(findings).toEqual([]);
+  });
+});
+
+// ── line endings ────────────────────────────────────────────────────────────
+//
+// Git for Windows checks out CRLF by default. Two things break silently on such
+// a clone, and neither of them announces itself:
+//
+//   * scripts/lib/env-write.mjs read every .env key back as "not set",
+//   * `node run.mjs update` classified every guidance file as "edited in this
+//     app", because the hashes in .template-version are taken over LF content.
+//
+// .gitattributes is what stops it, and it is one file that a refactor could
+// delete without anybody developing on Linux ever noticing.
+
+/** Everything shipped, minus what is generated or genuinely binary. */
+function shippedFiles(dir: string, found: string[] = []): string[] {
+  const SKIP = new Set([".git", "node_modules", ".next", ".dev", "dist", "out"]);
+  for (const entry of readdirSync(dir)) {
+    if (SKIP.has(entry)) continue;
+    const full = path.join(dir, entry);
+    if (statSync(full).isDirectory()) shippedFiles(full, found);
+    else if (!/\.(png|jpg|jpeg|gif|ico|woff2?|pdf|zip)$/i.test(entry)) found.push(full);
+  }
+  return found;
+}
+
+describe("everything ships with LF line endings", () => {
+  it("declares it in .gitattributes, for all three systems", () => {
+    const attributes = readFileSync(path.join(ROOT, ".gitattributes"), "utf8");
+    // Without `eol=lf` the local git config decides, and on Windows it decides
+    // CRLF. `text=auto` alone normalises the index, not the working tree.
+    expect(attributes).toMatch(/^\*\s+text=auto\s+eol=lf$/m);
+  });
+
+  it("has no file with CRLF in it", () => {
+    const offenders = shippedFiles(ROOT)
+      .filter((file) => readFileSync(file, "utf8").includes("\r\n"))
+      .map((file) => path.relative(ROOT, file));
+
+    expect(offenders).toEqual([]);
   });
 });

@@ -1571,6 +1571,7 @@ code:
 | `curl`, `wget` | not guaranteed, and flags differ | `fetch()` — Node has it built in |
 | `openssl` | not everywhere, LibreSSL on macOS | `node:crypto` |
 | `date +%s%N`, `readlink -f`, `realpath` | GNU-only flags | Node (`Date.now()`, `path.resolve`) |
+| `split("\n")` on a file from disk | on Windows every line ends on `\r` | `split(/\r?\n/)` — see **Line endings** below |
 
 **The rule of thumb that settles most cases: anything that starts, stops or
 finds a process belongs in a `.mjs` script, not in bash.** Node is guaranteed
@@ -1600,6 +1601,38 @@ without a shell since 18.20/20.12 (it fails with `EINVAL`). Our own scripts are
 therefore started as `spawn(process.execPath, ["scripts/…mjs", …args])` — no
 shell, so user arguments cannot be mangled by quoting. `docker` is a real
 executable and needs neither. Both rules are written out at the top of `run.mjs`.
+
+### Line endings — LF, on all three systems
+
+Git for Windows sets `core.autocrlf=true` by default, so without being told
+otherwise it checks every text file out with **CRLF**. That is not a cosmetic
+difference here, and it used to break two things without saying a word:
+
+- **the `.env` was unreadable.** A pattern anchored with `$` never matches a
+  line ending in `\r`, so every key read back as "not set" — and a fresh
+  `AUTH_SECRET` was minted on every run, signing everybody out.
+- **`node run.mjs update` did nothing, for ever.** The hashes in
+  `.template-version` are taken over LF content, so on a CRLF checkout every
+  guidance file looked "edited in this app" and was left alone.
+
+**`.gitattributes` decides this, not the machine's git config.** One line —
+`* text=auto eol=lf` — and all three systems see the same bytes. It is a file a
+refactor could delete without anybody on Linux noticing, which is why
+`scripts/portability.test.ts` asserts both that it is there and that no file in
+the project carries `\r\n`.
+
+Two rules follow for anything you write:
+
+- **Split a file on `/\r?\n/`, never on `"\n"`.** The `.env` is the case that
+  matters most, because it is gitignored — `.gitattributes` never sees it, and
+  it may well have been written by an editor on Windows. `scripts/lib/env.mjs`
+  and `scripts/lib/env-write.mjs` normalise on the way in and write LF on the
+  way out; go through `setEnvValue()` / `readEnvValue()` rather than parsing
+  `.env` again somewhere else.
+- **A hash over a file describes its content**, so normalise before hashing —
+  `normalizeText()` from `scripts/dev/update-plan.mjs`. On Linux and macOS that
+  is a no-op; on Windows it is the difference between an update that works and
+  one that silently refuses.
 
 `scripts/portability.test.ts` scans `run.mjs` and `scripts/` for the tools in
 the table above and fails the test run if one shows up. It is the reason this

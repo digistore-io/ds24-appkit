@@ -63,11 +63,22 @@ If you have experimented locally with `db:push`, get back in line like this:
 
 `scripts/db/seed.mjs` creates initial data for development — by default an
 admin (`owner@example.com`, role `owner`) and a customer
-(`customer@example.com`, role `member`). Override the addresses:
+(`customer@example.com`, role `member`). To use your own addresses, put them in
+`.env` and run the seed as usual:
 
 ```bash
-SEED_OWNER_EMAIL=me@my-domain.de node run.mjs db-seed
+# in .env
+SEED_OWNER_EMAIL=me@my-domain.de
+SEED_MEMBER_EMAIL=customer@my-domain.de
 ```
+
+```bash
+node run.mjs db-seed
+```
+
+Not as a prefix on the command line (`SEED_OWNER_EMAIL=… node run.mjs db-seed`):
+that is shell syntax which PowerShell does not have, and this app has to work on
+all three systems. `.env` does.
 
 The seed must stay **idempotent** (`on conflict do update/nothing`) so it can
 run several times. No real customer data, no secrets in the seed.
