@@ -4,7 +4,8 @@
 // What may an update touch, and what must it leave alone?
 //
 // This app is a COPY of a template that keeps being worked on. The code is the
-// customer's from the moment they clone it, but the guidance is not: CLAUDE.md,
+// customer's from the moment they clone it, but the guidance is not: CLAUDE.md
+// (and its twin AGENTS.md, for the programs that look for that name instead),
 // the docs and the skills under `.claude/skills/` are how the agent knows what
 // the app can do, and a copy of them from six months ago is how an agent ends up
 // rebuilding by hand a feature that shipped in the meantime.

@@ -80,6 +80,20 @@ it and say so in the report. If it is not, say *that* — "judged from the code,
 not opened" belongs in **Worth a look**, not in the count. An unseen page is not
 a passed page.
 
+**And if you have none, you can usually get one.** All four programs this
+template supports speak MCP, and Playwright ships an MCP server that gives you a
+browser — navigate, click, screenshot. That is a change to the user's own setup,
+not to this app, so **offer it and let them decide**:
+
+> "I can only judge these pages from the code. If you add the Playwright MCP
+> server to <your program>, I can open them and actually look. Shall I walk you
+> through it? It takes a minute, and it is useful well beyond this check."
+
+If they say no, or it does not work, carry on and be honest in the report about
+which checks were done on a screen and which were not. Checks 5 and 7 (`kit`,
+`access`) are the ones that suffer most; `node run.mjs ux-check` already covers
+their measurable half, and that half needs no browser at all.
+
 ## What counts as a finding
 
 **Severity — what it costs if it stays:**

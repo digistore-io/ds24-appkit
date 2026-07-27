@@ -15,7 +15,7 @@
 // comparison would announce that notes written months ago are out of date.
 //
 // A missing mention is a hint, not an error: somebody may be in the middle of
-// building. The greeting says it once per session (.claude/hooks/session-start.mjs)
+// building. The greeting says it once per session (scripts/dev/session-start.mjs)
 // and CLAUDE.md → "Adding a feature" makes it step 8.
 
 /** The notes file, or `null` when there is none yet. Never throws. */

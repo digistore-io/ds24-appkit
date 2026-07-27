@@ -2,7 +2,8 @@
 // Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
 // SPDX-License-Identifier: MIT
 
-// Bring this app's GUIDANCE up to date — CLAUDE.md, docs/ and .claude/skills/.
+// Bring this app's GUIDANCE up to date — CLAUDE.md/AGENTS.md (the same file
+// under the two names different programs look for), docs/ and .claude/skills/.
 //
 //   node run.mjs update            what would change (nothing is written)
 //   node run.mjs update --apply    write it
@@ -107,7 +108,34 @@ try {
 
 // ── the plan ────────────────────────────────────────────────────────────────
 
-const paths = new Set([...Object.keys(remote.files ?? {}), ...Object.keys(stamp.files ?? {})]);
+// Files this app deliberately does not have, because `node run.mjs agent-setup`
+// removed the wiring for the programs it does not use. Without this the update
+// would helpfully put them all back — and it would do it again after every
+// release, which is how a tidy-up command teaches people to stop running it.
+//
+// Absent file, absent profile: nothing is filtered, which is the right default
+// for everybody who never ran agent-setup.
+const pruned = (() => {
+  try {
+    const profile = JSON.parse(readFileSync(".agent-profile.json", "utf8"));
+    return Array.isArray(profile.pruned) ? profile.pruned : [];
+  } catch {
+    return [];
+  }
+})();
+
+const isPruned = (file) =>
+  pruned.some((prefix) => file === prefix || file.startsWith(`${prefix}/`));
+
+// Filtered once, here, and used for everything downstream — a pruned path that
+// survives into the plan comes back as "new" and undoes the tidy-up.
+const remoteFiles = Object.fromEntries(
+  Object.entries(remote.files ?? {}).filter(([file]) => !isPruned(file)),
+);
+
+const paths = new Set(
+  [...Object.keys(remoteFiles), ...Object.keys(stamp.files ?? {})].filter((file) => !isPruned(file)),
+);
 const local = {};
 for (const file of paths) {
   local[file] = { current: currentHash(file), shipped: stamp.files?.[file] ?? null };
@@ -126,8 +154,13 @@ async function contentOf(file) {
 // fetched before the plan can be finished — but only the skills that would
 // actually change, which is normally none or a handful. Everything else is
 // fetched at `--apply` time and not before: a dry run should cost one request.
-const skillsInPlay = Object.keys(remote.files ?? {}).filter(
-  (file) => file.startsWith(".claude/skills/") && local[file]?.current !== remote.files[file],
+//
+// Every SKILL.md, not just the ones under .claude/skills/: the stubs in
+// .agents/skills/ carry the same `requires:` line, and they have to be refused
+// on the same apps. A stub that slips through is worse than a skill that does —
+// it is a signpost to a file the update just declined to write.
+const skillsInPlay = Object.keys(remoteFiles).filter(
+  (file) => file.endsWith("/SKILL.md") && local[file]?.current !== remoteFiles[file],
 );
 try {
   for (const file of skillsInPlay) await contentOf(file);
@@ -138,7 +171,7 @@ try {
 
 const plan = planUpdate({
   local,
-  remote: remote.files ?? {},
+  remote: remoteFiles,
   content: fetched,
   codeVersion,
 });

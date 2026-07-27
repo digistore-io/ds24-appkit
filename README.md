@@ -3,7 +3,7 @@
 # Digistore SAAS App Template
 
 A starter template for **SAAS applications that bill through Digistore24** —
-built so that you can extend it **together with Claude Code**, even without
+built so that you can extend it **together with an AI coding agent**, even without
 programming experience.
 
 **Stack:** Next.js 16 (App Router) · TypeScript · Drizzle ORM + Postgres ·
@@ -26,9 +26,9 @@ Wired up and ready to use:
 - 🗄️ **Database** with an order state machine (paid/refunded/chargeback/…)
 - 🩺 Health checks (`/api/healthz`, `/api/readyz`) for easy deployment
 
-## Your path to a finished SaaS (with Claude Code)
+## Your path to a finished SaaS
 
-Start Claude Code in the project and simply say what you want — the matching
+Start your AI program in the project and simply say what you want — the matching
 **skills** (in the `.claude/skills/` folder) guide you step by step. Every step
 hands over to the next:
 
@@ -63,7 +63,7 @@ the place that fixes it. You never have to know a skill name:
 
 > **"What's the next step?"**
 
-**You don't have to remember any of this.** Start Claude Code in the project
+**You don't have to remember any of this.** Start your AI program in the project
 folder and say:
 
 > **"Build my app"**
@@ -74,16 +74,16 @@ step by step.
 
 ## What you need installed
 
-The template runs on **Linux, macOS and Windows** — Claude Code does, so this
+The template runs on **Linux, macOS and Windows** — all four programs do, so this
 does too. **Two things you install yourself**, and to get this far you already
 have both:
 
 | | What for |
 |---|---|
-| **Claude Code** | the program you build the app with — [claude.com/claude-code](https://claude.com/claude-code) |
+| **an AI coding program** | the one you build the app with. This template ships wired for four: [Claude Code](https://claude.com/claude-code), [OpenAI Codex CLI](https://developers.openai.com/codex), [Gemini CLI](https://geminicli.com) and [OpenCode](https://opencode.ai). Take whichever you already use — if you have none, Claude Code is the one the walkthroughs are written against |
 | **git** | to fetch this repo — [git-scm.com](https://git-scm.com/downloads); on macOS `xcode-select --install` brings it, on Windows it brings Git Bash |
 
-**Everything else, Claude installs for you.** That includes **Node.js ≥ 20**,
+**Everything else, the agent installs for you.** That includes **Node.js ≥ 20**,
 which the app itself runs on — you do not have to sort that out in advance. Say
 "get my machine ready" in the project folder and the skill `setup-machine` takes
 it from there: it checks what is there, names what is missing, asks before every
@@ -96,7 +96,7 @@ receive real Digistore24 purchases on your own machine while developing.
 
 **No `make` is needed** — the commands run through `node run.mjs`, which works
 in every shell. On **Windows** use **Git Bash** or **WSL2** (not PowerShell);
-Git for Windows brings Git Bash with it, and Claude Code needs it there anyway.
+Git for Windows brings Git Bash with it, and these programs need it there anyway.
 
 **No Homebrew is needed on macOS either.** Where you have it, it gets used;
 where you do not, nothing here asks you to install it first.
@@ -121,13 +121,21 @@ start one morning. `node run.mjs doctor` tells you which of the two is in use.
 
 ## Quick start
 
-```bash
-claude             # start Claude Code in the project folder
-```
+Start your AI program **in this folder** — `claude`, `codex`, `gemini` or
+`opencode`. Point it at the folder above this one and it finds neither the
+guidance nor the skills, and "Build my app" goes nowhere.
 
-Claude greets you and tells you how things continue. It takes care of setup,
+It greets you and tells you how things continue. It takes care of setup,
 database and starting the app together with you — you don't need to know any of
 the commands below by heart.
+
+If no greeting appears, run `node run.mjs greet` — the greeting says whether
+this machine is ready, and silence is not the same as "fine".
+
+*Arrived here with nothing installed yet?* [`docs/start.md`](docs/start.md) is
+the walkthrough from zero — which program to install, how to get this repo, and
+where to start once you have it. `https://ds24-appkit.com/start.md` redirects to
+that same file, which is how somebody reaches it before they have a clone.
 
 ### For developers: the commands directly
 
@@ -179,7 +187,7 @@ takes money (a sleeping app server, an expiring database — both explained in t
 doc), and what the paid ones cost today is something Claude looks up with you
 before you book anything.
 
-**You do not have to do this by hand.** Ask Claude Code for the skill
+**You do not have to do this by hand.** Ask your agent for the skill
 **`setup-hosting`**: it picks the host with you, says what it costs before you
 book anything, installs the host's CLI, gets itself authenticated, creates app
 and database, sets every secret, wires the migration into the deploy and puts a
@@ -210,7 +218,7 @@ scripts/db/         reset.mjs (rebuild the local DB) + seed.mjs (initial data)
 scripts/ds24/       setup: sync products, approval, set up IPN
 scripts/users/      create accounts/roles via CLI
 scripts/ds24/       tunnel.mjs (Cloudflare Quick Tunnel for local IPNs)
-.claude/skills/     guided skills for extending with Claude Code
+.claude/skills/     guided skills for extending the app (all four programs)
 run.mjs             all commands for everyday work (node run.mjs = overview)
 ```
 

@@ -45,21 +45,31 @@ const FORBIDDEN: { pattern: RegExp; tool: string; instead: string }[] = [
 ];
 
 /** The folders that hold tooling — everything a developer's machine executes. */
-const TOOLING_DIRS = ["scripts", ".claude/hooks"];
+const TOOLING_DIRS = ["scripts"];
 
-/** Every .mjs we ship as tooling, plus run.mjs. */
-function toolingFiles(dir: string, found: string[] = []): string[] {
+/**
+ * The session greeting for OpenCode. It lives apart from the rest because
+ * OpenCode has no declarative hooks (opencode#14863) and loads plugins as
+ * modules — and it is `.js`, not `.mjs`, because that is the extension OpenCode
+ * looks for. Same rules apply: it runs on somebody's Linux, macOS or Windows
+ * machine, so it may not reach for a shell either.
+ */
+const PLUGIN_DIRS = [".opencode/plugins"];
+
+/** Every .mjs we ship as tooling, plus run.mjs and the OpenCode plugins. */
+function toolingFiles(dir: string, extensions: string[], found: string[] = []): string[] {
   for (const entry of readdirSync(dir)) {
     const full = path.join(dir, entry);
-    if (statSync(full).isDirectory()) toolingFiles(full, found);
-    else if (entry.endsWith(".mjs")) found.push(full);
+    if (statSync(full).isDirectory()) toolingFiles(full, extensions, found);
+    else if (extensions.some((ext) => entry.endsWith(ext))) found.push(full);
   }
   return found;
 }
 
 const TOOLING = [
   path.join(ROOT, "run.mjs"),
-  ...TOOLING_DIRS.flatMap((dir) => toolingFiles(path.join(ROOT, dir))),
+  ...TOOLING_DIRS.flatMap((dir) => toolingFiles(path.join(ROOT, dir), [".mjs"])),
+  ...PLUGIN_DIRS.flatMap((dir) => toolingFiles(path.join(ROOT, dir), [".mjs", ".js"])),
 ];
 
 /** The one file allowed to know that shells exist. */

@@ -3,7 +3,7 @@
 
 // The greeting has to greet a beginner as a beginner.
 //
-// `.claude/hooks/session-start.mjs` decides between two texts by counting the
+// `scripts/dev/session-start.mjs` decides between two texts by counting the
 // pages under app/dashboard/ that the template did NOT ship. Zero means "fresh
 // clone" and prints the one sentence the whole README points at — "Build my
 // app". Anything above zero means "project under way".
@@ -22,7 +22,7 @@ import path from "node:path";
 const ROOT = path.join(import.meta.dirname, "..");
 
 describe("the session greeting knows which pages ship with the template", () => {
-  const hook = readFileSync(path.join(ROOT, ".claude/hooks/session-start.mjs"), "utf8");
+  const hook = readFileSync(path.join(ROOT, "scripts/dev/session-start.mjs"), "utf8");
 
   // Read as text, not imported: the hook prints the greeting on import and asks
   // the doctor while doing it. Its own side effects are the point of the file.

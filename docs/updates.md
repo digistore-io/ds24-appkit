@@ -9,8 +9,9 @@ yours from the moment you cloned it — nobody changes it behind your back. The
 ## Why this exists
 
 You build this app with an AI agent, and the agent knows what the text in this
-project tells it: `CLAUDE.md` on every session, `docs/` and `.claude/skills/`
-when something points at them. Those files are the reason it uses `hasPlan()`
+project tells it: the guidance file on every session — `CLAUDE.md` or `AGENTS.md`,
+depending on which program you use, and they are the same file under two
+names — plus `docs/` and `.claude/skills/` when something points at them. Those files are the reason it uses `hasPlan()`
 instead of reading a billing table, reaches for `<Callout>` instead of picking
 colours, and runs `setup-digistore` instead of inventing a checkout.
 
@@ -30,7 +31,7 @@ node run.mjs update --apply   # write it
 
 | | |
 |---|---|
-| **Updated** | `CLAUDE.md`, `README.md`, `docs/*.md`, `.claude/skills/**` |
+| **Updated** | `CLAUDE.md` and `AGENTS.md`, `README.md`, `docs/*.md`, `.claude/skills/**` |
 | **Never touched** | everything under `app/`, `lib/`, `db/`, `components/`, `config/`, `messages/`, `scripts/` — all of your code, and every setting |
 | **Never touched** | `docs/app.md`, `docs/product-brief.md`, `docs/reports/` — your own writing |
 | **Never touched** | any of the files above **that you edited yourself** (see below) |

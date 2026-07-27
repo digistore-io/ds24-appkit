@@ -1,10 +1,13 @@
 // Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
 // SPDX-License-Identifier: MIT
 
-// Greeting when Claude Code starts in this project.
+// Greeting when a session starts in this project.
 //
-// Runs as a SessionStart hook (see .claude/settings.json). Whatever lands on
-// stdout here is what the user sees in the terminal — and Claude gets it as
+// It lives here and not under any one program's folder because all four invoke
+// it: .claude/settings.json, .codex/hooks.json, .gemini/settings.json and
+// .opencode/plugins/session-start.js all point at this file, and
+// `node run.mjs greet` runs it by hand when a hook did not fire. Whatever lands
+// on stdout is what the user sees in the terminal — and the agent gets it as
 // context. So: keep it short, say concretely what to do next.
 //
 // Node and not bash, like everything else that has to run on Linux, macOS and
@@ -13,18 +16,19 @@
 //
 // And exactly there is the one thing this file cannot do: it is started WITH
 // `node`, so on a machine that has none it does not run, prints nothing, and
-// "nothing" reads like "all fine". That is why .claude/settings.json carries a
-// second, tiny hook in front of this one — three words of shell asking whether
-// `node` exists at all. It is the one check that cannot be written here, and
+// "nothing" reads like "all fine". That is why each config carries a second,
+// tiny hook in front of this one — three words of shell asking whether `node`
+// exists at all. It is the one check that cannot be written here, and
 // CLAUDE.md → Three systems says so out loud.
 //
-// Note: when a freshly cloned project is opened for the first time, Claude Code
-// asks whether it should trust the project folder. Only after that does this hook run.
+// Note: when a freshly cloned project is opened for the first time, most of
+// these programs ask whether they should trust the folder. Only after that does
+// the greeting run.
 import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { blockers, inspect } from "../../scripts/dev/doctor.mjs";
-import { readNotes, unwrittenPages } from "../../scripts/dev/app-notes.mjs";
-import { readStamp, stampValid, verifiedOn } from "../../scripts/dev/setup-stamp.mjs";
-import { describe as describeUpdate, updateAvailable } from "../../scripts/dev/update-check.mjs";
+import { blockers, inspect } from "./doctor.mjs";
+import { readNotes, unwrittenPages } from "./app-notes.mjs";
+import { readStamp, stampValid, verifiedOn } from "./setup-stamp.mjs";
+import { describe as describeUpdate, updateAvailable } from "./update-check.mjs";
 
 const hasEnv = existsSync(".env");
 const hasBrief = existsSync("docs/product-brief.md");

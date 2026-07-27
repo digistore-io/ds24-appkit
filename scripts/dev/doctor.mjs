@@ -8,7 +8,7 @@
 //
 //   node run.mjs doctor          the text a person reads
 //   node run.mjs doctor --json   the same facts for the agent (skill setup-machine)
-//   .claude/hooks/session-start  the cheap subset, on every session
+//   scripts/dev/session-start     the cheap subset, on every session
 //
 // Why data and not prose: the skill that walks somebody through the setup must
 // not carry install commands of its own. Three copies of the same table — one

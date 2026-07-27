@@ -154,6 +154,26 @@ node run.mjs setup
 That is `.env` (including a generated `AUTH_SECRET`), the dependencies, the
 database and the pending migrations, in one go.
 
+### 5b. Which program is this?
+
+This app ships wired for four — Claude Code, Codex CLI, Gemini CLI and OpenCode —
+so that it works whichever one it was opened in. Now that somebody is actually
+working here, take the other three out:
+
+```bash
+node run.mjs agent-setup --agent claude|codex|gemini|opencode --apply
+```
+
+**You know which one you are, so say it** — do not leave it to detection. The
+command reads environment variables when nobody tells it, which is a convenience
+and not a mechanism: it cannot distinguish reliably, and a wrong guess removes
+the wiring somebody is using.
+
+Nothing is lost either way. The skills, the guidance and the greeting are shared
+and stay; only the other programs' config goes, and `--agent <other>` or `--undo`
+puts it back. Mention it in half a sentence — it is housekeeping, not a decision
+the user has to make.
+
 ### 6. Prove it
 
 ```bash

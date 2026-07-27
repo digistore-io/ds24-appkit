@@ -1,0 +1,282 @@
+#!/usr/bin/env node
+// Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
+// SPDX-License-Identifier: MIT
+
+// Reduce this app to the one AI program you actually use.
+//
+//   node run.mjs agent-setup                  what it would do
+//   node run.mjs agent-setup --apply          do it
+//   node run.mjs agent-setup --agent codex --apply
+//   node run.mjs agent-setup --undo --apply   wire all four up again
+//
+// ── Why the template ships wired for all four ───────────────────────────────
+//
+// Because "it works out of the box" has to be literally true. A fresh clone
+// opened in Claude Code, Codex, Gemini or OpenCode greets you and finds the
+// skills before anybody has run anything. Wiring it up on demand would have made
+// that claim conditional on remembering a command, and the person who most needs
+// the greeting is exactly the one who does not know the command exists.
+//
+// The cost is files for three programs you do not use. This removes them.
+// Tidiness afterwards, never a precondition.
+//
+// ── Nothing here is one-way ─────────────────────────────────────────────────
+//
+// People try one program and move to another, and that must not mean re-cloning.
+// Everything removed can be written again from what stays:
+//
+//   the configs   from scripts/dev/agent-configs.mjs, which ships for this reason
+//   the stubs     from .claude/skills/, via scripts/dev/agent-skills.mjs
+//
+// So `--agent <other> --apply` is always available, and so is `--undo`.
+//
+// ── What it never touches ───────────────────────────────────────────────────
+//
+//   .claude/skills/**              the real skills. Claude Code and OpenCode read
+//                                  them directly and the stubs point at them —
+//                                  they are not "the Claude folder", they are the
+//                                  substance.
+//   scripts/dev/session-start.mjs  the greeting, shared by all four.
+//   CLAUDE.md, AGENTS.md           the same guidance under both names. Kept even
+//                                  for a program that reads only one, because
+//                                  switching later is a normal thing to do.
+//   anything you wrote             it only ever removes paths it can regenerate.
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import { AGENTS, detectAgent, prunedPathsFor } from "./agent-configs.mjs";
+import { stubFor } from "./agent-skills.mjs";
+
+const ROOT = process.cwd();
+const PROFILE = ".agent-profile.json";
+const STUBS = ".agents/skills";
+
+const abs = (file) => path.join(ROOT, file);
+
+/** The stub files, derived from whatever skills this app currently has. */
+function stubFiles() {
+  let skills = [];
+  try {
+    skills = readdirSync(abs(".claude/skills"), { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort();
+  } catch {
+    return [];
+  }
+
+  return skills.map((skill) => ({
+    file: `${STUBS}/${skill}/SKILL.md`,
+    content: stubFor(readFileSync(abs(`.claude/skills/${skill}/SKILL.md`), "utf8"), skill),
+  }));
+}
+
+/**
+ * Everything the chosen program needs, and everything it does not.
+ *
+ * Removal is per FILE and only when the file still holds what we put there.
+ * Deleting a directory wholesale would take a `.gemini/skills/` somebody added,
+ * or the `permissions` block they wrote into `.claude/settings.json`, and it
+ * would do it without a word. Same rule the guidance update lives by: a file you
+ * changed is yours, and this reports it instead of touching it.
+ */
+function planFor(agent) {
+  const keep = [];
+  const drop = [];
+
+  for (const [name, { files }] of Object.entries(AGENTS)) {
+    for (const [file, content] of Object.entries(files)) {
+      (name === agent ? keep : drop).push({ file, content });
+    }
+  }
+
+  // The stubs are generated from this app's own skills, so "what we put there"
+  // is whatever they would be regenerated as right now.
+  const stubs = stubFiles();
+  if (AGENTS[agent].stubs) keep.push(...stubs);
+  else drop.push(...stubs);
+
+  const present = drop.filter(({ file }) => existsSync(abs(file)));
+
+  return {
+    write: keep.filter(({ content, file }) => content !== undefined && read(file) !== content),
+    remove: present.filter(({ file, content }) => read(file) === content),
+    yours: present.filter(({ file, content }) => read(file) !== content),
+  };
+}
+
+/**
+ * What this app should NOT have, given the program it is set up for — minus
+ * anything the customer changed, which stayed put and must keep being seen.
+ *
+ * Derived from the choice, not from what this run happened to delete: otherwise
+ * switching twice quietly shortens the list, because the second run finds the
+ * first run's files already gone and records only its own.
+ */
+function prunedPaths(agent) {
+  const paths = prunedPathsFor(agent);
+  const kept = planFor(agent).yours.map(({ file }) => file);
+  return paths.filter((p) => !kept.some((file) => file === p || file.startsWith(`${p}/`)));
+}
+
+/** Directories left empty by the removal — never one that still holds anything. */
+function emptyDirs(removed) {
+  const candidates = new Set();
+  for (const { file } of removed) {
+    let dir = path.dirname(file);
+    while (dir && dir !== "." && dir !== path.sep) {
+      candidates.add(dir);
+      dir = path.dirname(dir);
+    }
+  }
+  // Deepest first, so `.agents/skills` goes before `.agents`.
+  return [...candidates].sort((a, b) => b.length - a.length);
+}
+
+function read(file) {
+  try {
+    return readFileSync(abs(file), "utf8");
+  } catch {
+    return null;
+  }
+}
+
+function write(file, content) {
+  const target = abs(file);
+  mkdirSync(path.dirname(target), { recursive: true });
+  writeFileSync(target, content);
+}
+
+// ── arguments ───────────────────────────────────────────────────────────────
+
+const args = process.argv.slice(2);
+const apply = args.includes("--apply");
+const undo = args.includes("--undo");
+const flag = (name) => {
+  const at = args.indexOf(name);
+  return at >= 0 ? args[at + 1] : null;
+};
+
+const names = Object.keys(AGENTS);
+const asked = flag("--agent");
+
+if (asked && !AGENTS[asked]) {
+  console.error(`✗ Unknown program: ${asked}`);
+  console.error(`  Pick one of: ${names.join(", ")}`);
+  process.exit(1);
+}
+
+// ── undo ────────────────────────────────────────────────────────────────────
+
+if (undo) {
+  const restore = [
+    ...Object.values(AGENTS).flatMap(({ files }) =>
+      Object.entries(files).map(([file, content]) => ({ file, content })),
+    ),
+    ...stubFiles(),
+  ].filter(({ file, content }) => read(file) !== content);
+
+  if (restore.length === 0) {
+    console.log("✓ Already wired up for all four programs — nothing to do.");
+    process.exit(0);
+  }
+
+  console.log("Wire this app up for all four programs again:\n");
+  for (const { file } of restore) console.log(`  + ${file}`);
+
+  if (!apply) {
+    console.log("\nNothing written. Repeat with --apply to do it.");
+    process.exit(0);
+  }
+
+  for (const { file, content } of restore) write(file, content);
+  rmSync(abs(PROFILE), { force: true });
+  console.log(`\n✓ ${restore.length} file(s) written. ${PROFILE} removed.`);
+  process.exit(0);
+}
+
+// ── which program? ──────────────────────────────────────────────────────────
+
+const previous = (() => {
+  try {
+    return JSON.parse(readFileSync(abs(PROFILE), "utf8"));
+  } catch {
+    return null;
+  }
+})();
+
+const detected = detectAgent();
+const agent = asked ?? detected ?? previous?.agent;
+
+if (!agent) {
+  // Detection is a convenience, never the mechanism — the program running this
+  // knows what it is. Saying so is one word and always correct; guessing from
+  // environment variables is neither.
+  console.error("✗ Cannot tell which program this is.");
+  console.error("");
+  console.error("  If you are the agent reading this: say which one you are.");
+  for (const name of names) {
+    console.error(`      node run.mjs agent-setup --agent ${name} --apply`.padEnd(58) + `# ${AGENTS[name].label}`);
+  }
+  process.exit(1);
+}
+
+// ── the plan ────────────────────────────────────────────────────────────────
+
+const { write: toWrite, remove: toRemove, yours } = planFor(agent);
+const label = AGENTS[agent].label;
+
+if (toWrite.length === 0 && toRemove.length === 0) {
+  console.log(`✓ Already set up for ${label} — nothing to do.`);
+  if (yours.length > 0) {
+    console.log("");
+    console.log("  Left alone, because you changed them:");
+    for (const { file } of yours) console.log(`    · ${file}`);
+  }
+  process.exit(0);
+}
+
+console.log(`This app, set up for ${label}${asked ? "" : detected ? " (detected)" : " (from the last run)"}:\n`);
+for (const { file } of toWrite) console.log(`  + ${file}`);
+for (const { file } of toRemove) console.log(`  - ${file}`);
+for (const { file } of yours) console.log(`  · ${file}  (kept — you changed this one)`);
+console.log("");
+console.log("  The skills, the guidance and the greeting stay — only the wiring for the");
+console.log("  other programs goes. `--undo` puts it all back, and so does --agent <other>.");
+
+if (!apply) {
+  console.log("\nNothing written. Repeat with --apply to do it.");
+  process.exit(0);
+}
+
+for (const { file, content } of toWrite) write(file, content);
+for (const { file } of toRemove) rmSync(abs(file), { force: true });
+
+// Removing the last file out of `.agents/skills/build-app` leaves two empty
+// directories behind, which reads as something half-finished. Emptiness is the
+// whole condition — a directory that still holds anything is somebody's, and
+// readdirSync throwing (not there) is fine too.
+for (const dir of emptyDirs(toRemove)) {
+  try {
+    if (readdirSync(abs(dir)).length === 0) rmSync(abs(dir), { recursive: true });
+  } catch {
+    /* already gone, or never there */
+  }
+}
+
+writeFileSync(
+  abs(PROFILE),
+  `${JSON.stringify(
+    {
+      agent,
+      label,
+      stubs: AGENTS[agent].stubs,
+      pruned: prunedPaths(agent),
+      note: "Written by `node run.mjs agent-setup`. Delete it and run the command again to start over.",
+    },
+    null,
+    2,
+  )}\n`,
+);
+
+console.log(`\n✓ Set up for ${label}. ${toWrite.length} written, ${toRemove.length} removed.`);
+console.log(`  Recorded in ${PROFILE}, so \`node run.mjs update\` will not put them back.`);

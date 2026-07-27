@@ -17,9 +17,9 @@
 //   node run.mjs start --port 3005
 //
 // ── Why a Node script and not a Makefile ────────────────────────────────────
-// This app is built with Claude Code, and Claude Code runs on Linux, macOS and
-// Windows. `make` does not: it is absent on Windows and needs the Xcode Command
-// Line Tools on macOS. Node is present anyway — it is a Next.js app. See
+// This app is built with an AI program — Claude Code, Codex, Gemini or OpenCode
+// — and all of them run on Linux, macOS and Windows. `make` does not: it is
+// absent on Windows and needs the Xcode Command Line Tools on macOS. Node is present anyway — it is a Next.js app. See
 // CLAUDE.md → Three systems. (A Makefile is still in the project, but only as
 // an alias that forwards here.)
 //
@@ -373,10 +373,37 @@ const TASKS = {
     help: "Bring the guidance up to date (CLAUDE.md, docs/, skills) — --apply writes",
     run: (args) => script("scripts/dev/update.mjs", args),
   },
+  "agent-setup": {
+    group: "Setup",
+    help: "Reduce this app to the AI program you use (--apply writes; --undo restores all four)",
+    // No `needs`: it only moves text files around, and the first session in a
+    // fresh clone is exactly when it is wanted.
+    run: (args) => script("scripts/dev/agent-setup.mjs", args),
+  },
+  greet: {
+    group: "Setup",
+    help: "The session greeting — where this project stands and what to do next",
+    // The same thing every program prints when a session starts, available as a
+    // command. Two reasons it has to be:
+    //
+    //   1. Each of the four wires it up differently (.claude/settings.json,
+    //      .codex/hooks.json, .gemini/settings.json, .opencode/plugins/), and
+    //      three of those are young enough to break. When the hook does not
+    //      fire, the greeting is not a nicety that goes missing — it carries
+    //      the `[Setup: blocked]` line, and CLAUDE.md makes a node answer this
+    //      session a precondition for writing any file at all. Silence would
+    //      read as "all fine" on a machine with nothing installed.
+    //   2. An agent that starts in a project with no greeting has a command it
+    //      can run instead of guessing.
+    //
+    // No `needs`: it has to work in a project where nothing is set up yet —
+    // that is the case it exists for.
+    run: () => script("scripts/dev/session-start.mjs"),
+  },
   help: {
     group: "Setup",
-    help: "Show this overview",
-    run: () => showHelp(),
+    help: "Show this overview (--json for the machine-readable list)",
+    run: (args) => showHelp(args),
   },
 
   // Runs when something needs it, never listed.
@@ -393,7 +420,19 @@ const TASKS = {
 
 // ── help ────────────────────────────────────────────────────────────────────
 
-function showHelp() {
+function showHelp(args = []) {
+  // --json is for an agent, not a person: a program that starts here with no
+  // greeting and no memory can read the command list instead of guessing at it,
+  // and get the same answer every time. Together with `greet` that is two calls
+  // to full orientation in a project it has never seen.
+  if (args.includes("--json")) {
+    const commands = Object.entries(TASKS)
+      .filter(([, task]) => !task.hidden)
+      .map(([name, task]) => ({ name, group: task.group, help: task.help }));
+    console.log(JSON.stringify({ usage: "node run.mjs <command> [arguments]", commands }, null, 2));
+    return;
+  }
+
   console.log("Commands for this app — node run.mjs <command> [arguments]\n");
   const groups = new Map();
   for (const [name, task] of Object.entries(TASKS)) {
