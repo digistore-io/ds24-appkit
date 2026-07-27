@@ -130,6 +130,12 @@ There are guided skills in `.claude/skills/` — use them in this order:
   key in, bind each task to a model and set the prices the cost page reports.
 - **`mcp-server`** — *(optional)* let customers connect Claude to the app: decide
   which capabilities become tools, then switch the MCP interface on.
+- **`ux-gateway`** — once the app has pages: the same shape for the experience.
+  The first five minutes after a purchase, dead ends, actions that report
+  nothing back, hand-built elements, wording, keyboard and small screens —
+  measured where it can be (`node run.mjs ux-check`), looked at where it
+  cannot, report in `docs/reports/`. The rules it audits against are
+  [`docs/ux.md`](docs/ux.md).
 - **`security-gateway`** — before the launch: eight checks (access control,
   money, secrets, packages, endpoints, hosting), each finding with a severity,
   the serious ones fixed, and a report in `docs/reports/`.
@@ -160,11 +166,18 @@ next one):
 `setup-digistore` *(→ optional `billing-modes` for subscriptions/prepaid tokens,
 optional `ai-chat-knowledge` for the in-app assistant, optional `ai-providers`
 to choose the AI company, optional `mcp-server` for the AI interface)* →
-**(3) Security** `security-gateway` → **(4) Scaling** `performance-gateway` →
-**(5) Legal** `compliance-check` → **(6) Live** `go-live` *(which begins with
-`setup-hosting` — host, database, secrets, domain)* → **(7) Marketing**
-`go-to-market`. Alongside all of it: `guardrails`, and `coach` whenever somebody
-has lost the thread.
+**(3) Experience** `ux-gateway` → **(4) Security** `security-gateway` →
+**(5) Scaling** `performance-gateway` → **(6) Legal** `compliance-check` →
+**(7) Live** `go-live` *(which begins with `setup-hosting` — host, database,
+secrets, domain)* → **(8) Marketing** `go-to-market`. Alongside all of it:
+`guardrails`, and `coach` whenever somebody has lost the thread.
+
+**Experience comes before security on purpose.** Its findings change the
+interface, and a security pass run before those changes is a pass on an app that
+no longer exists. It also comes after the payment step rather than before it,
+because the moment it exists to protect — a customer who has just paid, looking
+for proof that it worked — is not there to be checked until there is a
+checkout.
 
 ### How a skill works — the same way every time
 
@@ -187,14 +200,15 @@ their way around one skill has then found their way around all of them:
     checks, each with what it looks at and roughly how long it takes. Item 1 is
     the full run and the default. If the user's request already names one check,
     start it and skip the menu; otherwise show the menu and **wait**.
-    `security-gateway`, `performance-gateway`.
+    `ux-gateway`, `security-gateway`, `performance-gateway`.
 - **Point at the reference, do not copy it.** Where a `docs/…` file already
   explains the thing in full, the skill names it in its first few lines and
   reads it — it does not restate it. Two copies drift, and the one in the skill
   is the one nobody updates.
 - **One severity ladder, one shape for a finding.** 🚨 CRITICAL, ❌ HIGH,
   ⚠️ MEDIUM, ℹ️ LOW, and every finding says *Where · Why · Fix · Evidence* in
-  that order. `security-gateway` and `performance-gateway` are the reference.
+  that order. `security-gateway`, `performance-gateway` and `ux-gateway` are the
+  reference.
 - **Anything that produces a verdict writes it down**, dated, into
   `docs/reports/` — so that "have we already done that?" has an answer next
   month. Anything that produces a plan or a text writes it into `docs/`.
@@ -300,6 +314,12 @@ colors doesn't make the app more individual, only inconsistent: the
 hand-built variant tips over in dark mode, has no focus ring and looks
 different again two pages later.
 
+**This section says which component to reach for.
+[`docs/ux.md`](docs/ux.md) says what the app has to do for the person in front
+of it** — the first five minutes after a purchase, dead ends, wording, keyboard
+and small screens. The skill that audits an app against it is `ux-gateway`, and
+`node run.mjs ux-check` settles the part of it a machine can settle.
+
 **The construction kit** (`components/ui/`, all shadcn/ui):
 
 | For what | Use | Instead of |
@@ -315,6 +335,7 @@ different again two pages later.
 | Status, role, marker | `<Badge>`, `<RoleBadge>` | a colored `<span>` |
 | Empty list | `<EmptyState>` | a blank area |
 | Page header | `<PageHeader>` | your own `<h1>` |
+| What a new customer should do first | `<OnboardingChecklist>` | an overview that explains nothing |
 
 **The four rules that count:**
 
@@ -487,6 +508,59 @@ it finds by cause, names the file and line, and tells you where the fix belongs.
 It exits non-zero when it finds something, so it can gate a "done". `smoke` runs
 it around its own sweep; after clicking through the app yourself, run it by hand.
 
+### A hydration mismatch is not always yours
+
+One class of that error comes from **outside the app entirely**, and it is worth
+recognising before you go looking for the bug: a browser extension that rewrites
+the page before React hydrates. React itself says so at the bottom of its
+message — *"It can also happen if the client has a browser extension installed
+which messes with the HTML before React loaded"* — and that line is easy to read
+past when the stack trace is pointing at one of your own components.
+
+**Read the diff, not the trace.** React prints the attributes that differ, and
+they carry the culprit's name:
+
+```
+  <svg className="lucide lucide-languages" …>
+-   data-darkreader-inline-stroke=""
+-   style={{--darkreader-inline-stroke:"currentColor"}}
+```
+
+`data-darkreader-*` is Dark Reader, `data-gr-*` and `data-new-gr-c-s-*` are
+Grammarly. An attribute nobody in this project wrote, on an element nobody in
+this project styled, is an extension. The trace names `components/…tsx` because
+that is where the element was rendered, not where the attribute came from — and
+the fix is never there.
+
+Three things follow, and the third is the one that costs time:
+
+- **Dark Reader is already dealt with.** `app/layout.tsx` carries
+  `other: { "darkreader-lock": "true" }` in its `metadata`, the tag Dark Reader
+  documents for exactly this
+  ([`CONTRIBUTING.md`](https://github.com/darkreader/darkreader/blob/main/CONTRIBUTING.md)).
+  It is right for this app rather than a workaround: the app **has** a dark mode
+  of its own, so an extension inverting it on top is both the fault and a worse
+  result than the toggle in the header. A browser without the extension ignores
+  an unknown meta name, so it costs nothing anywhere else.
+  `app/darkreader-lock.test.ts` keeps the line from being tidied away as
+  mysterious.
+  **The `"true"` is load-bearing and has nothing to do with Dark Reader**, which
+  reads the value never (`meta[name="darkreader-lock"] != null` is its whole
+  check): **Next drops an `other` entry whose value is the empty string.** Write
+  the `""` that the tag's own documentation suggests and it type-checks, the
+  tests stay green, and no tag ever reaches the browser. That is the shape of
+  bug this whole section is about — verify a metadata change by looking at the
+  delivered HTML, not at the source.
+- **It is not a Windows thing**, however it was reported. It follows the browser
+  profile, so the same extension shows the same error on Linux and macOS, and a
+  colleague without it never reproduces the bug you are chasing.
+- **`suppressHydrationWarning` is not the answer, and reaching for it is the
+  mistake.** It works **one level deep** — the one on `<html>` covers the theme
+  class next-themes sets there and nothing else. Adding a second one further
+  down does not stop an extension rewriting the DOM; it stops React telling you
+  about it, which is worse than the warning. If some future extension needs
+  handling, handle it at the element it touches or not at all.
+
 Three things `node run.mjs smoke` cannot do:
 
 - **Dynamic pages** (`app/…/[id]/page.tsx`) are skipped — without a real ID
@@ -520,7 +594,12 @@ Three things `node run.mjs smoke` cannot do:
 7. **`node run.mjs start && node run.mjs smoke && node run.mjs errors`** — call the
    new page up yourself, signed in, and then ask the log. Only then is it done
    (see "Never ship a broken page").
-8. **One entry in `docs/app.md`** — the page's path, the access gate as code, the
+8. **`node run.mjs ux-check`**, and then look at the page as the customer: does
+   it say what to do when it is empty, does the action report back, is it
+   readable in dark mode and at 380 px? Thirty seconds each, and they are the
+   three that get skipped. The full pass is the skill `ux-gateway`;
+   the rules are [`docs/ux.md`](docs/ux.md).
+9. **One entry in `docs/app.md`** — the page's path, the access gate as code, the
    tables, the tests. See **This app's own notebook** below.
 
 ### This app's own notebook — `docs/app.md`
@@ -1399,6 +1478,11 @@ overview). Arguments go straight through — there is no `ARGS="…"` wrapping.
 - `node run.mjs errors` — what the log picked up: the errors that leave the status
   code at 200 (a bad date, a missing text, a hydration mismatch). Run it after
   clicking through the app; non-zero exit when it finds something
+- `node run.mjs ux-check` — the interface, measured: contrast of every token
+  pair in both modes, hard-coded colours, hand-built elements, icon buttons with
+  no name, pages that are in no menu. The half of `ux-gateway` a machine can
+  settle — a green run means the countable things are counted, not that the app
+  is good
 - `node run.mjs ai-check` — which task runs on which model, are the keys there, what does a call cost
 - `node run.mjs mcp-check` — check the MCP server's settings; `--live` really calls it once
 - `node run.mjs db-generate` / `node run.mjs db-migrate` — create / apply a migration
@@ -1595,12 +1679,30 @@ in `ps`. That is portable by construction, it survives a recycled PID, and it
 answers the question you actually care about ("does it respond?") instead of a
 proxy for it. `scripts/dev/ports.mjs` is written that way on purpose.
 
-**One Windows-only trap in Node itself:** spawning `npm` or `npx` needs
-`shell: true`, because those are `.cmd` shims and Node has refused to run them
-without a shell since 18.20/20.12 (it fails with `EINVAL`). Our own scripts are
-therefore started as `spawn(process.execPath, ["scripts/…mjs", …args])` — no
-shell, so user arguments cannot be mangled by quoting. `docker` is a real
-executable and needs neither. Both rules are written out at the top of `run.mjs`.
+**One Windows-only trap in Node itself:** spawning `npm` needs a shell, because
+it is a `.cmd` shim there and Node has refused to run those without one since
+18.20/20.12 (it fails with `EINVAL`). Our own scripts are started as
+`spawn(process.execPath, ["scripts/…mjs", …args])` — no shell, so user arguments
+cannot be mangled by quoting. `docker`, `git` and `cloudflared` are real
+executables and need neither. Both rules are written out at the top of `run.mjs`.
+
+**Never pass a `shell` option yourself, though — that decision belongs to
+`scripts/lib/proc.mjs` and `scripts/portability.test.ts` fails the build on a
+second one.** Not a style rule; it is load-bearing twice over:
+
+- **`shell: true` beside an args array escapes nothing.** Node builds the command
+  line as a plain `[file, ...args].join(" ")`, so an argument carrying a `&` or a
+  `;` stops being an argument. That is not theoretical — the Digistore24 approval
+  link carries query parameters, and `node run.mjs ds24-connect` used to hand the
+  browser an address truncated at the first `&`. Node 24 deprecated the
+  combination for exactly this reason (`DEP0190`), and the warning it prints
+  greets a Windows developer in front of their very first command.
+- **Most of those spawns never needed a shell at all.** `spawnCommand()` looks
+  the command up on the `PATH` first, and starts `cmd.exe` only where the
+  resolved file really is a `.cmd`/`.bat` — with the command line built there and
+  every argument quoted, rather than concatenated by Node. Opening a URL is the
+  one case with no way around a shell (`start` is a word cmd.exe understands, not
+  a program), which is why `openUrl()` lives in that file too.
 
 ### Line endings — LF, on all three systems
 

@@ -48,8 +48,11 @@ if ((!isLocal || isProd) && !force) {
   process.exit(2);
 }
 
-const run = (cmd, args) =>
-  execFileSync(cmd, args, { stdio: "inherit", shell: process.platform === "win32" });
+// `process.execPath` and no shell — rule 1 of scripts/lib/proc.mjs. The child
+// then runs on the Node that started this, not on whatever is first on the
+// PATH; and `node` is a real .exe on Windows, so the shell this used to ask for
+// there was never needed (it only earned us Node 24's DEP0190 warning).
+const run = (args) => execFileSync(process.execPath, args, { stdio: "inherit" });
 
 console.log(`>> Dropping and recreating schemas (${host})`);
 const sql = postgres(url, { max: 1 });
@@ -69,11 +72,11 @@ try {
 }
 
 console.log(">> Applying migrations (drizzle/)");
-run("node", ["scripts/db/migrate.mjs"]);
+run(["scripts/db/migrate.mjs"]);
 
 if (existsSync("scripts/db/seed.mjs")) {
   console.log(">> Applying seed (scripts/db/seed.mjs)");
-  run("node", ["scripts/db/seed.mjs"]);
+  run(["scripts/db/seed.mjs"]);
 }
 
 console.log("✓ Database has been rebuilt from scratch.");

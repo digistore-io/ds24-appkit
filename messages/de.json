@@ -106,7 +106,23 @@
     "nextBody": "Das ist deine Startseite nach der Anmeldung. Ersetze diesen Inhalt durch das, was deine App wirklich tut — sag deiner KI-Assistenz einfach, was du brauchst.",
     "purchasePlan": "Kauf erfolgreich — {product} ist jetzt freigeschaltet.",
     "purchaseTokens": "{credits, plural, one {# Token wurde deinem Guthaben gutgeschrieben.} other {# Tokens wurden deinem Guthaben gutgeschrieben.}}",
-    "purchaseGeneric": "Kauf erfolgreich. Vielen Dank!"
+    "purchaseGeneric": "Kauf erfolgreich. Vielen Dank!",
+    "onboardingPlanTitle": "Zugang freischalten",
+    "onboardingPlanBody": "Wähle einen Tarif — danach steht dir alles offen, was dazugehört.",
+    "onboardingPlanCta": "Tarife ansehen",
+    "onboardingPlanDone": "Freigeschaltet: {products}",
+    "onboardingTokensTitle": "Guthaben aufladen",
+    "onboardingTokensBody": "Mit Tokens bezahlst du, was du wirklich nutzt.",
+    "onboardingTokensCta": "Guthaben kaufen",
+    "onboardingTokensDone": "{balance} Tokens auf deinem Konto."
+  },
+  "onboarding": {
+    "title": "Deine ersten Schritte",
+    "body": "Was noch offen ist, damit du loslegen kannst.",
+    "progress": "{done} von {total} erledigt",
+    "open": "Erledigen",
+    "stateDone": "erledigt",
+    "stateOpen": "offen"
   },
   "account": {
     "title": "Mein Konto",

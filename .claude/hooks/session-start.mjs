@@ -90,7 +90,9 @@ console.log("");
 if (customPages > 0 || hasBrief) {
   // A project already under way — do not bother them with beginner text.
   console.log("What do you want to carry on with?");
-  console.log("The path: build → payment → security → legal → live → marketing.");
+  console.log(
+    "The path: build → payment → experience → security → legal → live → marketing.",
+  );
   console.log('Say e.g. "carry on with the app" or "set up the payment".');
 } else {
   console.log("This is how you start — just say:");

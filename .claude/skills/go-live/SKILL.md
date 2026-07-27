@@ -115,13 +115,18 @@ Once, before selling:
   unlocked.
 - Custom domain + HTTPS active.
 
-## 6. Checking security & performance against LIVE
+## 6. Checking the experience, security & performance against LIVE
 
-- Run **`security-gateway`** and **`performance-gateway`** once more against the
-  live instance — the full pass in each, and this time the `host` check has
-  something to look at and the load test runs against the live URL at `-c 100`.
-  Both write a dated report into `docs/reports/`; that pair is the record that
-  the launch was checked. Only when they are green is "live" really finished.
+- Run **`ux-gateway`**, **`security-gateway`** and **`performance-gateway`**
+  once more against the live instance — the full pass in each, and this time the
+  `host` check has something to look at and the load test runs against the live
+  URL at `-c 100`. All three write a dated report into `docs/reports/`; those
+  three are the record that the launch was checked. Only when they are green is
+  "live" really finished.
+- **`ux-gateway` has something here it cannot have locally: a real purchase on
+  the real domain.** Buy one as a stranger would, on a phone, and stop on the
+  page you land on afterwards. That is the screen the whole launch is judged on,
+  and it is the one nobody sees until the day it is live.
 
 ## 7. Safeguards
 

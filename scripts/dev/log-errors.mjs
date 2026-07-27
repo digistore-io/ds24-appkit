@@ -122,7 +122,10 @@ const HINTS = [
     when: /hydrat/i,
     say:
       "server and browser rendered different markup. Usually a date, a random value\n" +
-      "    or a `typeof window` check inside the render.",
+      "    or a `typeof window` check inside the render — but read the attributes React\n" +
+      "    prints as differing FIRST: a vendor name in them (data-darkreader-*,\n" +
+      "    data-gr-*) means a browser extension rewrote the page and the code is fine.\n" +
+      "    See CLAUDE.md -> A hydration mismatch is not always yours.",
   },
   {
     when: /unhandledRejection/,

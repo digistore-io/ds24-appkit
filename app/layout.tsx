@@ -19,6 +19,19 @@ export async function generateMetadata(): Promise<Metadata> {
     // `template` appends the app name to every page title: "Plans · Your App".
     title: { default: APP_NAME, template: `%s · ${APP_NAME}` },
     description: t("subtitle"),
+    // Asks the Dark Reader browser extension to leave this page alone — it has
+    // a dark mode of its own (next-themes, the toggle in the header). Without
+    // it the extension writes `data-darkreader-*` into every SVG BEFORE React
+    // hydrates, and the first page view reports a hydration mismatch that is
+    // not in this app's code at all. Officially provided for
+    // (darkreader/CONTRIBUTING.md → "Disabling Dark Reader on your site").
+    // Dark Reader only checks that the tag is THERE — its own test reads
+    // `document.querySelector('meta[name="darkreader-lock"]') != null`, so the
+    // content is never looked at. It says `"true"` because Next silently drops
+    // an `other` entry whose value is the empty string, and then nothing ships.
+    // A browser without the extension ignores an unknown meta name.
+    // See CLAUDE.md → A hydration mismatch is not always yours.
+    other: { "darkreader-lock": "true" },
   };
 }
 
@@ -31,6 +44,13 @@ export default async function RootLayout({
     // suppressHydrationWarning: next-themes sets the theme class on <html>
     // before React hydrates — the mismatch is intended and affects only this
     // one element.
+    //
+    // It is worth knowing what this does NOT cover: the attribute works one
+    // level deep only. It says nothing about anything inside <body>, so it is
+    // no answer to a browser extension rewriting the markup — that is what the
+    // `darkreader-lock` above is for. Reaching for a second
+    // suppressHydrationWarning further down the tree is the mistake this note
+    // exists to prevent; it would silence the report without changing the DOM.
     //
     // The Geist fonts ship as files in the `geist` package (no fetch from
     // Google Fonts at build time) and hang off <html> as CSS variables;

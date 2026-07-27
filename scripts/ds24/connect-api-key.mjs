@@ -34,12 +34,12 @@
 //   node scripts/ds24/connect-api-key.mjs --manual  (force route B)
 //   node scripts/ds24/connect-api-key.mjs --print   (write nothing, just show)
 //   node scripts/ds24/connect-api-key.mjs --port 3005  (the app runs on this port)
-import { spawn } from "node:child_process";
 import { createInterface } from "node:readline/promises";
 import "../lib/env.mjs";
 import { ds24Call, parseArgs } from "./_client.mjs";
 import { publicUrlFor } from "./_public-url.mjs";
 import { setEnvValue } from "../lib/env-write.mjs";
+import { openUrl } from "../lib/proc.mjs";
 import { rememberedPort } from "../dev/app-port.mjs";
 import {
   DIGISTORE_API_URL,
@@ -92,36 +92,17 @@ function appBaseUrl() {
 // Only for testing against a DS24 test host that lets localhost through.
 const noRelay = Boolean(args["no-relay"]);
 
-/** Opens a URL in the default browser (best effort, cross-platform). */
-function openBrowser(url) {
-  const cmd =
-    process.platform === "darwin" ? "open"
-    : process.platform === "win32" ? "start"
-    : "xdg-open";
-  try {
-    const child = spawn(cmd, [url], {
-      stdio: "ignore",
-      detached: true,
-      shell: process.platform === "win32",
-    });
-    // A missing `xdg-open` — a headless Linux box, a container, a server over
-    // SSH — does NOT throw here: spawn reports it asynchronously as an 'error'
-    // event, and an 'error' event nobody listens for takes the whole process
-    // down. That would kill the setup on exactly the machines where the printed
-    // link above is the only way through. The link is already on screen, so
-    // there is nothing left to say here.
-    child.on("error", () => {});
-    child.unref();
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 function showLink(url, hint) {
   console.log(`\n${hint}`);
   console.log(`\n  ${url}\n`);
-  if (!openBrowser(url)) {
+  // `openUrl()` lives in scripts/lib/proc.mjs because opening a link is the one
+  // thing on Windows that cannot be done without cmd.exe — `start` is a word it
+  // understands, not a program. This used to be done here, and the URL went to
+  // the shell unquoted: the request_url below carries query parameters, so cmd
+  // ended the command line at the first `&` and the browser was handed a
+  // truncated address. The link is on screen either way, which is why a failure
+  // here is only worth one sentence.
+  if (!openUrl(url)) {
     console.log("(The browser could not be opened automatically — copy the link above.)");
   } else {
     console.log("(The browser was opened. If not: copy the link above.)");

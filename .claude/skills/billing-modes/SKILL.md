@@ -233,8 +233,8 @@ charges/day, 1/minute per purchase_id.
 ## Next step
 
 Once the billing is in place, before the launch in this order:
-**`security-gateway`** → **`performance-gateway`** → **`compliance-check`** →
-**`go-live`** → **`go-to-market`**.
+**`ux-gateway`** → **`security-gateway`** → **`performance-gateway`** →
+**`compliance-check`** → **`go-live`** → **`go-to-market`**.
 
 ## Important rules
 

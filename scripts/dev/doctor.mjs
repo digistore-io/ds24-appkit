@@ -396,7 +396,7 @@ export async function deployChecks(only = null) {
       continue;
     }
 
-    const auth = await capture(cli.command, cli.auth, { shell: isWindows, timeout: 20000 });
+    const auth = await capture(cli.command, cli.auth, { timeout: 20000 });
     checks.push({
       id,
       label,

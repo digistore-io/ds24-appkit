@@ -36,19 +36,21 @@ you get to?" is a question the coach should rarely have to ask.
 | What does it sell? | `"billingMode"` in `config/digistore-products.json` | still `"both"` on an app that sells one of them → **`build-app`** (step 1) sets it; the models themselves are **`billing-modes`** |
 | Is the assistant on? | `"enabled"` in `config/ai-chat.json`, then `node run.mjs ai-check` | on but with a thin `content/knowledge/` → **`ai-chat-knowledge`** |
 | Is there an AI interface? | `"enabled"` in `config/mcp.json` (ships **off**) | wanted → **`mcp-server`** |
+| Has anybody looked at it as a customer? | the newest `docs/reports/ux-*.md`, and `node run.mjs ux-check` | none once there are pages and a checkout → **`ux-gateway`**. Its findings change the interface, so it belongs before the security pass, not after it |
 | Has it been checked for security? | the newest `docs/reports/security-*.md` | none → **`security-gateway`**; one with an open CRITICAL or HIGH → fix those before anything else; one older than the last big change → run it again |
 | Has it been measured under load? | the newest `docs/reports/performance-*.md` | none before a launch → **`performance-gateway`** |
 | Are the legal pages there? | routes `app/impressum`, `app/datenschutz` (`app/agb`, `app/widerruf` depending on the seller role) | missing before selling → **`compliance-check`** |
 | Is it live? | `APP_URL` and `APP_ENV` in `.env` | still `localhost` → **`go-live`**, which starts with **`setup-hosting`** |
 | Is there a host at all? | `node run.mjs doctor --deploy` — is a hosting CLI installed and logged in? | nothing there and the app is meant to go online → **`setup-hosting`** |
 
-**Two of the steps do leave a trace, and one does not.** `security-gateway` and
-`performance-gateway` each write a dated report into `docs/reports/` —
-`security-2026-07-26.md`, `performance-2026-07-26.md`. Read the newest one: it
-says which checks ran, what was found and what is still open. A report older
-than the last big change is worth as much as no report, so compare its date
-against `git log -1 --format=%cd`; an open CRITICAL or HIGH in it is the next
-step, whatever else the table says.
+**Three of the steps do leave a trace, and one does not.** `ux-gateway`,
+`security-gateway` and `performance-gateway` each write a dated report into
+`docs/reports/` — `ux-2026-07-27.md`, `security-2026-07-26.md`,
+`performance-2026-07-26.md`. Read the newest one: it says which checks ran, what
+was found and what is still open. A report older than the last big change is
+worth as much as no report, so compare its date against
+`git log -1 --format=%cd`; an open CRITICAL or HIGH in it is the next step,
+whatever else the table says.
 
 `go-to-market` still writes nothing that proves it ran. Do not infer it — ask,
 in one sentence. And when there is no report at all, that is the answer: the
@@ -90,6 +92,8 @@ below.
 | The assistant answers "I do not know" | her handbook, not her switch → **`ai-chat-knowledge`**, then `node run.mjs kb-check` |
 | Which AI company, what does a call cost, a key is missing | **`ai-providers`**, `node run.mjs ai-check` |
 | "Claude should be able to use my app" | **`mcp-server`**, `node run.mjs mcp-check` |
+| "My customers do not find their way around", "nobody uses it after they buy", "this looks unfinished", "is this understandable?" | **`ux-gateway`**, `node run.mjs ux-check` |
+| "The page is unreadable in dark mode", a colour that vanishes, text nobody can make out | `node run.mjs ux-check` measures every token pair in both modes — then **`ux-gateway`** (check `kit`) |
 | Slow, timing out, will it hold under load | **`performance-gateway`** |
 | Is this safe? Is this route protected? Is there a secret in the code? | **`security-gateway`** |
 | Imprint, privacy policy, GDPR, "what does the app store about people?" | **`compliance-check`**, `node run.mjs legal-check`; the inventory it reads from is `docs/data-protection.md` |

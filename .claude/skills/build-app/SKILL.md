@@ -342,11 +342,14 @@ Then run the skill **`billing-modes`** afterwards.
 ## Step 6 — Before the launch: secure it, scale it, legal & live
 
 One after another:
-1. **`security-gateway`** — scan the app for security holes and fix them.
-2. **`performance-gateway`** — make sure ~100 parallel users run smoothly.
-3. **`compliance-check`** — legal pages (imprint/privacy/terms/withdrawal), GDPR.
-4. **`go-live`** — put the app online and verify it live.
-5. **`go-to-market`** — positioning, channels, launch plan and finished content
+1. **`ux-gateway`** — look at the app the way the customer will: the first five
+   minutes after a purchase, dead ends, actions that report nothing back, dark
+   mode and the phone. First, because what it finds changes the interface.
+2. **`security-gateway`** — scan the app for security holes and fix them.
+3. **`performance-gateway`** — make sure ~100 parallel users run smoothly.
+4. **`compliance-check`** — legal pages (imprint/privacy/terms/withdrawal), GDPR.
+5. **`go-live`** — put the app online and verify it live.
+6. **`go-to-market`** — positioning, channels, launch plan and finished content
    (landing page, emails, video scripts).
 
 ## The golden rules (don't work against them)

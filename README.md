@@ -42,12 +42,13 @@ hands over to the next:
 | 2c | **AI assistant** *(optional)* | `ai-chat-knowledge` | switch the in-app chat on, give her a name, and write the handbook she answers your customers from |
 | 2d | **Which AI company** *(optional)* | `ai-providers` | pick OpenAI, Anthropic, Gemini, Mistral or OpenRouter, get the key in, bind each job to a model and set the prices the cost page reports |
 | 2e | **AI interface (MCP)** *(optional)* | `mcp-server` | let your customers connect Claude to your app: decide which capabilities become tools, then switch it on |
-| 3 | **Security** | `security-gateway` | eight checks — access control, money, secrets, packages, endpoints, hosting — findings by severity, the serious ones fixed, report in `docs/reports/` |
-| 4 | **Scaling** | `performance-gateway` | measure instead of guess: response times, database and indexes, ~100 concurrent users, memory, CPU, front end — fixed and measured again |
-| 5 | **Legal** | `compliance-check` | which EU rules reach your app: imprint, privacy policy, terms — plus the **AI Act**, consent, your customers' rights and the records you have to be able to show |
-| 5b | **The server** | `setup-hosting` | pick a host (Railway/Render/Fly.io/DigitalOcean), say what it costs, install its CLI, authenticate, app + managed Postgres, secrets, migration in the deploy, domain |
-| 6 | **Live** | `go-live` | put the app online and verify it live — a real test purchase included |
-| 7 | **Marketing** | `go-to-market` | positioning, channels, launch plan + ready-made content (landing page, emails, **video scripts**) |
+| 3 | **The experience** | `ux-gateway` | the app as your customer meets it: the first five minutes after a purchase, dead ends, actions that report nothing back, wording, keyboard and phone — measured with `node run.mjs ux-check` where it can be, looked at where it cannot |
+| 4 | **Security** | `security-gateway` | eight checks — access control, money, secrets, packages, endpoints, hosting — findings by severity, the serious ones fixed, report in `docs/reports/` |
+| 5 | **Scaling** | `performance-gateway` | measure instead of guess: response times, database and indexes, ~100 concurrent users, memory, CPU, front end — fixed and measured again |
+| 6 | **Legal** | `compliance-check` | which EU rules reach your app: imprint, privacy policy, terms — plus the **AI Act**, consent, your customers' rights and the records you have to be able to show |
+| 6b | **The server** | `setup-hosting` | pick a host (Railway/Render/Fly.io/DigitalOcean), say what it costs, install its CLI, authenticate, app + managed Postgres, secrets, migration in the deploy, domain |
+| 7 | **Live** | `go-live` | put the app online and verify it live — a real test purchase included |
+| 8 | **Marketing** | `go-to-market` | positioning, channels, launch plan + ready-made content (landing page, emails, **video scripts**) |
 
 While building (step 1), **tests are written and run automatically**
 (`npm run test`) — locally, on your machine, before anything moves on.
@@ -157,6 +158,7 @@ The most important commands at a glance (`node run.mjs` alone shows them all):
 | `node run.mjs ds24-connect` | fetch the Digistore24 API key (browser) and store it in `.env` |
 | `node run.mjs logs` | follow the log of the running app |
 | `node run.mjs doctor` | check that everything needed is installed |
+| `node run.mjs ux-check` | the interface, measured: contrast in both modes, the design system, missing names, pages in no menu — see [`docs/ux.md`](docs/ux.md) |
 | `node run.mjs update` | fetch improved guidance for the AI agent (`CLAUDE.md`, `docs/`, skills) — your code is never touched, see [`docs/updates.md`](docs/updates.md) |
 | `node run.mjs` | show all commands |
 
@@ -243,6 +245,6 @@ Code **and** skills in this template are under the **MIT license** —
   arising from its use — the app you build, operate and sell is yours to test,
   secure and answer for.
 
-That last point is why steps 3 and 5 above are part of the path:
+That last point is why steps 4 and 6 above are part of the path:
 `security-gateway` before real money flows, and `compliance-check` before real
 customers do.

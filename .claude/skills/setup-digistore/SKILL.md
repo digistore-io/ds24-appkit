@@ -298,9 +298,11 @@ Then **`billing-modes`** now — it sets up subscriptions (monthly/yearly),
 prepaid tokens with auto top-up (`createBillingOnDemand`) and the subscription
 self-service (cancel, payment details, invoices).
 
-After that, before the launch, in this order: **`security-gateway`** (security)
-→ **`performance-gateway`** (scaling) → **`compliance-check`** (legal) →
-**`go-live`** (putting it online) → **`go-to-market`** (marketing).
+After that, before the launch, in this order: **`ux-gateway`** (the experience —
+now that there is a checkout, the first five minutes can be checked) →
+**`security-gateway`** (security) → **`performance-gateway`** (scaling) →
+**`compliance-check`** (legal) → **`go-live`** (putting it online) →
+**`go-to-market`** (marketing).
 
 ## Important rules
 

@@ -448,5 +448,7 @@ buying — it is cheaper than the letter that comes otherwise.
 After the compliance gateway: **`go-live`** (which runs `legal-check` in its
 pre-flight), then **`go-to-market`**.
 
-If `security-gateway` and `performance-gateway` have not run yet, they come
-first: a lawful app that leaks customer data is not a lawful app.
+If `ux-gateway`, `security-gateway` and `performance-gateway` have not run yet,
+they come first: a lawful app that leaks customer data is not a lawful app, and
+one whose customers cannot find what they paid for is a refund queue with a
+privacy policy on it.

@@ -106,7 +106,23 @@
     "nextBody": "This is your landing spot after signing in. Replace it with what your app actually does — just tell your AI assistant what you need.",
     "purchasePlan": "Purchase successful — {product} is now unlocked.",
     "purchaseTokens": "{credits, plural, one {# token has been added to your balance.} other {# tokens have been added to your balance.}}",
-    "purchaseGeneric": "Purchase successful. Thank you!"
+    "purchaseGeneric": "Purchase successful. Thank you!",
+    "onboardingPlanTitle": "Unlock your access",
+    "onboardingPlanBody": "Pick a plan — everything that comes with it opens up straight away.",
+    "onboardingPlanCta": "View plans",
+    "onboardingPlanDone": "Unlocked: {products}",
+    "onboardingTokensTitle": "Top up your balance",
+    "onboardingTokensBody": "With tokens you pay for what you actually use.",
+    "onboardingTokensCta": "Buy credit",
+    "onboardingTokensDone": "{balance} tokens on your account."
+  },
+  "onboarding": {
+    "title": "Your first steps",
+    "body": "What is still open before you can get going.",
+    "progress": "{done} of {total} done",
+    "open": "Do it",
+    "stateDone": "done",
+    "stateOpen": "open"
   },
   "account": {
     "title": "My account",

@@ -26,9 +26,11 @@
 // ── The two rules for starting other programs ───────────────────────────────
 //  1. Our own scripts run through `process.execPath`, never a shell, so their
 //     arguments survive verbatim.
-//  2. `npm` needs `shell: true` — on Windows it is a .cmd shim, and Node has
-//     refused to spawn those without a shell since 18.20/20.12.
-// Both live in scripts/lib/proc.mjs; use the helpers, don't call spawn here.
+//  2. A .cmd shim is the only thing that still needs cmd.exe — `npm` is one on
+//     Windows, and Node has refused to spawn those without a shell since
+//     18.20/20.12. Everything else is a real .exe and is started directly.
+// Both live in scripts/lib/proc.mjs; use the helpers, don't call spawn here —
+// and never pass a `shell` option, scripts/portability.test.ts refuses it.
 import * as app from "./scripts/dev/app.mjs";
 import { dbUp } from "./scripts/db/up.mjs";
 import { doctor } from "./scripts/dev/doctor.mjs";
@@ -152,6 +154,14 @@ const TASKS = {
     // half-set-up project — which is exactly when somebody asks whether they
     // may go live. The one check that wants a database says so and skips.
     run: (args) => script("scripts/legal/check.mjs", args),
+  },
+  "ux-check": {
+    group: "Tests & quality",
+    help: "The interface, measured — contrast in both modes, the design system, names, menus",
+    // No `needs`: it reads .tsx and .css and prints findings. It has to work in
+    // a half-set-up project, because "does this look right?" is asked long
+    // before there is a database. The judgement half is the skill: ux-gateway.
+    run: (args) => script("scripts/ux/check.mjs", args),
   },
   "kb-check": {
     group: "Tests & quality",

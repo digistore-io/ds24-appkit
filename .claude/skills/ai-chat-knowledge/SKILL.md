@@ -197,7 +197,7 @@ cost bug, and `docs/ai-chat.md` says where to look.
 
 The handbook is content and stays alive: revisit it whenever the product gains a
 feature or support answers the same question twice. Otherwise the path
-continues as usual — **`security-gateway`** → **`performance-gateway`** →
-**`compliance-check`** (which needs `docs/data-protection.md` §8 for the privacy
-policy, because the assistant sends customer input to Anthropic) → **`go-live`**
-→ **`go-to-market`**.
+continues as usual — **`ux-gateway`** → **`security-gateway`** →
+**`performance-gateway`** → **`compliance-check`** (which needs
+`docs/data-protection.md` §8 for the privacy policy, because the assistant sends
+customer input to Anthropic) → **`go-live`** → **`go-to-market`**.

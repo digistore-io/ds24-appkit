@@ -10,7 +10,10 @@ import { auth } from "@/auth";
 import { hasDigistoreApiKey } from "@/lib/digistore/settings";
 import { nextPaymentForMember } from "@/lib/digistore/subscriptions";
 import { purchaseNoticeFor } from "@/lib/digistore/member-billing";
-import { sellsPlans } from "@/lib/billing-mode";
+import { entitlementsFor } from "@/lib/entitlements/manage";
+import { getTokenAccount } from "@/lib/tokens/account";
+import { findProduct } from "@/lib/digistore/products";
+import { sellsPlans, sellsTokens } from "@/lib/billing-mode";
 import {
   NEXT_PAYMENT_FORMAT,
   isUpcoming,
@@ -18,6 +21,10 @@ import {
   toUtcDate,
 } from "@/lib/digistore/next-payment";
 import { FlashToast } from "@/components/flash-toast";
+import {
+  OnboardingChecklist,
+  type OnboardingStepView,
+} from "@/components/onboarding-checklist";
 import { PageHeader } from "@/components/page-header";
 import { RoleBadge } from "@/components/role-badge";
 import { Button } from "@/components/ui/button";
@@ -84,6 +91,64 @@ export default async function DashboardPage({
   // a charge that will never come even if the query above is ever loosened.
   const showNextPayment = isUpcoming(nextPaymentAt, todayInUtc());
 
+  // ── The first five minutes ────────────────────────────────────────────────
+  //
+  // THIS IS THE BLUEPRINT. Two steps ship, both derived from what the customer
+  // really holds, and both are meant to be replaced by YOUR app's steps as soon
+  // as it does something — "create your first project", "connect your calendar".
+  // The list is where you say what a new customer should do; leave it as it is
+  // and the app says "buy something" and nothing else.
+  //
+  // `done` is READ, never stored (lib/onboarding/rules.ts explains why): a
+  // refund takes the plan away and the step opens again by itself, which no
+  // stored tick would do.
+  //
+  // Both queries follow `billingMode` — a subscriptions-only app never asks
+  // about a balance, so nobody pays for a step that could not appear anyway
+  // (lib/billing-mode.ts).
+  const owned = sellsPlans()
+    ? await entitlementsFor(session.user.id as string)
+    : [];
+  const tokenBalance = sellsTokens()
+    ? ((await getTokenAccount(session.user.id as string))?.balance ?? 0)
+    : 0;
+
+  const onboardingSteps: OnboardingStepView[] = [];
+  if (sellsPlans()) {
+    onboardingSteps.push({
+      id: "plan",
+      done: owned.length > 0,
+      title: t("onboardingPlanTitle"),
+      description:
+        owned.length > 0
+          ? // The plan is named, not counted. "1 plan active" is the answer to a
+            // question nobody asked; the customer wants to read the name they
+            // paid for. `findProduct` returns null for a key the registry no
+            // longer knows — then the key itself is the honest fallback.
+            t("onboardingPlanDone", {
+              products: owned
+                .map((e) => findProduct(e.productKey)?.name ?? e.productKey)
+                .join(", "),
+            })
+          : t("onboardingPlanBody"),
+      href: "/plans",
+      cta: t("onboardingPlanCta"),
+    });
+  }
+  if (sellsTokens()) {
+    onboardingSteps.push({
+      id: "tokens",
+      done: tokenBalance > 0,
+      title: t("onboardingTokensTitle"),
+      description:
+        tokenBalance > 0
+          ? t("onboardingTokensDone", { balance: tokenBalance })
+          : t("onboardingTokensBody"),
+      href: "/plans",
+      cta: t("onboardingTokensCta"),
+    });
+  }
+
   return (
     <>
       {notice && (
@@ -103,6 +168,15 @@ export default async function DashboardPage({
         title={t("welcome")}
         description={t("signedInAs", { email: session.user.email ?? "" })}
       />
+
+      {/*
+        Above the status cards, deliberately. A customer who has just paid opens
+        this page to find out whether it worked; the cards answer questions they
+        have not asked yet. It renders nothing once every step is done — that
+        absence is the acknowledgement, and it survives a reload, which the
+        toast above cannot (it clears its own parameter by design).
+      */}
+      <OnboardingChecklist steps={onboardingSteps} className="mb-6" />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Card>

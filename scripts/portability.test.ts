@@ -6,10 +6,11 @@
 // The app code is never the problem; the tooling is. This test is the guard
 // that keeps it from quietly rotting back into a Linux-only project.
 //
-// It checks three things:
+// It checks four things:
 //   1. the commands live in .mjs files, not in bash,
 //   2. none of the tools from the table in CLAUDE.md → Three systems is used,
-//   3. every file ships with LF, and .gitattributes says so.
+//   3. only scripts/lib/proc.mjs decides whether a shell is involved,
+//   4. every file ships with LF, and .gitattributes says so.
 //
 // A finding is not a style complaint: every tool below is genuinely missing or
 // genuinely different on one of the three systems, and the replacement is named
@@ -61,6 +62,9 @@ const TOOLING = [
   ...TOOLING_DIRS.flatMap((dir) => toolingFiles(path.join(ROOT, dir))),
 ];
 
+/** The one file allowed to know that shells exist. */
+const PROC = path.join(ROOT, "scripts", "lib", "proc.mjs");
+
 /** Replace comments with spaces, so line numbers survive and prose does not count. */
 function stripComments(source: string): string {
   return source
@@ -100,6 +104,24 @@ describe("the tooling runs on Linux, macOS and Windows", () => {
         }
       }
     });
+
+    expect(findings).toEqual([]);
+  });
+
+  it.each(TOOLING.filter((file) => file !== PROC))("%s leaves the shell decision to proc.mjs", (file) => {
+    const original = readFileSync(file, "utf8").split("\n");
+    const code = stripComments(readFileSync(file, "utf8")).split("\n");
+
+    // `shell: true` beside an args array is what Node 24 deprecated (DEP0190),
+    // and it concatenates without escaping — which really did truncate a URL at
+    // its first `&`. spawnCommand() in scripts/lib/proc.mjs settles the question
+    // once, by looking the command up and shelling out only for a .cmd shim.
+    // Spread across five files it becomes five judgement calls, four of which
+    // nobody on Linux or macOS would ever see go wrong.
+    const findings = code
+      .map((line, index) => ({ line, index }))
+      .filter(({ line, index }) => /\bshell\s*:/.test(line) && !original[index].includes(EXEMPT))
+      .map(({ index }) => `${path.relative(ROOT, file)}:${index + 1} passes a shell option — use spawnCommand()/run()/capture() from scripts/lib/proc.mjs`);
 
     expect(findings).toEqual([]);
   });
