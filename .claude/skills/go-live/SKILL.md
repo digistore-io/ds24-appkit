@@ -79,15 +79,29 @@ Once, before selling:
    a second price would only drift from the first.
 3. **Request approval:** `node run.mjs ds24-approval --apply`
    → sets `approval_status = pending` per product (via `updateProduct`). The
-   reseller/marketplace follows from the language: German → Germany reseller
-   (id 1), otherwise USA (id 2). For the English variant `--lang en --apply`,
-   for a specific marketplace `--siteowner <id> --apply`. Products can
+   marketplace follows **the product's own** `language` in
+   `config/digistore-products.json`: German → Germany reseller (id 1), anything
+   else → USA (id 2); unset falls back to `APP_LANG`, then German. **Check that
+   field before you run this** if the app sells in more than one language — the
+   alternative is submitting the English offering to the German marketplace.
+   `--lang en --apply` forces one language for the whole run, `--siteowner <id>
+   --apply` a specific (even private) marketplace. Products can
    only be sold publicly once Digistore24 has approved them. Only request
    approval when the product description and the app are mature.
+
    Whether it was **granted** you can check any time with
-   `node run.mjs ds24-approval` (without `--apply` — the dry run shows the
-   current status per product), and the session greeting reports a pending or
-   rejected approval by itself, once a day.
+   `node run.mjs ds24-approval` (without `--apply` — the dry run is the status
+   view), and the session greeting reports a pending or rejected approval by
+   itself, once a day, as does `node run.mjs doctor`. A product counts as
+   approved once **one** marketplace has approved it. Two refusals to expect
+   rather than fight: `--apply` skips a product already approved at the
+   marketplace it would write to, and refuses one whose status it could not
+   read — resubmitting an approved product is a step Digistore24 does not
+   document. Pass `--force` only if you know why.
+
+   > **A rejected product is not resubmitted unchanged.** The reason is in the
+   > vendor's Digistore24 account; fix it there first, otherwise the second
+   > attempt is the slower repeat of the first.
 
    > **Test first — without approval only the test purchase works.** As long as a
    > product is not approved, only **test purchases** are possible. On the LIVE

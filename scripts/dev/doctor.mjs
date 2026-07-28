@@ -41,7 +41,7 @@
 // whether the agent may run the command itself or has to hand it over, and that
 // decision is a fact about the command, not a judgement to be re-made in prose.
 import { existsSync, readFileSync } from "node:fs";
-import { classifyStatuses } from "../ds24/_approval.mjs";
+import { classifyStatuses, readApprovalCache } from "../ds24/_approval.mjs";
 import { readEnvValue } from "../lib/env-write.mjs";
 import { capture, hasCommand, isWindows } from "../lib/proc.mjs";
 import { configuredDriver, dbDriver } from "../db/driver.mjs";
@@ -255,28 +255,46 @@ export async function inspect({ quick = false } = {}) {
   // (scripts/ds24/_approval.mjs) — never live: the greeting owns the quick
   // path and the daily listProducts call, and two surfaces disagreeing about
   // freshness would be worse than one of them being a day old. No cache means
-  // no synced products (or the check is off), and then there is nothing to
-  // report — an app without Digistore24 products is a normal state, not a
-  // finding.
-  try {
-    const approval = JSON.parse(readFileSync(".dev/approval-check.json", "utf8"));
-    if (approval?.statuses) {
-      const grouped = classifyStatuses(approval.statuses);
-      const parts = [];
-      if (grouped.rejected.length > 0) parts.push(`rejected: ${grouped.rejected.join(", ")}`);
-      if (grouped.unrequested.length > 0)
-        parts.push(`not requested yet: ${grouped.unrequested.join(", ")}`);
-      add({
-        id: "ds24-approval",
-        label: "Digistore24 product approval",
-        ok: parts.length === 0,
-        detail: `${parts.join("; ")} — only test purchases work until approved`,
-        severity: "info",
-        fix: everywhere({ command: "node run.mjs ds24-approval --apply" }),
-      });
-    }
-  } catch {
-    /* no cache, or an unreadable one — the greeting will rebuild it */
+  // no synced products, or the check is switched off, or nobody has looked in
+  // a month — `readApprovalCache` answers null for all of them, and then there
+  // is nothing to report. An app without Digistore24 products is a normal
+  // state, not a finding.
+  //
+  // **Every state that is not "approved" has to appear here.** The first
+  // version listed only rejected and unrequested, so an app whose every
+  // product sat at `pending` — unable to sell anything — got a green tick from
+  // the command people run right before going live, while the greeting two
+  // lines up said the opposite.
+  const approvalGroups = classifyStatuses(readApprovalCache()?.statuses);
+  const approvalCount = Object.values(approvalGroups).reduce((n, keys) => n + keys.length, 0);
+  if (approvalCount > 0) {
+    const parts = [];
+    if (approvalGroups.rejected.length > 0) parts.push(`rejected: ${approvalGroups.rejected.join(", ")}`);
+    if (approvalGroups.unrequested.length > 0)
+      parts.push(`not requested yet: ${approvalGroups.unrequested.join(", ")}`);
+    if (approvalGroups.pending.length > 0)
+      parts.push(`waiting for Digistore24: ${approvalGroups.pending.join(", ")}`);
+    if (approvalGroups.unknown.length > 0)
+      parts.push(`status could not be read: ${approvalGroups.unknown.join(", ")}`);
+    add({
+      id: "ds24-approval",
+      label: "Digistore24 product approval",
+      ok: parts.length === 0,
+      detail: `${parts.join("; ")} — only test purchases work until a product is approved`,
+      severity: "info",
+      // A rejected product must NOT simply be resubmitted: the reason is in the
+      // vendor's Digistore24 account, and the go-live skill says the second
+      // attempt is slower than the first. This field is consumed as data by the
+      // setup tooling, so the distinction belongs in it, not only in prose.
+      fix: everywhere(
+        approvalGroups.rejected.length > 0
+          ? {
+              command: "node run.mjs ds24-approval --apply",
+              note: "for a REJECTED product read the reason in your Digistore24 account and fix it there FIRST — resubmitting it unchanged gets rejected again",
+            }
+          : { command: "node run.mjs ds24-approval --apply" },
+      ),
+    });
   }
 
   // ── how this checkout sits on disk ────────────────────────────────────────

@@ -315,7 +315,7 @@ const TASKS = {
   },
   "ds24-approval": {
     group: "Digistore24",
-    help: "Show + request product approval (dry run shows the status; --apply requests; --lang en)",
+    help: "Show + request product approval (dry run = status view; --apply requests; marketplace per product language)",
     run: (args) => script("scripts/ds24/request-approval.mjs", args),
   },
   "ds24-ipn": {

@@ -1488,20 +1488,30 @@ has already created stays at Digistore24 until you deactivate it there.
   IPN is registered via the API (only with a public `APP_URL`; skipped locally).
   This one **applies** — a preview without changes is `node run.mjs ds24-sync --dry-run`
 - `node run.mjs ds24-approval --apply` — request product approval at the
-  reseller/marketplace (`approval_status=pending`). The reseller comes from the
-  language (German → Germany/1, otherwise USA/2; overridable via
-  `--lang`/`--reseller`/`--siteowner`). A go-live step: only once description and app
-  are mature. Before that only **test purchases** are possible.
-  **The dry run (no `--apply`) is also the status view** — it shows per product
-  whether Digistore24 has approved it (`new`/`pending`/`approved`/`rejected`),
-  and `--apply` skips what is already approved. The session greeting checks the
-  same thing by itself, once a day with one `listProducts` call, and says one
-  line while a product is unrequested, pending or rejected
-  (`scripts/ds24/_approval.mjs`; off with `DIGISTORE_APPROVAL_CHECK=off`). In DEV that is
+  reseller/marketplace (`approval_status=pending`). **Which marketplace follows
+  the PRODUCT's language**, not the app's: a product whose `language` is German
+  goes to Digistore24 Germany (1), everything else to the USA (2), so one app
+  can sell a German and an English offering and each is submitted where it
+  belongs. A product that names no language falls back to `APP_LANG` and then to
+  German; `--lang`/`--reseller`/`--siteowner` override it for the whole run.
+  A go-live step: only once description and app
+  are mature. Before that only **test purchases** are possible. In DEV that is
   automatic: every checkout link carries the DS24 test-payment parameter by
   itself (`lib/digistore/testpay.ts`; inspect/rotate with
   `node run.mjs ds24-testpay`). Outside DEV the vendor sets the
   [test-purchase cookie](https://help.digistore24.com/hc/de/articles/23901169396241)
+- `node run.mjs ds24-approval` **without `--apply` is the status view** — it
+  reads back what Digistore24 actually decided per product
+  (`new`/`pending`/`approved`/`rejected`), and `--apply` skips a product that is
+  already approved at the marketplace it would write to. If the status cannot be
+  read, `--apply` **refuses** rather than setting an approved product back to
+  pending (`--force` overrides). The session greeting asks the same question by
+  itself, once a day with one `listProducts` call, and says one line while a
+  product is unrequested, pending or rejected; `node run.mjs doctor` reports the
+  same answer from the same cache. A product counts as approved as soon as **one**
+  marketplace has approved it — that is what decides whether it can be sold.
+  Details and the kill switch (`DIGISTORE_APPROVAL_CHECK=off`):
+  [`docs/digistore-integration.md`](docs/digistore-integration.md).
 
 **Digistore24 stores public https URLs only — localhost goes through the
 redirect.** Handing it the address the app actually runs on locally ends the

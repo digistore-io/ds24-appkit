@@ -81,16 +81,26 @@ const unwritten = unwrittenPages(ownPages, readNotes((file) => readFileSync(file
 const stamp = readStamp();
 const verifiedDay = stampValid(stamp) ? verifiedOn(stamp) : "";
 
-// Has the template been improved since this app was copied out of it? Asked at
-// most once a day, answered from .dev/ the rest of the time, and silent on any
-// problem — see scripts/dev/update-check.mjs, including how to switch it off.
-const updateLine = describeUpdate(await updateAvailable());
-
-// Are the synced Digistore24 products approved for sale yet? Same shape as the
-// update line: one listProducts call a day at most, answered from .dev/ the
-// rest of the time, silent unless a product is unrequested, pending or
-// rejected — see scripts/ds24/_approval.mjs, including how to switch it off.
-const approvalLine = describeApproval(await approvalReport());
+// Two questions that may cost a request, and neither depends on the other:
+//
+//   Has the template been improved since this app was copied out of it? Asked
+//   at most once a day — scripts/dev/update-check.mjs, including how to switch
+//   it off.
+//   Are the synced Digistore24 products approved for sale yet? Same shape, one
+//   listProducts call a day at most — scripts/ds24/_approval.mjs.
+//
+// **Together, not one after the other.** Awaited in sequence they add up to
+// 5.5 s of dead air in front of every session on a network that blackholes
+// instead of refusing — in the file whose own header says to keep it short.
+// The `.catch` on each is belt and braces: both are written never to reject,
+// and if that ever stops being true a rejected promise here would take the
+// whole greeting with it, which is the one thing this file must not do.
+const [updateResult, approvalResult] = await Promise.all([
+  updateAvailable().catch(() => null),
+  approvalReport().catch(() => null),
+]);
+const updateLine = describeUpdate(updateResult);
+const approvalLine = describeApproval(approvalResult);
 
 const line = "──────────────────────────────────────────────────────────────────";
 console.log(line);

@@ -72,29 +72,39 @@ server*, and its localhost is not yours — the redirect cannot help, which is w
 `ipn-setup.mjs --auto` skips the IPN locally instead. Use `node run.mjs ds24-tunnel`.
 
 Request approval (go-live) — sets `approval_status=pending` per product. The
-reseller/marketplace the approval is requested from follows from the
-**language**: German → Germany reseller (id 1), otherwise USA reseller (id 2).
-Overridable via `--lang`, `--reseller` or `--siteowner`:
+marketplace follows the **product's own** `language` in
+`config/digistore-products.json`: German → Germany reseller (id 1), anything
+else → USA reseller (id 2). A product that names no language falls back to
+`APP_LANG` and then to German, so an older registry behaves as before.
+`--lang`, `--reseller` and `--siteowner` override it for the whole run:
 
 ```bash
 node run.mjs ds24-approval                            # dry run = the status view
-node run.mjs ds24-approval --apply                    # reseller from language (default: DE → 1)
-node run.mjs ds24-approval --lang en --apply        # → USA reseller (id 2)
+node run.mjs ds24-approval --apply                    # marketplace per product language
+node run.mjs ds24-approval --lang en --apply        # force USA reseller (id 2)
 node run.mjs ds24-approval --reseller US --apply    # a specific reseller: DE|US|GB|IE
 node run.mjs ds24-approval --siteowner <id> --apply # any (even private) marketplace
-# a different status: --status requested
+# a different status: --status new|pending|approved|rejected  (only "pending" is worth setting)
+# --force: request even when the current status could not be read
 ```
 
 The reseller IDs are hard-coded in `_resellers.mjs` (source:
 `https://www.digistore24.com/support/resellers.json` — practically never change).
 
 The dry run shows the **current** status per product (`new`/`pending`/
-`approved`/`rejected`, read from `listProducts` → `approval_status_list`), and
-`--apply` skips products that are already approved — re-writing `pending` over
-an approval is a step whose effect Digistore24 does not document. The read side
-lives in `_approval.mjs`, which also feeds the once-a-day line in the session
-greeting and the `info` check in doctor (cache: `.dev/approval-check.json`,
-kill switch `DIGISTORE_APPROVAL_CHECK=off`).
+`approved`/`rejected`, read from `listProducts` → `approval_status_list`).
+`--apply` skips a product already approved **at the marketplace it would write
+to**, and **refuses** a product whose status could not be read at all — writing
+`pending` over an approval is a step whose effect Digistore24 does not
+document, and the guard against it is exactly the status that failed to read.
+`--force` overrides both refusals.
+
+The read side lives in `_approval.mjs`, which also feeds the once-a-day line in
+the session greeting and the `info` check in doctor (cache:
+`.dev/approval-check.json`, kill switch `DIGISTORE_APPROVAL_CHECK=off`). There a
+product has **one** status across all marketplaces — approved anywhere wins,
+else pending, else rejected, else new — because the question is whether it can
+be sold at all. Full reasoning: `docs/digistore-integration.md`.
 
 **Before approval only test purchases.** New products are not approved at
 first. In DEV that is already handled: every checkout link carries the

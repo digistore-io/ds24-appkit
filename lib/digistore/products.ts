@@ -46,6 +46,18 @@ export interface ProductDef {
   highlight?: boolean;
   /** Product image for Digistore24 (publicly reachable URL). */
   imageUrl?: string | null;
+  /**
+   * The product's own language ("de", "en", …) — it decides **which
+   * Digistore24 marketplace its approval is requested from**: a German product
+   * goes to Digistore24 Germany (siteowner 1), everything else to the USA (2).
+   * See `scripts/ds24/request-approval.mjs` and `scripts/ds24/_resellers.mjs`.
+   *
+   * Per product rather than per app, so one app can sell a German and an
+   * English offering and each is submitted where it belongs. Unset falls back
+   * to `APP_LANG` and then to German, which is what every existing registry
+   * does — so leaving it out changes nothing.
+   */
+  language?: string;
   /** Live product ID set by sync-products.mjs (null = not created yet). */
   productId?: string | null;
 }

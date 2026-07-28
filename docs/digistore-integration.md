@@ -233,30 +233,78 @@ only step that cannot be automated is the vendor's single click in the browser.
 All three commands are shape-A commands: they assume one key in the `.env` and
 one IPN connection.
 
+### Which marketplace a product is submitted to
+
+Approval is requested **per marketplace** (`data[approval_status][<siteowner>]`),
+and which one follows the **product's own language**, not the app's:
+
+| The product's `language` | Marketplace |
+|---|---|
+| `de` (or anything starting with "de") | Digistore24 GmbH, Germany — siteowner **1** |
+| anything else | Digistore24 Inc., USA — siteowner **2** |
+
+The field is `language` on the product in `config/digistore-products.json`. It
+is optional: a product that does not name one falls back to `APP_LANG`, and
+that to German — so a registry written before this existed keeps behaving
+exactly as it did. Set it per product as soon as you sell in more than one
+language, because the alternative is submitting your English offering to the
+German marketplace.
+
+`--lang`, `--reseller` and `--siteowner` override the rule for every product in
+the run; `--siteowner` also reaches a private marketplace, which the language
+rule can never name. The ids come from `scripts/ds24/_resellers.mjs`.
+
 ### Reading the approval status back
 
 Requesting approval is a write with no visible answer — Digistore24 decides
 later, and `retrieveApiKey` is *not* how you learn it happened (see above). The
 read side has one source: every `listProducts`/`getProduct` item carries
 `approval_status_list`, one entry per reseller with `approval_status` one of
-`new` (never requested), `pending`, `approved` or `rejected`. That field is
-**probed, not documented** (2026-07-28) — the OpenAPI spec does not list it —
-which is why `scripts/ds24/_approval.mjs` tolerates every way it could change
-and answers "say nothing" rather than guessing.
+`new` (never requested), `pending`, `approved` or `rejected`, plus
+`is_siteowner_active` and the rejection reason. That field is **probed, not
+documented** (2026-07-28) — the OpenAPI spec does not list it — which is why
+`scripts/ds24/_approval.mjs` tolerates every way it could change and answers
+"say nothing" rather than guessing.
+
+**A product has one status, aggregated across every marketplace it is active
+for: approved anywhere wins, else pending, else rejected, else new.** The
+question being answered is "can I sell this?", and a product approved in
+Germany sells in Germany whatever the US reseller decided — so nothing nags
+about it. A rejection is only worth reporting while nobody has approved it
+anywhere, and then it is the most useful thing to say, because it names
+something the vendor has to do in their account. A marketplace the account is
+not active for is ignored entirely; it cannot act, so its verdict says nothing.
+
+The per-marketplace view still exists and is what `--apply` uses — see below.
 
 Three surfaces read it, and they share one cache (`.dev/approval-check.json`,
-one `listProducts` call per day, a week once everything is approved):
+one `listProducts` call per day, a week once everything is approved, and a
+refetch as soon as the set of synced products changes). The request carries a
+**3-second timeout**, because it sits in front of every session; an API that
+answers more slowly than that costs a day of silence, not a slow greeting.
 
 - **The session greeting** says one bracketed line while a synced product is
-  unrequested, pending or rejected — worst state wins — and is silent
-  otherwise. Off with `DIGISTORE_APPROVAL_CHECK=off` in the `.env`.
+  unrequested, pending or rejected — worst state wins, at most three products
+  named — and is silent otherwise. Off with `DIGISTORE_APPROVAL_CHECK=off` in
+  the `.env`, which also deletes the cache so nothing keeps reporting from it.
 - **`node run.mjs doctor`** carries the same answer as an `info` check, from
-  the cache only.
+  the cache only, and reports **every** state that is not approved — including
+  `pending`, which means real sales are still impossible. A cache nobody has
+  refreshed in 30 days is ignored rather than reported as current.
 - **`node run.mjs ds24-approval`** (the dry run) shows the live status per
-  product, and `--apply` skips products that are already `approved`: the
-  reseller side decides on `pending` products only, and whether re-writing
-  `pending` over an approval resets it is undocumented — not worth finding out
-  on a live account.
+  product and writes what it learned into the cache, so an approval granted an
+  hour ago does not keep being reported as pending.
+
+**`--apply` refuses rather than guessing.** It skips a product already
+`approved` **at the marketplace it would write to** (a product approved in
+Germany may still have a legitimate request to make in the USA), and if the
+current status could not be read at all — the API failed, or the product is not
+in the response — it refuses that product instead of writing. The reseller side
+acts on `pending` products only, and whether re-writing `pending` over an
+approval resets it is undocumented; that is not a thing to find out on a live
+account. `--force` overrides, and `--status` accepts only the four known values,
+because a value the reader cannot parse would make the product disappear from
+all three surfaces above.
 
 **Deliberately not built:** no in-app notice and no checkout blocker for an
 unapproved product. Test purchases work before approval, so blocking the
