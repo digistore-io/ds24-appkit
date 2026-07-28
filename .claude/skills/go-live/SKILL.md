@@ -1,6 +1,7 @@
 ---
 name: go-live
 description: Brings the app online and proves that a purchase really unlocks access. Runs the pre-flight check, hands the hosting itself to setup-hosting (host, CLI, secrets, managed Postgres, migration hook, domain), then does the live part — Digistore products and approval, the IPN on the live domain, a smoke test, a test purchase and a re-check of security/performance against the live instance. Use this when the app is built, secured and scaled — before marketing.
+requires: 0.6.0
 ---
 <!-- Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA — SPDX-License-Identifier: MIT -->
 
@@ -70,24 +71,33 @@ Once, before selling:
    run this**, do not hand the command to the user:
    `node run.mjs ds24-sync`
    → creates them via `createProduct` / updates them via `updateProduct`, writes
-   the `productId`(s) back into the config **and** registers the IPN. Do not
+   the ids back into `productIdByLanguage` **and** registers the IPN. Do not
    call `node scripts/ds24/sync-products.mjs` directly: that skips the IPN, and
    purchases then unlock nothing.
+
+   **One product per plan AND language, and this is the last moment to get it
+   right.** A Digistore24 product carries exactly one language, and that is the
+   language of the **order form** — `createBuyUrl` cannot override it. If this
+   app's UI speaks two languages and a plan declares only one under
+   `"productIdByLanguage"`, half your customers are asked for their card details
+   in the wrong language, on a live shop. The sync warns about every such gap:
+   **read those warnings, fix the registry, run it again.** Fixing it after the
+   launch means new products, new approvals and links you have already given
+   out pointing at the old ones.
 2. **Nothing to do about prices.** Price, currency and interval live in
    `config/digistore-products.json` and travel with the checkout call as
    `payment_plan[...]`. Do **not** create payment plans in the DS24 interface —
    a second price would only drift from the first.
 3. **Request approval:** `node run.mjs ds24-approval --apply`
    → sets `approval_status = pending` per product (via `updateProduct`). The
-   marketplace follows **the product's own** `language` in
-   `config/digistore-products.json`: German → Germany reseller (id 1), anything
-   else → USA (id 2). The field is optional and the shipped sample products do
-   not carry it — without it a product falls back to `APP_LANG` and then to
-   German, which is right for an app that sells in one language. **If this app
-   sells in more than one, add `"language"` to each product before you run
-   this**, or the English offering goes to the German marketplace. The dry run
-   prints the target marketplace per product, so check that line before
-   `--apply`.
+   marketplace follows **the product's own language** — the key it sits under in
+   `productIdByLanguage`: German → Germany reseller (id 1), anything else → USA
+   (id 2). So a plan sold in both languages is **two products** and is submitted
+   to **two marketplaces**, each getting its own verdict; they are listed as
+   `pro (de)` and `pro (en)`. **Approved in Germany says nothing about the
+   English twin**, and that twin is the one that gets forgotten — check that
+   every row reaches `approved`, not just the first. The dry run prints the
+   target marketplace per product, so read those lines before `--apply`.
    `--lang en --apply` forces one language for the whole run, `--siteowner <id>
    --apply` a specific reseller.
 

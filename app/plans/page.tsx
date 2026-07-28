@@ -181,6 +181,7 @@ export default async function PlansPage({
   searchParams: Promise<{ checkout?: string }>;
 }) {
   const t = await getTranslations("plans");
+  const locale = await getLocale();
   const subscriptions = productsByKind("subscription");
   const tokens = productsByKind("token");
 
@@ -201,8 +202,14 @@ export default async function PlansPage({
   // Signed out: the shared links as before. One pass for every plan, the API
   // key resolved once, URLs from the cache (buy_url_cache, 20h)
   // — so this is not one Digistore24 call per visitor either.
+  //
+  // The locale travels with the links: a Digistore24 product carries exactly
+  // one language, and that language is the ORDER FORM's — so the visitor's
+  // locale picks WHICH product this offering sends them to
+  // (lib/digistore/products.ts → checkoutProductFor). Without it half the
+  // visitors are asked for their card details in the other language.
   const blockers = signedIn ? await checkoutBlockersFor(defs) : null;
-  const links = signedIn ? null : await checkoutLinksFor(defs);
+  const links = signedIn ? null : await checkoutLinksFor(defs, {}, locale);
 
   const cardFor = (def: ProductDef): { blocker: CheckoutBlocker | null; url: string | null } => {
     if (blockers) return { blocker: blockerFor(blockers, def.key), url: null };

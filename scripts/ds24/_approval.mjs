@@ -46,7 +46,7 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isDue } from "../dev/update-check.mjs";
-import { extractProducts, idOf, readProducts } from "./_products.mjs";
+import { extractProducts, idOf, productTargets, readProducts } from "./_products.mjs";
 import { isReseller } from "./_resellers.mjs";
 
 // Resolved from this file, not from the cwd — `_products.mjs` resolves the
@@ -449,7 +449,12 @@ export async function approvalReport(now = Date.now()) {
 
     let entries;
     try {
-      entries = Object.entries(readProducts().products).filter(([, def]) => def.productId);
+      // One entry per Digistore24 product — per offering AND language. Each is
+      // approved separately, at the marketplace its language belongs to, so
+      // each needs its own row here; see request-approval.mjs.
+      entries = productTargets(readProducts().products)
+        .filter(({ productId }) => productId)
+        .map(({ label, productId }) => [label, { productId }]);
     } catch {
       return null;
     }

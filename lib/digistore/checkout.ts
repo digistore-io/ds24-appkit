@@ -13,11 +13,12 @@
 // affiliate commissions, none of which a plain product link can express.
 // See docs/digistore-createbuyurl.md.
 import { getOrCreateBuyUrl, type BuyerContext, type Offer } from "./buyUrl";
-import type { ProductDef } from "./products";
+import { checkoutProductFor, type ProductDef } from "./products";
 import { publicUrlFor } from "./public-url";
 import { ds24ApiKey, hasDigistoreApiKey } from "./settings";
 import { withTestpayParam } from "./testpay";
 import { tokenCustomMarker } from "@/lib/tokens/packages";
+import { DEFAULT_LOCALE } from "@/i18n/config";
 
 /** Why there is no checkout link (never a broken or faked one). */
 export type CheckoutBlocker =
@@ -33,9 +34,21 @@ export type CheckoutLink =
   | { url: null; blocker: CheckoutBlocker };
 
 /**
- * Registry entry → DS24 offer.
+ * Registry entry + the buyer's language → DS24 offer.
  *
- * Two details that are easy to get wrong:
+ * **`locale` picks WHICH Digistore24 product**, and with it the language of the
+ * order form — a DS24 product carries exactly one, and `createBuyUrl` has no
+ * parameter to override it (the reasoning is in `lib/digistore/products.ts`).
+ * A locale the offering has no product for falls back rather than throwing;
+ * `checkoutProductFor` documents the chain.
+ *
+ * Three details that are easy to get wrong:
+ *  - **`key` carries the language, and it has to.** It is the buy-URL cache
+ *    key (`buy_url_cache.offerKey`, one row per key), so `pro` for both
+ *    languages would let the German and the English checkout URL evict each
+ *    other on every page view — and, in the window between, serve the German
+ *    form to an English buyer out of the cache. `offerHash` alone does not
+ *    save it: the hash detects the change, it does not give the two a row each.
  *  - `billingInterval` only counts for subscriptions. On a token package it
  *    would turn a one-off purchase into a subscription (buyUrl.ts derives
  *    number_of_installments from it).
@@ -44,15 +57,16 @@ export type CheckoutLink =
  *    purchase_id later — auto top-up via createBillingOnDemand then cannot
  *    work at all (see lib/tokens/account.ts, docs/digistore-billing-modes.md).
  */
-export function offerFor(def: ProductDef): Offer {
-  if (!def.productId) {
+export function offerFor(def: ProductDef, locale: string = DEFAULT_LOCALE): Offer {
+  const resolved = checkoutProductFor(def, locale);
+  if (!resolved) {
     throw new Error(
       `Product "${def.key}" has no productId yet. Run: node run.mjs ds24-sync`,
     );
   }
   return {
-    key: def.key,
-    productId: def.productId,
+    key: `${def.key}:${resolved.language}`,
+    productId: resolved.productId,
     priceCents: def.priceCents ?? 0,
     currency: def.currency,
     billingInterval:
@@ -103,6 +117,7 @@ export function optinThankyouUrl(
 export async function checkoutLinksFor(
   defs: ProductDef[],
   ctx: BuyerContext = {},
+  locale: string = DEFAULT_LOCALE,
 ): Promise<Map<string, CheckoutLink>> {
   const links = new Map<string, CheckoutLink>();
   if (defs.length === 0) return links;
@@ -111,7 +126,7 @@ export async function checkoutLinksFor(
 
   await Promise.all(
     defs.map(async (def) => {
-      links.set(def.key, await resolveOne(def, connected, ctx));
+      links.set(def.key, await resolveOne(def, connected, ctx, locale));
     }),
   );
   return links;
@@ -137,7 +152,12 @@ export async function checkoutBlockersFor(
   const connected = hasDigistoreApiKey();
 
   for (const def of defs) {
-    if (!def.productId) blockers.set(def.key, "notSynced");
+    // "Not synced" means no Digistore24 product in ANY language. An offering
+    // that exists in German but not yet in English is not blocked — the buyer
+    // gets the German form and can still buy (checkoutProductFor). Saying
+    // "checkout unavailable" there would refuse money over a missing
+    // translation; `node run.mjs ds24-sync` is where that gap is reported.
+    if (!checkoutProductFor(def, DEFAULT_LOCALE)) blockers.set(def.key, "notSynced");
     else if (!connected) blockers.set(def.key, "notConnected");
     else blockers.set(def.key, null);
   }
@@ -173,23 +193,25 @@ export function blockerFor(
 export async function checkoutLinkFor(
   def: ProductDef,
   ctx: BuyerContext = {},
+  locale: string = DEFAULT_LOCALE,
 ): Promise<CheckoutLink> {
   const connected = hasDigistoreApiKey();
-  return resolveOne(def, connected, ctx);
+  return resolveOne(def, connected, ctx, locale);
 }
 
 async function resolveOne(
   def: ProductDef,
   connected: boolean,
   ctx: BuyerContext,
+  locale: string,
 ): Promise<CheckoutLink> {
-  if (!def.productId) return { url: null, blocker: "notSynced" };
+  if (!checkoutProductFor(def, locale)) return { url: null, blocker: "notSynced" };
   if (!connected) return { url: null, blocker: "notConnected" };
 
   try {
     const url = await getOrCreateBuyUrl({
       apiKey: ds24ApiKey(),
-      offer: offerFor(def),
+      offer: offerFor(def, locale),
       ctx: { ...ctx, customTracking: ctx.customTracking ?? customTrackingFor(def) },
       thankyouUrl: optinThankyouUrl(),
     });

@@ -1439,6 +1439,30 @@ The plan list in `config/digistore-products.json` is the **single source** —
 it feeds the plans page (`app/plans/page.tsx`) *and* the sync script. Don't create
 a second price list in the code.
 
+**One offering is one Digistore24 product PER LANGUAGE, not one product.** A
+DS24 product carries exactly one `data[language]`, and that language is the
+language of the **order form** the buyer fills in — the labels, the buttons, the
+payment methods, the cancellation terms. `createBuyUrl` has no parameter that
+overrides it. So an app whose UI speaks German and English needs two products
+per plan, or half its customers are asked for their card details in the wrong
+language:
+
+```json
+"basis_monatlich": { "productIdByLanguage": { "de": null, "en": null } }
+```
+
+`node run.mjs ds24-sync` creates one product per entry and writes the ids back;
+the visitor's locale picks which one the checkout sends them to
+(`checkoutProductFor` in `lib/digistore/products.ts`). Cover every locale from
+`i18n/config.ts` — one that is missing still sells, but on another language's
+form, and `ds24-sync` is the only thing that ever says so. Full reasoning:
+[`docs/digistore-integration.md`](docs/digistore-integration.md) → *The order
+form's language*.
+
+**Your product copy is deliberately not translated** — `name`, `description`,
+`tagline` and `features` are one text, sent to every language product. See
+**Languages** above; it is the form around your copy that follows the buyer.
+
 **What this app sells is one line in that same file**, and it is the first thing
 to set when the vendor tells you which of the two models they want:
 
@@ -1484,16 +1508,17 @@ has already created stays at Digistore24 until you deactivate it there.
 
 - `node run.mjs ds24-connect` — fetch the API key (browser) and write it into `.env`
 - `node run.mjs ds24-sync` — create/update products **and** the IPN
-  connection (idempotent): `productId` is written back into the JSON, the
-  IPN is registered via the API (only with a public `APP_URL`; skipped locally).
+  connection (idempotent): one product per offering **and language**, the ids
+  written back into `productIdByLanguage`, the
+  IPN registered via the API (only with a public `APP_URL`; skipped locally).
   This one **applies** — a preview without changes is `node run.mjs ds24-sync --dry-run`
 - `node run.mjs ds24-approval --apply` — request product approval at the
   reseller/marketplace (`approval_status=pending`). **Which marketplace follows
-  the PRODUCT's language**, not the app's: a product whose `language` is German
-  goes to Digistore24 Germany (1), everything else to the USA (2), so one app
-  can sell a German and an English offering and each is submitted where it
-  belongs. A product that names no language falls back to `APP_LANG` and then to
-  German; `--lang`/`--reseller`/`--siteowner` override it for the whole run.
+  the PRODUCT's language**, not the app's: a German product goes to Digistore24
+  Germany (1), everything else to the USA (2). Since an offering is one product
+  per language (above), an offering sold in both is submitted to **both**
+  marketplaces and each gets its own verdict — they are listed as `pro (de)` and
+  `pro (en)`. `--lang`/`--reseller`/`--siteowner` override it for the whole run.
   **Only the four resellers approve products** — Germany (1), USA (2), UK (3),
   Ireland (4). Any other siteowner is a **Direct Seller**, where no approval
   step exists at all: the command says so and writes nothing, and the greeting

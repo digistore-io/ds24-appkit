@@ -202,9 +202,66 @@ Fields worth knowing before you design anything:
 | `api_mode` | `live` or `test`. Test purchases arrive as `test` — whether made with the test-purchase cookie or with the testpay parameter that DEV checkout links append by themselves (`node run.mjs ds24-testpay`). The template deliberately processes `test` events exactly like `live` ones: that identical path is what makes a test purchase prove the chain. An operator who wants test orders segregated in PROD branches on this field — nothing in the template does |
 | `order_id` | stable across all transactions of one order → the idempotency key |
 
+### The order form's language — one product per language
+
+**A Digistore24 product carries exactly ONE language, and that language is the
+language of the order form your buyer fills in** — the field labels, the
+buttons, the payment-method names, the cancellation terms. It is
+`data[language]` on the product, and **`createBuyUrl` has no parameter that
+could override it** (its `expectedArgs` are `buyer`, `payment_plan`,
+`tracking`, `urls`, `placeholders`, `settings` and `addons` — no language
+anywhere).
+
+So an app whose UI speaks German and English cannot send both audiences to one
+product. One of the two would be asked for their card details in the other's
+language, which is exactly the moment a purchase gets abandoned.
+
+**Two products, one per language, is the only way**, and the registry says so:
+
+```json
+"basis_monatlich": {
+  "name": "Basic (monthly)",
+  "priceCents": 1900,
+  "productIdByLanguage": { "de": null, "en": null }
+}
+```
+
+`node run.mjs ds24-sync` creates one Digistore24 product per entry — with
+`data[language]` set — and writes the ids back. At checkout the visitor's
+locale picks which of them they are sent to
+(`lib/digistore/products.ts` → `checkoutProductFor`).
+
+Four things follow, and none of them is optional reading:
+
+- **Cover every locale from `i18n/config.ts`.** A locale with no entry still
+  sells — the buyer falls back to another language's product rather than
+  hitting a dead button — but they get the wrong form. `ds24-sync` warns about
+  the gap; nothing else ever will, because the app renders fine and the
+  purchase completes.
+- **Each language product is approved separately**, at the marketplace its
+  language belongs to (see the next section). Approving the German one says
+  nothing about the English one.
+- **The IPN names whichever product was actually bought**, and
+  `productByDs24Id()` searches every language of every offering. One
+  `productKey`, one entitlement — a German and an English buyer of the same
+  plan get the same access.
+- **Your product copy is NOT translated.** `name`, `description`, `tagline` and
+  `features` stay one text and are sent to every language product. That is the
+  same deliberate decision the plans page makes (template/CLAUDE.md →
+  Languages): it is your copy, and Digistore24 carries exactly what you wrote.
+  The *form* around it is what follows the buyer's language.
+
+> **Since template 0.6.0.** Before that an offering had a single `productId`
+> plus a `language` field, and the order form's language was whatever the API
+> session happened to default to. That shape is still read, so an older
+> registry keeps selling, and `ds24-sync` migrates it to
+> `productIdByLanguage` the next time it runs — without creating a duplicate of
+> the product you already have.
+
 ### The checkout
 
-One base product per offer at Digistore24; **the price does not live there**.
+One base product per offer **and language** at Digistore24; **the price does
+not live there**.
 The API discards `data[amount]`, so `priceCents`, `currency` and
 `billingInterval` travel with each `createBuyUrl` call as `payment_plan[…]`.
 There is a `createPaymentPlan` API and this template deliberately does not use
@@ -243,15 +300,19 @@ and which one follows the **product's own language**, not the app's:
 | `de` (or anything starting with "de") | Digistore24 GmbH, Germany — siteowner **1** |
 | anything else | Digistore24 Inc., USA — siteowner **2** |
 
-The field is `language` on the product in `config/digistore-products.json`. It
-is optional: a product that does not name one falls back to `APP_LANG`, and
-that to German — so a registry written before this existed keeps behaving
-exactly as it did. Set it per product as soon as you sell in more than one
-language, because the alternative is submitting your English offering to the
-German marketplace.
+The languages are the keys of `productIdByLanguage` (see above), and there is
+one Digistore24 product per key — so **an offering sold in both languages is
+submitted to both marketplaces**, each product where it belongs, and each gets
+its own verdict. `node run.mjs ds24-approval` lists them as `pro (de)` and
+`pro (en)`; an offering with a single language keeps its bare key.
+
+That is not a feature of the approval command. It falls out of the registry
+already holding one product per language, for the order-form reason above.
 
 `--lang`, `--reseller` and `--siteowner` override the rule for every product in
-the run. The ids come from `scripts/ds24/_resellers.mjs`.
+the run. The ids come from `scripts/ds24/_resellers.mjs`. A registry still in
+the pre-0.6.0 shape falls back to its `language` field, then to `APP_LANG`,
+then to German.
 
 ### Direct Sellers have no product approval — and then none of this applies
 

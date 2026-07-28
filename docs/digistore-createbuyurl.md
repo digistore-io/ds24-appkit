@@ -47,10 +47,43 @@ return await withTestpayParam(url);
 // -> open the returned url for the buyer (link/redirect)
 ```
 
+## The language is NOT set here — it comes from the product
+
+There is no language parameter on `createBuyUrl`, and that is not an oversight
+to work around: **the order form's language is a property of the Digistore24
+product** (`data[language]`), and a product carries exactly one. Whatever you
+pass here, a buyer sent to the German product fills in a German form.
+
+So the language is chosen one level up, by choosing *which product* to send
+them to. `config/digistore-products.json` holds one id per language
+(`productIdByLanguage`), and `checkoutLinkFor(def, ctx, locale)` /
+`checkoutLinksFor(defs, ctx, locale)` resolve the visitor's locale to the right
+one. Reach for those and it is already handled; the full reasoning is in
+[`digistore-integration.md`](digistore-integration.md) → *The order form's
+language*.
+
+If you build your own path on `getOrCreateBuyUrl`, that resolution is yours:
+
+```ts
+import { checkoutProductFor } from "@/lib/digistore/products";
+
+const chosen = checkoutProductFor(def, locale);   // { productId, language } | null
+```
+
+⚠️ **And then `offer.key` must carry the language too** — see the caching rule
+directly below. It is one cache row per key, so two languages sharing a key
+serve each other's checkout URL.
+
 ## Caching (important)
 
 - URLs are cached per `offer.key` in the table `buy_url_cache`,
   **TTL 20h** (safety margin below the 24h validity of the DS24 URL).
+- **`offer.key` includes the language** — `offerFor()` builds it as
+  `"<productKey>:<language>"`. There is one row per key, so a shared key would
+  let the German and the English checkout URL evict each other on every page
+  view and, in the window between, hand the German form to an English buyer
+  straight out of the cache. The `offerHash` does not save you here: it detects
+  that the offer changed, it does not give the two a row each.
 - **If the offer changes** (price, interval, title, thank-you URL …), the
   `offerHash` changes → a **new URL** is created automatically.
 - **User-specific URLs are never cached**: as soon as `buyer`, `affiliate`,

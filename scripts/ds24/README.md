@@ -20,8 +20,10 @@ into the `.env` as `DIGISTORE_API_KEY`.
 
 For apps with several offers (subscription plans + token packages),
 **`config/digistore-products.json`** is the source of truth. `sync-products.mjs`
-creates each product via `createProduct` or updates it via `updateProduct` and
-writes the `productId` back into the config. **The price is NOT set on the
+creates one product **per offer and language** via `createProduct` (or updates it
+via `updateProduct`) and writes the ids back into `productIdByLanguage`. One per
+language because a DS24 product carries exactly one `data[language]`, and that
+is the language of the buyer's order form. **The price is NOT set on the
 product** (`data[amount]` is deprecated and discarded) — price and interval stay
 in the registry and travel with the checkout call as `payment_plan[...]`
 (`lib/digistore/checkout.ts`). Do **not** maintain payment plans in the DS24 UI;

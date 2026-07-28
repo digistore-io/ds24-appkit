@@ -10,6 +10,9 @@ import {
   hasProductId,
   productId,
   productByDs24Id,
+  productIdsOf,
+  productLanguages,
+  checkoutProductFor,
   formatPrice,
   intervalKey,
   type ProductDef,
@@ -83,7 +86,7 @@ describe("Produkt-Registry", () => {
       if (hasProductId(product.key)) {
         expect(productId(product.key)).toBeTruthy();
       } else {
-        expect(() => productId(product.key)).toThrow(/sync-products/);
+        expect(() => productId(product.key)).toThrow(/ds24-sync/);
       }
     }
   });
@@ -122,6 +125,95 @@ describe("Preis-Anzeige", () => {
   it("returns null for an unknown interval", () => {
     // The page then shows the raw value instead of leaving a blank.
     expect(intervalKey({ ...abo, billingInterval: "3_month" })).toBeNull();
+  });
+});
+
+// Ein Digistore24-Produkt traegt GENAU EINE Sprache, und diese Sprache ist die
+// Sprache des Bestellformulars — createBuyUrl kann sie nicht ueberschreiben.
+// Eine zweisprachige App braucht deshalb zwei Produkte pro Angebot. Diese
+// Tests halten die Aufloesung fest; das Begleitwissen steht in products.ts.
+describe("Sprache → Digistore24-Produkt", () => {
+  const zweisprachig: ProductDef = {
+    key: "pro",
+    name: "Pro",
+    kind: "token",
+    productIdByLanguage: { de: "111", en: "222" },
+  };
+
+  it("schickt jeden Kaeufer auf das Produkt SEINER Sprache", () => {
+    expect(checkoutProductFor(zweisprachig, "de")).toEqual({
+      productId: "111",
+      language: "de",
+    });
+    expect(checkoutProductFor(zweisprachig, "en")).toEqual({
+      productId: "222",
+      language: "en",
+    });
+  });
+
+  it("faellt auf die Standardsprache zurueck statt den Verkauf zu verweigern", () => {
+    // Ein Angebot, das es auf Franzoesisch nicht gibt, bleibt kaufbar — der
+    // Kaeufer bekommt nur ein Formular in der falschen Sprache. Die Luecke
+    // meldet `node run.mjs ds24-sync`, nicht die Kasse.
+    expect(checkoutProductFor(zweisprachig, "fr")?.language).toBe("de");
+  });
+
+  it("nimmt irgendein vorhandenes Produkt, wenn auch die Standardsprache fehlt", () => {
+    const nurEnglisch: ProductDef = {
+      key: "pro",
+      name: "Pro",
+      kind: "token",
+      productIdByLanguage: { en: "222" },
+    };
+    expect(checkoutProductFor(nurEnglisch, "de")).toEqual({
+      productId: "222",
+      language: "en",
+    });
+  });
+
+  it("antwortet null, solange gar nichts synchronisiert ist", () => {
+    // "noch nicht angelegt" und "in dieser Sprache nicht verkauft" sind zwei
+    // verschiedene Zustaende — nur der erste ist ein Fehler.
+    const frisch: ProductDef = {
+      key: "pro",
+      name: "Pro",
+      kind: "token",
+      productIdByLanguage: { de: null, en: null },
+    };
+    expect(checkoutProductFor(frisch, "de")).toBeNull();
+    expect(productLanguages(frisch)).toEqual([]);
+  });
+
+  it("liest die alte Ein-Produkt-Form weiter (vor Template 0.6.0)", () => {
+    // Eine Registry aus der Zeit vor der Sprach-Aufteilung muss weiter
+    // verkaufen, ohne dass jemand sie von Hand umbaut.
+    const alt: ProductDef = {
+      key: "pro",
+      name: "Pro",
+      kind: "token",
+      language: "en",
+      productId: "999",
+    };
+    expect(productIdsOf(alt)).toEqual({ en: "999" });
+    expect(checkoutProductFor(alt, "de")?.productId).toBe("999");
+  });
+
+  it("laesst die Karte gewinnen, wenn eine Registry mitten in der Migration steht", () => {
+    // Beides gesetzt: `productIdByLanguage` ist das, was ds24-sync pflegt.
+    const gemischt: ProductDef = {
+      key: "pro",
+      name: "Pro",
+      kind: "token",
+      language: "de",
+      productId: "alt",
+      productIdByLanguage: { de: "neu", en: "222" },
+    };
+    expect(productIdsOf(gemischt)).toEqual({ de: "neu", en: "222" });
+  });
+
+  it("ohne Sprachangabe gilt die Standardsprache", () => {
+    const ohne: ProductDef = { key: "pro", name: "Pro", kind: "token", productId: "999" };
+    expect(productLanguages(ohne)).toEqual(["de"]);
   });
 });
 
@@ -173,5 +265,29 @@ describe("productByDs24Id — the reverse lookup", () => {
   it("defaults to the real registry", () => {
     // Whatever the shipped config says, an empty id must never resolve.
     expect(productByDs24Id("")).toBeNull();
+  });
+
+  it("finds an offering by ANY of its language products", () => {
+    // The one that costs money if it regresses: a German and an English buyer
+    // arrive on two different Digistore24 products, and the IPN names the one
+    // they actually bought. Matching only the first id would leave every
+    // English purchase unattributed — and `orders.productKey` is never
+    // reconstructed afterwards.
+    const bilingual: ProductDef[] = [
+      { key: "pro", name: "Pro", kind: "token", productIdByLanguage: { de: "111", en: "222" } },
+      { key: "basis", name: "Basis", kind: "subscription", productIdByLanguage: { de: "333" } },
+    ];
+    expect(productByDs24Id("111", bilingual)?.key).toBe("pro");
+    expect(productByDs24Id("222", bilingual)?.key).toBe("pro");
+    expect(productByDs24Id("333", bilingual)?.key).toBe("basis");
+  });
+
+  it("does not call two languages of ONE offering ambiguous", () => {
+    // Two offerings sharing an id is a refusal; two LANGUAGES of the same
+    // offering are one answer, not two.
+    const bilingual: ProductDef[] = [
+      { key: "pro", name: "Pro", kind: "token", productIdByLanguage: { de: "111", en: "222" } },
+    ];
+    expect(productByDs24Id("222", bilingual)?.key).toBe("pro");
   });
 });

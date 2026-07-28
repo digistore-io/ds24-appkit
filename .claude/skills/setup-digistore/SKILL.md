@@ -1,7 +1,7 @@
 ---
 name: setup-digistore
 description: Sets up Digistore24 billing for the app — fetch the API key into the `.env` via `node run.mjs ds24-connect`, then create products with `node run.mjs ds24-sync` and register the IPN connection (webhook + SHA512 passphrase) via API, test the connection and generate checkout links. The agent runs the commands itself. Use this as soon as the app is meant to receive sales or process completed purchases.
-requires: 0.5.0
+requires: 0.6.0
 ---
 <!-- Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA — SPDX-License-Identifier: MIT -->
 
@@ -23,8 +23,9 @@ That is wrong: the commands exist for exactly that purpose.
 - **Obtain the API key** → you call `node run.mjs ds24-connect` (fetches the operator's
   key and writes it into the `.env`).
 - **Create products + IPN** → you call `node run.mjs ds24-sync` (creates
-  the plans from `config/digistore-products.json` at Digistore24, writes the
-  `productId` back and registers the IPN connection via API). Product IDs are
+  the plans from `config/digistore-products.json` at Digistore24 — one product
+  per plan **and language** — writes the ids back and registers the IPN
+  connection via API). Product IDs are
   **nothing the user has to obtain** — the app brings the plans with it, the
   script generates the IDs.
 
@@ -128,7 +129,17 @@ deliberately no interface for entering or generating a key.
    One command, idempotent, does both:
    - **Products:** reads the plans from `config/digistore-products.json` (the
      source of truth that also feeds `/plans`), creates each one at Digistore24
-     or updates it and writes the `productId` back into the config.
+     or updates it and writes the ids back into the config.
+
+     **One Digistore24 product per plan AND language.** A DS24 product carries
+     exactly one language, and that language is the language of the **order
+     form** the buyer fills in — `createBuyUrl` cannot override it. So a
+     bilingual app needs two products per plan, declared as
+     `"productIdByLanguage": { "de": null, "en": null }`, and the visitor's
+     locale decides which one their checkout goes to. **Read the sync's
+     warnings out loud to the user**: a plan missing a language still sells, but
+     those buyers get an order form in the wrong language, and nothing else in
+     the app will ever mention it.
    - **IPN connection:** registers the webhook `…/api/ipn` **via API** directly
      at Digistore24 (`ipnSetup`) — the user has to enter **nothing** in the DS24
      interface for that. The SHA512 passphrase is generated in the process and
@@ -252,9 +263,11 @@ deliberately no interface for entering or generating a key.
    (`node run.mjs ds24-approval --apply`, sets `approval_status = pending`) is
    only requested once the product description and the app are mature — a
    go-live step (skill `go-live`). Which marketplace it goes to follows **each
-   product's own `language`** in `config/digistore-products.json` (German → 1,
-   anything else → 2), so an app selling in two languages submits each product
-   where it belongs; the command's dry run prints the target per product.
+   product's own language** in `config/digistore-products.json` (German → 1,
+   anything else → 2). Since a plan is one product per language, a bilingual
+   plan is submitted to **both** marketplaces and each gets its own verdict
+   (listed as `pro (de)` / `pro (en)`); the command's dry run prints the target
+   per product.
 
 ## Generating checkout links (with cache)
 
@@ -306,7 +319,8 @@ The two common ones run conveniently through `make` (see the steps above):
 
 - **Products + IPN (the normal case):** `node run.mjs ds24-sync`.
   Synchronizes the entire plan list from `config/digistore-products.json`
-  (idempotent, writes the `productId` back) **and** registers the IPN connection
+  (idempotent, writes the ids back into `productIdByLanguage`) **and**
+  registers the IPN connection
   via API (`ipn-setup.mjs --auto`, only with a public `APP_URL`). That is the
   route from step 2 — use it. This target applies by itself; the preview is
   `node run.mjs ds24-sync --dry-run`.

@@ -62,6 +62,36 @@ describe("offerFor", () => {
   it("throws while the product is not synced yet", () => {
     expect(() => offerFor({ ...sub, productId: null })).toThrow(/ds24-sync/);
   });
+
+  // A Digistore24 product carries exactly ONE language, and that language is
+  // the language of the order form. So the buyer's locale picks the product —
+  // see lib/digistore/products.ts.
+  const bilingual: ProductDef = {
+    ...sub,
+    productId: undefined,
+    productIdByLanguage: { de: "111111", en: "111222" },
+  };
+
+  it("picks the product whose ORDER FORM is in the buyer's language", () => {
+    expect(offerFor(bilingual, "de").productId).toBe("111111");
+    expect(offerFor(bilingual, "en").productId).toBe("111222");
+  });
+
+  it("gives each language its own cache key", () => {
+    // THE regression this guards. `offer.key` is the buy_url_cache primary
+    // key, one row per key — so a shared key would let the two languages evict
+    // each other on every page view and, in between, serve the German
+    // checkout URL to an English buyer straight from the cache. `offerHash`
+    // does not save it: it detects the change, it does not give them a row each.
+    expect(offerFor(bilingual, "de").key).not.toBe(offerFor(bilingual, "en").key);
+    expect(offerFor(bilingual, "en").key).toBe("basis_monatlich:en");
+  });
+
+  it("keeps a language it has no product for buyable", () => {
+    // Fallback, not refusal: a missing translation must not cost the sale.
+    // The gap is reported by `node run.mjs ds24-sync`, where it can be fixed.
+    expect(offerFor(bilingual, "fr").productId).toBe("111111");
+  });
 });
 
 describe("customTrackingFor", () => {

@@ -16,10 +16,14 @@
 //
 // **Which marketplace a product goes to follows the PRODUCT's language**, not
 // the app's: a German product is submitted to Digistore24 Germany (id 1), an
-// English one to Digistore24 USA (id 2). The language is `language` on the
-// product in config/digistore-products.json; a product that does not name one
-// falls back to APP_LANG and then to German. So one app can sell a German and
-// an English product and each is submitted where it belongs. See _resellers.mjs.
+// English one to Digistore24 USA (id 2). The languages are the keys of
+// `productIdByLanguage` in config/digistore-products.json, and there is one
+// Digistore24 product per key — so an offering sold in both is submitted to
+// both marketplaces, each in the right one. See _resellers.mjs.
+//
+// That per-language split is not a feature of this command; it is what the
+// registry already is, because a Digistore24 product carries exactly one
+// language and that language is the buyer's order form (lib/digistore/products.ts).
 //
 // --lang / --reseller / --siteowner override that for EVERY product in the run
 // and take precedence over DIGISTORE_SITEOWNER_ID in the .env.
@@ -42,7 +46,7 @@ import {
   writeApprovalCache,
 } from "./_approval.mjs";
 import { ds24Call, requireApiKey, parseArgs } from "./_client.mjs";
-import { extractProducts, readProducts } from "./_products.mjs";
+import { extractProducts, productTargets, readProducts } from "./_products.mjs";
 import { isKnownLanguage, isReseller, resolveReseller } from "./_resellers.mjs";
 
 const args = parseArgs(process.argv.slice(2));
@@ -134,8 +138,11 @@ if (flagged || envSiteowner) {
 
 const apiKey = requireApiKey();
 const config = readProducts();
-const entries = Object.entries(config.products).filter(
-  ([key]) => !onlyKey || key === onlyKey,
+// ONE ROW PER DIGISTORE24 PRODUCT — per offering AND language. An offering
+// sold in German and English is two products, and they belong to two different
+// marketplaces; approving one says nothing about the other.
+const targets = productTargets(config.products).filter(
+  ({ key }) => !onlyKey || key === onlyKey,
 );
 
 // Read before writing. listProducts carries the current status per reseller
@@ -181,18 +188,17 @@ let attempted = false;
 let refused = 0;
 
 try {
-  for (const [key, def] of entries) {
-    if (!def.productId) {
-      console.log(`· skipped: "${key}" (no productId yet — run sync-products first).`);
+  for (const { label, language, productId } of targets) {
+    if (!productId) {
+      console.log(`· skipped: "${label}" (not created at Digistore24 yet — run sync-products first).`);
       continue;
     }
     synced = true;
 
     // Per product, unless a flag forced one marketplace for the whole run.
-    const language = typeof def.language === "string" ? def.language : "";
     if (!forced && language && !isKnownLanguage(language)) {
       console.error(
-        `WARN: "${key}" has language "${language}", which is not a Digistore24 language code — ` +
+        `WARN: "${label}" has language "${language}", which is not a Digistore24 language code — ` +
           `it will be treated as non-German. Use "de", "en", … if that is not what you meant.`,
       );
     }
@@ -200,7 +206,7 @@ try {
     const siteowner = target.id;
     const where = target.reseller ? target.reseller.name : `siteowner ${siteowner}`;
 
-    const product = byId.get(String(def.productId)) ?? null;
+    const product = byId.get(String(productId)) ?? null;
     const entry = resellerEntry(product, siteowner);
     const current = entry ? String(entry.approval_status ?? "").trim().toLowerCase() : null;
     // The target is always one of the four resellers by now (checked above and
@@ -209,20 +215,20 @@ try {
     // earlier version treated the two as one and sent requests into the void.
     const currentNote = entry ? `currently "${current}"` : "status unknown";
     if (statusRead && !hasApprovalList(product)) {
-      console.error(`WARN: "${key}" carries no approval list in the response — status unknown.`);
+      console.error(`WARN: "${label}" carries no approval list in the response — status unknown.`);
     }
 
     // Already approved for THIS marketplace is the end state. Deliberately not
     // the aggregated status: a product approved in Germany may still have a
     // legitimate request to make in the USA.
     if (current === "approved") {
-      console.log(`✓ "${key}" (product_id=${def.productId}) is already approved at ${where} — skipped.`);
+      console.log(`✓ "${label}" (product_id=${productId}) is already approved at ${where} — skipped.`);
       continue;
     }
 
     if (!apply) {
       console.log(
-        `DRY-RUN — would request "${status}": "${key}" (product_id=${def.productId}) ` +
+        `DRY-RUN — would request "${status}": "${label}" (product_id=${productId}) ` +
           `at ${where} [id=${siteowner}] — ${currentNote}`,
       );
       continue;
@@ -234,7 +240,7 @@ try {
     // as never submitted, for ever, and repeating the command never helps.
     if (entry && !isMarketplaceActive(entry) && !force) {
       console.error(
-        `· REFUSED: "${key}" — your account is not active at ${where}, so a request there ` +
+        `· REFUSED: "${label}" — your account is not active at ${where}, so a request there ` +
           `would never be looked at. Pass --force to send it anyway.`,
       );
       refused++;
@@ -243,7 +249,7 @@ try {
 
     if (!entry && !force) {
       console.error(
-        `· REFUSED: "${key}" (product_id=${def.productId}) — its status at ${where} could not be ` +
+        `· REFUSED: "${label}" (product_id=${productId}) — its status at ${where} could not be ` +
           `read, so an existing approval cannot be ruled out. Pass --force to request anyway.`,
       );
       refused++;
@@ -252,11 +258,11 @@ try {
 
     attempted = true;
     await ds24Call("updateProduct", apiKey, {
-      product_id: String(def.productId),
+      product_id: String(productId),
       [`data[approval_status][${siteowner}]`]: status,
     });
     applied = true;
-    console.log(`✓ Approval "${status}" requested: "${key}" at ${where} [id=${siteowner}] (was ${currentNote})`);
+    console.log(`✓ Approval "${status}" requested: "${label}" at ${where} [id=${siteowner}] (was ${currentNote})`);
   }
 } finally {
   // In a `finally` because a throw halfway through the loop still leaves the
@@ -281,7 +287,14 @@ try {
     // Not when the kill switch is on — this command would otherwise re-create
     // the very file the switch exists to remove, and doctor would start talking
     // again until the next session start deleted it.
-    const syncedEntries = entries.filter(([, def]) => def.productId);
+    // Keyed by LABEL, not by registry key: an offering sold in two languages
+    // is two products at two marketplaces, and one of them being approved says
+    // nothing about the other. Collapsing them onto one key would let an
+    // approved German product silence the reminder about its English twin —
+    // and that twin is the one nobody remembers to submit.
+    const syncedEntries = targets
+      .filter(({ productId }) => productId)
+      .map(({ label, productId }) => [label, { productId }]);
     if (syncedEntries.length > 0) {
       writeApprovalCache({ checkedAt: Date.now(), statuses: statusesFrom(syncedEntries, list) });
     }

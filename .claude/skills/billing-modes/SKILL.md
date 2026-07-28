@@ -1,6 +1,7 @@
 ---
 name: billing-modes
 description: Sets up the billing models beyond the one-off purchase — fixed subscriptions (monthly/yearly), usage-based prepaid tokens with auto top-up (createBillingOnDemand) as well as subscription self-service for customers (cancel, change payment details, view invoices). Use this after setup-digistore, when the app is meant to bill recurring or by usage (e.g. tokens for AI usage).
+requires: 0.6.0
 ---
 <!-- Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA — SPDX-License-Identifier: MIT -->
 
@@ -66,7 +67,9 @@ type it:
 node run.mjs ds24-sync
 ```
 
-That writes the `productId`(s) back into the config and registers the IPN. Use
+That writes the id(s) back into `productIdByLanguage` (one Digistore24 product
+per offer **and language** — a DS24 product carries exactly one, and it is the
+language of the buyer's order form) and registers the IPN. Use
 the `make` target, **not** `node scripts/ds24/sync-products.mjs` directly — the
 script alone skips the IPN hookup, and purchases then never unlock anything.
 

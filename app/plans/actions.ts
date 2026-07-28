@@ -19,6 +19,7 @@
 // renders for a signed-in Member, but that is cosmetics — the check below is
 // what actually holds.
 import { redirect } from "next/navigation";
+import { getLocale } from "next-intl/server";
 
 import { auth } from "@/auth";
 import { getProduct } from "@/lib/digistore/products";
@@ -44,26 +45,35 @@ export async function startCheckoutAction(formData: FormData): Promise<void> {
     // Throws on an unknown key — a tampered form must not silently do nothing.
     const def = getProduct(productKey);
     const checkoutToken = await ensureCheckoutToken(memberId);
+    // Decides WHICH of the offering's Digistore24 products they are sent to,
+    // and with it the language of the order form — a DS24 product carries
+    // exactly one (lib/digistore/products.ts). A Member reading the app in
+    // English must not be handed a German checkout page.
+    const locale = await getLocale();
 
-    const link = await checkoutLinkFor(def, {
-      // Pins the checkout to the address they signed in with. They may still
-      // pay with another one at Digistore24 — the identity string is what
-      // makes that harmless.
-      ...(email ? { buyer: { email } } : {}),
-      customTracking: buildIdentity({
-        memberId,
-        checkoutToken,
-        productKey,
-        // Subscriptions and one-off token packages are told apart in the
-        // ledger by this. Auto top-ups carry "auto" (set in autoReloadIfNeeded).
-        kind: def.kind === "subscription" ? "sub" : "topup",
-        // Travels as one more pair in tracking[custom] (AD-5) rather than a
-        // column, because the thing it will be attached to does not exist yet:
-        // the chargeable purchase_id is created when Digistore24 confirms this
-        // payment. The IPN reads the pair back and arms the mandate then.
-        armAutoReload: wantsAutoReload && def.kind === "token",
-      }),
-    });
+    const link = await checkoutLinkFor(
+      def,
+      {
+        // Pins the checkout to the address they signed in with. They may still
+        // pay with another one at Digistore24 — the identity string is what
+        // makes that harmless.
+        ...(email ? { buyer: { email } } : {}),
+        customTracking: buildIdentity({
+          memberId,
+          checkoutToken,
+          productKey,
+          // Subscriptions and one-off token packages are told apart in the
+          // ledger by this. Auto top-ups carry "auto" (set in autoReloadIfNeeded).
+          kind: def.kind === "subscription" ? "sub" : "topup",
+          // Travels as one more pair in tracking[custom] (AD-5) rather than a
+          // column, because the thing it will be attached to does not exist yet:
+          // the chargeable purchase_id is created when Digistore24 confirms this
+          // payment. The IPN reads the pair back and arms the mandate then.
+          armAutoReload: wantsAutoReload && def.kind === "token",
+        }),
+      },
+      locale,
+    );
     url = link.url;
   } catch (error) {
     // Visible in `node run.mjs logs`. The buyer gets a sentence, not a stack trace,

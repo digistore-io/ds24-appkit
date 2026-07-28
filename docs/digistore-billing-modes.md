@@ -17,7 +17,8 @@ Which of the two an app uses is **declared, not guessed** — see
 
 Code:
 - `config/digistore-products.json` — **product registry** (source of truth): one
-  DS24 product per offer; `productId` written back by `sync-products.mjs`.
+  DS24 product per offer **and language**; the ids are written back into
+  `productIdByLanguage` by `sync-products.mjs`.
   Also holds `billingMode` — which of the two models this app sells.
 - `lib/billing-mode.ts` — reads it: `sellsPlans()`, `sellsTokens()`.
 - `lib/digistore/products.ts` — registry access (price, interval, features).
@@ -98,14 +99,18 @@ there.
 
 ## Products: registry + checkout via createBuyUrl
 
-Every offer (subscription plan **and** token package) is **one DS24 product** with a
-stable `productId`. Declare products in `config/digistore-products.json` and create them:
+Every offer (subscription plan **and** token package) is **one DS24 product per
+language**, each with a stable id. One product per language, because a DS24
+product carries exactly one and that one is the language of the buyer's order
+form — see [`digistore-integration.md`](digistore-integration.md) → *The order
+form's language*. Declare products in `config/digistore-products.json` and
+create them:
 
 ```bash
 node run.mjs ds24-sync
 ```
 
-That writes the `productId`(s) back into the config **and** registers the IPN.
+That writes the id(s) back into `productIdByLanguage` **and** registers the IPN.
 (`node scripts/ds24/sync-products.mjs --apply` only does the products — the
 purchases would then unlock nothing.)
 
@@ -135,7 +140,10 @@ const link = links.get("pro");
 `settings[force_rebilling]=Y` — without which no chargeable `purchase_id` comes
 into being and the auto-reload below cannot work. URLs are cached for 20h
 (`buy_url_cache`) and regenerate whenever the offer changes. Blueprint:
-`app/plans/page.tsx`. All environments use the same live `productId`.
+`app/plans/page.tsx`. All environments use the same live products.
+
+The cache key carries the language (`"<key>:<language>"`), because the visitor's
+locale decides which of the offer's DS24 products they are sent to.
 
 ---
 
