@@ -192,3 +192,32 @@ own domain and the Auth.js defaults apply.
 So if you do see the message, the app is running with `APP_ENV` other than
 `development`, with a non-local `APP_URL`, or with no `AUTH_SECRET` — check
 `.env`. Deleting the `authjs.*` cookies in the browser clears the leftover.
+
+## "An unexpected response was received from the server."
+
+The other side of the same coin, and it looks nothing like a cookie problem.
+Signing in fails with that sentence, the Next.js overlay points at
+`app/login/page.tsx` — and **that page is fine**. Two details give it away:
+
+- the dev log shows the `GET /login` and then **no `POST`** at all
+- it started right after you created another app from this template
+
+The cookie names above stop installations from decrypting each other's sessions.
+What they cannot do is remove the names an installation stops using: cookies
+know nothing about ports, so every copy ever started on this machine keeps
+sending its session to every other one, for as long as it has not expired. Once
+they add up past Node's 16 KB header limit, the request is refused with `431` by
+the HTTP parser **before Next.js sees it** — hence no log line — and the browser
+turns that into the sentence above, blaming the page that was waiting for the
+answer.
+
+**Right now:** clear the cookies for `localhost` (DevTools → Application →
+Cookies → `http://localhost:<port>`) and sign in again. `node run.mjs errors`
+says the same thing if you would rather ask the app.
+
+**From now on:** the DEV cookies expire after a week, and once there is more
+than 6 KB of them the app deletes the ones belonging to other installations
+(`lib/auth/cookie-names.ts`, carried out in `proxy.ts`). Below that threshold
+nothing is touched, so two apps you are working on at the same time both stay
+signed in. Above it you may find yourself signed out of the other one — that is
+the trade, and it is the better half of it.

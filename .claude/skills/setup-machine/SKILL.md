@@ -191,8 +191,15 @@ A `307` to `/login` is correct, not an error: those pages are protected. `smoke`
 then calls them a second time signed in as the owner — and on a machine that has
 just been set up it usually cannot, because there is no `owner` account yet. It
 says so in one line with the reason, and that is a normal state here, not a
-finding. The account comes into being in `build-app` (step 3b) or with
-`node run.mjs user-create`.
+finding.
+
+**There is nothing to create for it.** The first account in a fresh app becomes
+`owner` by itself in DEV (`lib/users/bootstrap.ts`) — the user signs in at
+http://localhost:3000/login with any address and that is the admin. Say that,
+rather than asking them for an address. Only if you need the signed-in pass
+*before* anybody has signed in once is there a command, because
+`scripts/dev/sign-in.mjs` deliberately creates no account:
+`node run.mjs user-create --email … --role owner --apply`.
 
 ### 7. Hand over
 

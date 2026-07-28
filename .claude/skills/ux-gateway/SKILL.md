@@ -72,8 +72,12 @@ go straight into the report with a file and a line.
 
 Then open the app. Signed in as a **member**, not as the owner — the owner sees
 an admin area the customer will never meet, and every judgement made from the
-owner's session is made about the wrong app. `node run.mjs user-create` makes
-one; the developer sign-in gets you in.
+owner's session is made about the wrong app. In DEV a member costs nothing to
+get: only the *first* account in a fresh app becomes `owner`
+(`lib/users/bootstrap.ts`), so signing in through the development login with a
+second address you make up gives you exactly what a customer has. Where there is
+no browser, `node run.mjs user-create --email … --apply` writes the same row
+(`member` is the default role).
 
 **A note on what you can and cannot see.** If a browser tool is available, use
 it and say so in the report. If it is not, say *that* — "judged from the code,

@@ -215,26 +215,43 @@ other. Reference: `lib/billing-mode.ts`. Everything else about billing is the
 - Every page has to be readable in light **and** dark; the app has a toggle
   (default: system). With tokens this follows by itself.
 
-## Step 3b — Create the operator/admin account
+## Step 3b — The operator/admin account: locally there is nothing to create
 
-So that the user can sign in as the **operator (admin)** themselves, create an
-`owner` account. **Ask the user for their email address** (the one they will
-sign in with later) and create the account via CLI — as soon as the DB is
-running (`node run.mjs start`):
+**Do not ask the user for an email address here, and do not create an account.**
+Locally the first one makes itself: whoever signs in first at `/login` — with
+any address, no password, no mail — comes into being as `owner`, and the admin
+area plus the "Users" entry are in the navigation on that first page load. So
+the whole step is one sentence to the user: *open http://localhost:3000/login
+and sign in with whatever address you like; that account is the admin.*
+
+The rule is `lib/users/bootstrap.ts` and it is narrow on purpose: **the very
+first account, in DEV only.** Anything after it is a `member`, and outside DEV
+every account is, including the first — a freshly deployed instance has an empty
+user table too, and the first person to sign in there may be a customer. Handing
+them user management would be an account takeover.
+
+**Two cases still need the CLI**, and neither is this step:
 
 ```bash
-node scripts/users/create-user.mjs --email <their-email> --role owner --apply
-# or: node run.mjs user-create --email <their-email> --role owner --apply
+node run.mjs user-create --email <address> --role owner --apply
 ```
 
-Sign-in is by email magic link — the `owner` account created in advance is
-reused at the first sign-in. On top of that every customer may set a password
-on themselves under `/dashboard/account`; it is optional, it never replaces the
-magic link, and there is nothing to configure for it. Protect admin-only pages
-with
-`requireOwner()` (`lib/authz.ts`); model to follow:
+- **STAGING and PROD**, where the bootstrap deliberately does not fire. That
+  belongs to `setup-hosting` / `go-live`, not here.
+- **When YOU need a signed-in session and cannot open a browser.** The bootstrap
+  fires on a real sign-in, and `node run.mjs smoke` never triggers it:
+  `scripts/dev/sign-in.mjs` looks an existing owner up and skips with a named
+  reason if there is none, rather than putting a row into somebody's database on
+  a command they ran to look at pages. If you need `smoke`'s second pass before
+  the user has signed in once, run the command above and say that you did.
+
+Sign-in is by email magic link, and in DEV without mail delivery by the
+development login (`lib/auth/dev-login.ts`) — nothing to configure either way.
+On top of it every customer may set a password on themselves under
+`/dashboard/account`; it is optional and never replaces the link. Protect
+admin-only pages with `requireOwner()` (`lib/authz.ts`); model to follow:
 `app/dashboard/admin/page.tsx`. Normal customers stay `member` (default).
-Details: `scripts/users/README.md`.
+Details: `scripts/users/README.md` and `docs/auth-setup.md`.
 
 ## Step 4 — Write tests AND run them (mandatory)
 
@@ -268,8 +285,9 @@ that sent it to `/login` — so your new protected pages are really rendered. Tw
 lines in its output are worth reading rather than skimming:
 
 - `Signed in as … — the N protected page(s) again` → they were checked.
-- `N protected page(s) NOT checked — <reason>` → **they were not.** Usually there
-  is no `owner` account yet (step 3b) or mail delivery is configured, which
+- `N protected page(s) NOT checked — <reason>` → **they were not.** Usually
+  nobody has signed in yet, so there is no `owner` account for it to use
+  (step 3b — `smoke` never creates one), or mail delivery is configured, which
   switches the development login off. Fix the reason or open the pages yourself;
   do not report them as working.
 

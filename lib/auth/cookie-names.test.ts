@@ -6,6 +6,8 @@ import {
   devCookies,
   installationFingerprint,
   shouldUseOwnCookieNames,
+  staleAuthCookieNames,
+  PRUNE_ABOVE_BYTES,
 } from "./cookie-names";
 
 const DEV = {
@@ -83,5 +85,92 @@ describe("devCookies", () => {
       expect(cookie.options.sameSite).toBe("lax");
       expect(cookie.options.path).toBe("/");
     }
+  });
+
+  it("gives the DEV cookies a maxAge of at most a week", () => {
+    const c = devCookies(DEV)!;
+    for (const cookie of [c.sessionToken, c.callbackUrl, c.csrfToken]) {
+      expect(cookie.options.maxAge).toBeGreaterThan(0);
+      expect(cookie.options.maxAge).toBeLessThanOrEqual(7 * 24 * 60 * 60);
+    }
+  });
+});
+
+/**
+ * A cookie of a FOREIGN installation, sized like a real Auth.js session JWE.
+ * `index` only has to vary the fingerprint — it stands for another copy of this
+ * template, not for an order.
+ */
+function foreign(index: number, kind = "session-token") {
+  return {
+    name: `authjs.${kind}.${(0x10000000 + index).toString(16)}`,
+    value: "e".repeat(499),
+  };
+}
+
+/** As many foreign installations as it takes to pass the threshold. */
+function overThreshold() {
+  const jar = [];
+  while (jar.reduce((n, c) => n + c.name.length + c.value.length + 2, 0) <= PRUNE_ABOVE_BYTES) {
+    jar.push(foreign(jar.length));
+  }
+  return jar;
+}
+
+describe("staleAuthCookieNames", () => {
+  it("prunes nothing while the jar is small — two apps side by side stay signed in", () => {
+    const own = devCookies(DEV)!;
+    const jar = [
+      { name: own.sessionToken.name, value: "x".repeat(499) },
+      foreign(1),
+      foreign(2),
+    ];
+    expect(staleAuthCookieNames(jar, DEV)).toEqual([]);
+  });
+
+  it("names the foreign fingerprints once the jar passes the threshold", () => {
+    const jar = overThreshold();
+    const stale = staleAuthCookieNames(jar, DEV);
+    expect(stale.length).toBe(jar.length);
+    expect(stale).toEqual(expect.arrayContaining(jar.map((c) => c.name)));
+  });
+
+  it("never names its own three cookies, however full the jar is", () => {
+    const own = devCookies(DEV)!;
+    const mine = [own.sessionToken.name, own.callbackUrl.name, own.csrfToken.name];
+    const jar = [...overThreshold(), ...mine.map((name) => ({ name, value: "x".repeat(499) }))];
+    const stale = staleAuthCookieNames(jar, DEV);
+    for (const name of mine) expect(stale).not.toContain(name);
+  });
+
+  it("leaves everything that is not this template's naming scheme alone", () => {
+    const strangers = [
+      { name: "authjs.session-token", value: "x".repeat(499) },
+      { name: "next-auth.session-token", value: "x".repeat(499) },
+      { name: "authjs.session-token.NOTHEX", value: "x".repeat(499) },
+      { name: "authjs.session-token.abc", value: "x".repeat(499) },
+      { name: "grafana_session", value: "x".repeat(499) },
+    ];
+    const stale = staleAuthCookieNames([...overThreshold(), ...strangers], DEV);
+    for (const stranger of strangers) expect(stale).not.toContain(stranger.name);
+  });
+
+  it("prunes nothing outside DEV, on a real domain, or without a secret", () => {
+    const jar = overThreshold();
+    expect(staleAuthCookieNames(jar, { ...DEV, APP_ENV: "production" })).toEqual([]);
+    expect(staleAuthCookieNames(jar, { ...DEV, APP_ENV: "tippfehler" })).toEqual([]);
+    expect(staleAuthCookieNames(jar, { ...DEV, APP_URL: "https://app.example.de" })).toEqual([]);
+    expect(staleAuthCookieNames(jar, { ...DEV, AUTH_SECRET: undefined })).toEqual([]);
+  });
+
+  it("counts every authjs cookie towards the threshold, its own included", () => {
+    // One foreign installation next to a jar that is already large because of
+    // OUR cookies: the header is what breaks, no matter whose name is on it.
+    const own = devCookies(DEV)!;
+    const jar = [
+      { name: own.sessionToken.name, value: "x".repeat(PRUNE_ABOVE_BYTES) },
+      foreign(1),
+    ];
+    expect(staleAuthCookieNames(jar, DEV)).toEqual([foreign(1).name]);
   });
 });

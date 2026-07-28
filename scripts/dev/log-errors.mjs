@@ -62,11 +62,18 @@ function readFrom(fromOffset) {
  * Next writes an error as a block at column 0 — `Error: …`, sometimes with a
  * `⨯` in front — followed by an indented stack and a code frame. `[intl]` is
  * this project's own prefix from i18n/request.ts.
+ *
+ * **`[browser]` is not the app's own output at all**, and it is the one worth
+ * knowing about: Next forwards an error the BROWSER raised into this log, as
+ * `[browser] Uncaught Error: …`. For as long as these patterns only matched a
+ * line beginning with `Error`, such a block was invisible here — and it is
+ * exactly the class of failure this command exists for, because the server
+ * answered 200 and noticed nothing.
  */
 const ERROR_START = [
-  /^(?:⨯\s+)?(?:\[intl\]\s+)?\w*Error(?::|\b.*\bat\b)/,
-  /^(?:⨯\s+)?(?:\[intl\]\s+)?unhandledRejection\b/,
-  /^(?:⨯\s+)?(?:\[intl\]\s+)?Warning:.*hydrat/i,
+  /^(?:⨯\s+)?(?:\[(?:intl|browser)\]\s+)?(?:Uncaught\s+)?\w*Error(?::|\b.*\bat\b)/,
+  /^(?:⨯\s+)?(?:\[(?:intl|browser)\]\s+)?unhandledRejection\b/,
+  /^(?:⨯\s+)?(?:\[(?:intl|browser)\]\s+)?Warning:.*hydrat/i,
   /^(?:⨯\s+)?.*\bHydration failed\b/,
   /^⨯\s+\S/,
 ];
@@ -128,6 +135,17 @@ const HINTS = [
       "    See CLAUDE.md -> A hydration mismatch is not always yours.",
   },
   {
+    when: /unexpected response was received from the server/i,
+    say:
+      "the browser's cookies for localhost no longer fit in one request. Every copy\n" +
+      "    of this template ever started on this machine leaves a session cookie there,\n" +
+      "    cookies ignore ports, and past ~16 KB Node answers 431 BEFORE Next.js sees\n" +
+      "    the request — so the log shows the GET and no POST at all. The stack trace\n" +
+      "    names the sign-in page, which is the one place the fault is not.\n" +
+      "    Clear the cookies for localhost (DevTools → Application → Cookies) and it is\n" +
+      "    gone. The app prunes them itself from now on — lib/auth/cookie-names.ts.",
+  },
+  {
     when: /unhandledRejection/,
     say: "a promise rejected with nobody awaiting it — add the await, or catch it.",
   },
@@ -148,7 +166,13 @@ function isErrorStart(line) {
 
 /** The headline: a named code if there is one, else the first line as written. */
 function headline(firstLine) {
-  const clean = firstLine.replace(/^⨯\s+/, "").replace(/^\[intl\]\s+/, "").trim();
+  // `[browser]` goes the same way as `[intl]`: it names where the error was
+  // raised, not what it was. `Uncaught` stays — that is the browser's own
+  // wording, and the rest of the line is kept verbatim here too.
+  const clean = firstLine
+    .replace(/^⨯\s+/, "")
+    .replace(/^\[(?:intl|browser)\]\s+/, "")
+    .trim();
   const code = CODES.find((name) => clean.includes(name));
   if (!code) return clean;
   // "Error: FORMATTING_ERROR: Invalid time value" → "FORMATTING_ERROR: Invalid time value"

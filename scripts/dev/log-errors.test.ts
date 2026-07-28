@@ -87,6 +87,31 @@ unhandledRejection: TypeError: Cannot read properties of null
     expect(messages[1]).toMatch(/unhandledRejection/);
   });
 
+  it("finds an error the BROWSER reported, not only the server's own", () => {
+    // Next forwards a browser error into the dev log with a `[browser]` prefix.
+    // For as long as the patterns only matched lines beginning with `Error`,
+    // this command answered "✓ No errors in the log." while the log held this.
+    // Captured verbatim from the failure that produced story 4.3.
+    const log = ` GET /login 200 in 454ms (next.js: 402ms, application-code: 52ms)
+[browser] Uncaught Error: An unexpected response was received from the server.
+    at LoginPage (app/login/page.tsx:121:9)
+  119 |         )}
+  120 |
+> 121 |         <SignInForm
+      |         ^
+  122 |           mailConfigured={emailEnabled}
+`;
+    const found = parseErrors(log);
+
+    expect(found).toHaveLength(1);
+    // `[browser]` names where it was raised and is stripped like `[intl]`;
+    // everything the browser actually said is kept.
+    expect(found[0].message).toBe(
+      "Uncaught Error: An unexpected response was received from the server.",
+    );
+    expect(found[0].location).toBe("app/login/page.tsx:121");
+  });
+
   it("keeps two different errors in the same file apart", () => {
     const log = `Error: MISSING_MESSAGE: Could not resolve \`admin.title\`
     at AdminPage (app/dashboard/admin/page.tsx:10:5)

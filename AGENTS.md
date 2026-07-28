@@ -282,10 +282,16 @@ their way around one skill has then found their way around all of them:
 ## Rules
 
 - **Sign-in is not optional for app pages — but it is not automatic either.**
-  Protection is **opt-in, not opt-out**: `proxy.ts` guards only what its
-  `matcher` lists — today `/dashboard/:path*` — and `auth.config.ts` returns
-  true for every other path. **Any new route outside `/dashboard` is public
-  until you add it to the matcher.**
+  Protection is **opt-in, not opt-out**: the refusal is `authorized()` in
+  `auth.config.ts`, and it returns true for every path outside `/dashboard`.
+  **Any new route outside `/dashboard` is public until you protect it there.**
+  ⚠️ **The `matcher` in `proxy.ts` says where the proxy RUNS, not what is
+  protected**, and the two stopped being the same list when that file also took
+  on a second job: it prunes the session cookies of other local copies of this
+  template, which has to happen on a page a signed-out person opens (see
+  **Several copies on one machine** below). So `/login` and `/` are in the
+  matcher and are fully public — being listed protects nothing. A new protected
+  area needs both: the path in the matcher *and* `authorized()` taught about it.
   Public by design: the home page, `/login`, `/plans`, `/optin/*`,
   `/account/confirm-email`, the IPN endpoint `/api/ipn` (secured via the
   SHA512 signature) and the MCP endpoint `/api/mcp` (secured by a per-member
@@ -624,6 +630,47 @@ Three things follow, and the third is the one that costs time:
   down does not stop an extension rewriting the DOM; it stops React telling you
   about it, which is worse than the warning. If some future extension needs
   handling, handle it at the element it touches or not at all.
+
+### Several copies on one machine — the sign-in that breaks for no reason
+
+The same shape of lesson as above, and the harder one to recognise: an error
+whose stack trace points squarely into your code while the cause is in the
+browser's cookie jar.
+
+The symptom is a sign-in that answers
+
+```
+An unexpected response was received from the server.
+app/login/page.tsx (121:9) @ LoginPage
+```
+
+and a dev log showing the `GET /login` and then **no POST at all**. Both halves
+matter. **Nothing is wrong with that page**, and there is nothing to fix in it.
+
+What happened is that the `Cookie` header for `localhost` outgrew Node's 16 KB
+limit, so the HTTP parser answered `431 Request Header Fields Too Large` before
+Next.js ever saw the request — which is why nothing was logged. React turns any
+answer that is not a valid action response into that one sentence, and blames
+the component holding the `useActionState`.
+
+It builds up because **cookies know nothing about ports**. Every copy of this
+template ever started on this machine leaves a session cookie on `localhost`, so
+they all travel to all of them. `lib/auth/cookie-names.ts` gives each
+installation its own names — without that, apps decrypt each other's sessions
+and fail with `JWTSessionError` — and around twenty installations later the
+names themselves are the problem. The app that breaks first is the newest one,
+which is the one that looks broken.
+
+Two things now keep it in check, and both live in that file: the DEV cookies
+expire after a week, and above 6 KB of them `proxy.ts` deletes the ones
+belonging to other installations. **The threshold is what lets two apps be
+worked on side by side** — do not "simplify" it away, and do not solve a future
+version of this by dropping the fingerprints.
+
+There is a third one worth knowing about: `node run.mjs errors` recognises this
+message and says all of the above in four lines. If somebody is looking at it
+right now, the immediate remedy is to clear the cookies for `localhost` in the
+browser (DevTools → Application → Cookies).
 
 Three things `node run.mjs smoke` cannot do:
 
