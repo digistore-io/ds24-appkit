@@ -112,6 +112,21 @@ unhandledRejection: TypeError: Cannot read properties of null
     expect(found[0].location).toBe("app/login/page.tsx:121");
   });
 
+  it("finds a browser promise rejection — the async half of the same class", () => {
+    // `Uncaught (in promise) …` is how the browser reports a rejection nobody
+    // caught; Next forwards it under the same `[browser]` prefix. For as long
+    // as the pattern required `Error` right after `Uncaught`, this variant —
+    // the common one in fetch-heavy client code — stayed invisible.
+    const log = `[browser] Uncaught (in promise) TypeError: Failed to fetch
+    at loadReport (app/dashboard/report/ui.tsx:41:11)
+`;
+    const found = parseErrors(log);
+
+    expect(found).toHaveLength(1);
+    expect(found[0].message).toBe("Uncaught (in promise) TypeError: Failed to fetch");
+    expect(found[0].location).toBe("app/dashboard/report/ui.tsx:41");
+  });
+
   it("keeps two different errors in the same file apart", () => {
     const log = `Error: MISSING_MESSAGE: Could not resolve \`admin.title\`
     at AdminPage (app/dashboard/admin/page.tsx:10:5)

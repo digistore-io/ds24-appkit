@@ -77,6 +77,7 @@ reseller/marketplace the approval is requested from follows from the
 Overridable via `--lang`, `--reseller` or `--siteowner`:
 
 ```bash
+node run.mjs ds24-approval                            # dry run = the status view
 node run.mjs ds24-approval --apply                    # reseller from language (default: DE → 1)
 node run.mjs ds24-approval --lang en --apply        # → USA reseller (id 2)
 node run.mjs ds24-approval --reseller US --apply    # a specific reseller: DE|US|GB|IE
@@ -87,10 +88,33 @@ node run.mjs ds24-approval --siteowner <id> --apply # any (even private) marketp
 The reseller IDs are hard-coded in `_resellers.mjs` (source:
 `https://www.digistore24.com/support/resellers.json` — practically never change).
 
-**Before approval only test purchases.** New products are not approved at first;
-to test the checkout from inside the app, the vendor sets the test-purchase
-cookie once: <https://help.digistore24.com/hc/de/articles/23901169396241>.
+The dry run shows the **current** status per product (`new`/`pending`/
+`approved`/`rejected`, read from `listProducts` → `approval_status_list`), and
+`--apply` skips products that are already approved — re-writing `pending` over
+an approval is a step whose effect Digistore24 does not document. The read side
+lives in `_approval.mjs`, which also feeds the once-a-day line in the session
+greeting and the `info` check in doctor (cache: `.dev/approval-check.json`,
+kill switch `DIGISTORE_APPROVAL_CHECK=off`).
+
+**Before approval only test purchases.** New products are not approved at
+first. In DEV that is already handled: every checkout link carries the
+test-payment parameter by itself (`lib/digistore/testpay.ts`, state in
+`.dev/testpay.json`). Outside DEV the vendor sets the test-purchase cookie
+once: <https://help.digistore24.com/hc/de/articles/23901169396241>.
 You only request approval once the product description and the app are mature.
+
+### The test-purchase key (`testpay.mjs`)
+
+```bash
+node run.mjs ds24-testpay              # fetch/refresh the key + show the state
+node run.mjs ds24-testpay --json      # machine-readable
+node run.mjs ds24-testpay --recreate  # rotate — every old copy stops working
+```
+
+`getTestpayKey` (undocumented DS24 API function) returns the GET parameter that
+unlocks test payments on the checkout. The app fetches it by itself in DEV;
+this script inspects and rotates it. The key is account-level — treat it like
+a secret, and rotate before go-live.
 
 ### A single product (the old way)
 

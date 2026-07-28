@@ -199,7 +199,7 @@ Fields worth knowing before you design anything:
 | `ipn_config_api_key_id` | the numeric prefix of the API key whose connection this is — for key `12345-xxxx`, `12345`. **Present on order events, absent on the connection test** |
 | `ipn_config_domain_id` | the `domain_id` passed to `ipnSetup` |
 | `custom` | whatever the app sent as `tracking[custom]`, returned on *every* later event for that purchase. Documented as `string(63)`, and the identity pairs already fill most of it |
-| `api_mode` | `live` or `test`. Test purchases of unapproved products arrive as `test` |
+| `api_mode` | `live` or `test`. Test purchases arrive as `test` — whether made with the test-purchase cookie or with the testpay parameter that DEV checkout links append by themselves (`node run.mjs ds24-testpay`). The template deliberately processes `test` events exactly like `live` ones: that identical path is what makes a test purchase prove the chain. An operator who wants test orders segregated in PROD branches on this field — nothing in the template does |
 | `order_id` | stable across all transactions of one order → the idempotency key |
 
 ### The checkout
@@ -232,6 +232,38 @@ step-by-step guide including the local-tunnel and thank-you-page details. The
 only step that cannot be automated is the vendor's single click in the browser.
 All three commands are shape-A commands: they assume one key in the `.env` and
 one IPN connection.
+
+### Reading the approval status back
+
+Requesting approval is a write with no visible answer — Digistore24 decides
+later, and `retrieveApiKey` is *not* how you learn it happened (see above). The
+read side has one source: every `listProducts`/`getProduct` item carries
+`approval_status_list`, one entry per reseller with `approval_status` one of
+`new` (never requested), `pending`, `approved` or `rejected`. That field is
+**probed, not documented** (2026-07-28) — the OpenAPI spec does not list it —
+which is why `scripts/ds24/_approval.mjs` tolerates every way it could change
+and answers "say nothing" rather than guessing.
+
+Three surfaces read it, and they share one cache (`.dev/approval-check.json`,
+one `listProducts` call per day, a week once everything is approved):
+
+- **The session greeting** says one bracketed line while a synced product is
+  unrequested, pending or rejected — worst state wins — and is silent
+  otherwise. Off with `DIGISTORE_APPROVAL_CHECK=off` in the `.env`.
+- **`node run.mjs doctor`** carries the same answer as an `info` check, from
+  the cache only.
+- **`node run.mjs ds24-approval`** (the dry run) shows the live status per
+  product, and `--apply` skips products that are already `approved`: the
+  reseller side decides on `pending` products only, and whether re-writing
+  `pending` over an approval resets it is undocumented — not worth finding out
+  on a live account.
+
+**Deliberately not built:** no in-app notice and no checkout blocker for an
+unapproved product. Test purchases work before approval, so blocking the
+checkout would disable something that works; and `checkoutBlockersFor()`
+answers without network on purpose, while the approval answer lives in a
+`.dev/` cache that a deployed server does not have. The reminder is for the
+developer, in the terminal — the customer-facing surface is unaffected.
 
 ### What "one vendor" means in the code
 
@@ -531,6 +563,7 @@ Which key each function needs. "The vendor's key" is `ds24ApiKey()` from the
 | `listProducts`, `createProduct`, … | the vendor's key (`writable`) | products |
 | `createBuyUrl` | the vendor's key (`writable`) | checkout URL + payment plan |
 | `createBillingOnDemand` | the vendor's key (`writable`) | charge a stored mandate (token top-up) |
+| `getTestpayKey` | the vendor's key | the GET parameter that unlocks **test payments** on a checkout URL (undocumented, but real — DigiMember uses it). Returns `testpay_key`, `get_param_name`, `expires_at`; `do_recreate` rotates the key. DEV checkout links append it by themselves (`lib/digistore/testpay.ts`); inspect/rotate with `node run.mjs ds24-testpay` |
 
 - API reference: <https://www.digistore24.com/api/docs/index.html>
 - IPN events & payload: <https://dev.digistore24.com/hc/en-us/articles/32480561422353-Events>

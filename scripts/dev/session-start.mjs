@@ -25,6 +25,7 @@
 // these programs ask whether they should trust the folder. Only after that does
 // the greeting run.
 import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { approvalReport, describeApproval } from "../ds24/_approval.mjs";
 import { blockers, inspect } from "./doctor.mjs";
 import { readNotes, unwrittenPages } from "./app-notes.mjs";
 import { readStamp, stampValid, verifiedOn } from "./setup-stamp.mjs";
@@ -85,6 +86,12 @@ const verifiedDay = stampValid(stamp) ? verifiedOn(stamp) : "";
 // problem — see scripts/dev/update-check.mjs, including how to switch it off.
 const updateLine = describeUpdate(await updateAvailable());
 
+// Are the synced Digistore24 products approved for sale yet? Same shape as the
+// update line: one listProducts call a day at most, answered from .dev/ the
+// rest of the time, silent unless a product is unrequested, pending or
+// rejected — see scripts/ds24/_approval.mjs, including how to switch it off.
+const approvalLine = describeApproval(await approvalReport());
+
 const line = "──────────────────────────────────────────────────────────────────";
 console.log(line);
 console.log("Digistore SAAS Template — this is where you build your own SAAS app,");
@@ -117,6 +124,7 @@ console.log(line);
 // and terse):
 console.log(`[Project state: .env=${hasEnv}, product-brief=${hasBrief}, own pages=${customPages}]`);
 if (updateLine) console.log(updateLine);
+if (approvalLine) console.log(approvalLine);
 if (unwritten.length > 0) {
   console.log(
     `[App notes: docs/app.md does not cover ${unwritten.join(", ")}. ` +

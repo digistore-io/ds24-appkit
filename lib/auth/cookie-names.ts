@@ -91,6 +91,12 @@ export function shouldUseOwnCookieNames(env: CookieEnv): boolean {
  * across a working week. It only shortens the COOKIE; the Auth.js session
  * maxAge is untouched, and outside DEV none of this applies (see below).
  *
+ * On the wire the session `Set-Cookie` carries BOTH attributes: Auth.js merges
+ * its own ~30-day `expires` on top of these options (`SessionStore` in
+ * @auth/core), so DevTools shows `Max-Age=604800` next to an `Expires` a month
+ * out. That pair is correct, not a bug — RFC 6265 gives `Max-Age` precedence
+ * wherever both appear, so the week wins in every browser.
+ *
  * The acute case — a jar that is already full — is `staleAuthCookieNames()`.
  */
 const DEV_COOKIE_MAX_AGE = 7 * 24 * 60 * 60;
@@ -101,20 +107,43 @@ const DEV_COOKIE_MAX_AGE = 7 * 24 * 60 * 60;
  *
  * The threshold is the whole reason two apps can be worked on side by side: at
  * 6 KB roughly eight installations fit, so the normal case — this app and one
- * other — never loses a session. It also leaves 10 KB of the 16 KB budget for
- * everything else, which matters because a Server Action request carries
- * `Next-Action` and `Next-Router-State-Tree` ON TOP of the cookies. That is why
- * the failure looks like a broken sign-in form: there is a window in which every
- * GET still works and only the action POST is over the line.
+ * other — never loses a session. It also keeps most of the 16 KB budget clear
+ * for everything else — the Server Action headers (`Next-Action`,
+ * `Next-Router-State-Tree`, which ride ON TOP of the cookies and are why the
+ * failure looks like a broken sign-in form: a window exists in which every GET
+ * still works and only the action POST is over the line), and whatever
+ * non-`authjs` cookies other local tools have parked on `localhost`. Those
+ * strangers count against the 16 KB too, and this threshold cannot see them —
+ * so the margin is a working assumption, not a guarantee.
  */
 export const PRUNE_ABOVE_BYTES = 6 * 1024;
 
-/** The names this template hands out — `authjs.<kind>.<8 hex>`, nothing else. */
-const OWN_SCHEME = /^authjs\.(session-token|callback-url|csrf-token)\.[0-9a-f]{8}$/;
+/**
+ * The names this template hands out — `authjs.<kind>.<8 hex>`, plus the
+ * chunked form. The optional numeric tail is Auth.js itself: a session JWE
+ * over ~4 KB is stored as `<name>.0`, `<name>.1`, … (`SessionStore` in
+ * @auth/core). Those chunks are the LARGEST cookies an installation can leave
+ * behind — a rule that could not see them would fire on every request and
+ * remove nothing, while the jar sits above the threshold for ever.
+ */
+const OWN_SCHEME =
+  /^authjs\.(session-token|callback-url|csrf-token)\.[0-9a-f]{8}(?:\.\d+)?$/;
 
-/** What a cookie costs in the `Cookie` header: `name=value`, plus `; `. */
+/**
+ * A chunk's base name — `authjs.session-token.<fp>.1` → without the `.1`.
+ *
+ * Only ever use this TOGETHER with a check of the full name: a fingerprint can
+ * be all digits (`installationFingerprint` returns 8 hex characters, and about
+ * one in forty secrets hashes to digits only), and on the unchunked name this
+ * regex would then strip the fingerprint itself.
+ */
+function unchunked(name: string): string {
+  return name.replace(/\.\d+$/, "");
+}
+
+/** What a cookie costs in the `Cookie` header: `name=value` plus `; ` — 3. */
 function headerCost(cookie: { name: string; value: string }): number {
-  return cookie.name.length + cookie.value.length + 2;
+  return cookie.name.length + cookie.value.length + 3;
 }
 
 /**
@@ -155,8 +184,16 @@ export function staleAuthCookieNames(
   if (total <= PRUNE_ABOVE_BYTES) return [];
 
   const mine = new Set([own.sessionToken.name, own.callbackUrl.name, own.csrfToken.name]);
+  // Both checks, in this order: the full name catches our own unchunked
+  // cookies (including an all-digit fingerprint, which `unchunked` would
+  // mangle), the stripped name catches our own CHUNKS (`<name>.0`, `.1`, …).
   return authjs
-    .filter((cookie) => OWN_SCHEME.test(cookie.name) && !mine.has(cookie.name))
+    .filter(
+      (cookie) =>
+        OWN_SCHEME.test(cookie.name) &&
+        !mine.has(cookie.name) &&
+        !mine.has(unchunked(cookie.name)),
+    )
     .map((cookie) => cookie.name);
 }
 

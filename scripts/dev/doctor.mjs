@@ -41,6 +41,7 @@
 // whether the agent may run the command itself or has to hand it over, and that
 // decision is a fact about the command, not a judgement to be re-made in prose.
 import { existsSync, readFileSync } from "node:fs";
+import { classifyStatuses } from "../ds24/_approval.mjs";
 import { readEnvValue } from "../lib/env-write.mjs";
 import { capture, hasCommand, isWindows } from "../lib/proc.mjs";
 import { configuredDriver, dbDriver } from "../db/driver.mjs";
@@ -247,6 +248,36 @@ export async function inspect({ quick = false } = {}) {
   });
 
   if (quick) return checks;
+
+  // ── the Digistore24 product approval ──────────────────────────────────────
+  //
+  // Answered from the cache the session greeting maintains
+  // (scripts/ds24/_approval.mjs) — never live: the greeting owns the quick
+  // path and the daily listProducts call, and two surfaces disagreeing about
+  // freshness would be worse than one of them being a day old. No cache means
+  // no synced products (or the check is off), and then there is nothing to
+  // report — an app without Digistore24 products is a normal state, not a
+  // finding.
+  try {
+    const approval = JSON.parse(readFileSync(".dev/approval-check.json", "utf8"));
+    if (approval?.statuses) {
+      const grouped = classifyStatuses(approval.statuses);
+      const parts = [];
+      if (grouped.rejected.length > 0) parts.push(`rejected: ${grouped.rejected.join(", ")}`);
+      if (grouped.unrequested.length > 0)
+        parts.push(`not requested yet: ${grouped.unrequested.join(", ")}`);
+      add({
+        id: "ds24-approval",
+        label: "Digistore24 product approval",
+        ok: parts.length === 0,
+        detail: `${parts.join("; ")} — only test purchases work until approved`,
+        severity: "info",
+        fix: everywhere({ command: "node run.mjs ds24-approval --apply" }),
+      });
+    }
+  } catch {
+    /* no cache, or an unreadable one — the greeting will rebuild it */
+  }
 
   // ── how this checkout sits on disk ────────────────────────────────────────
   //

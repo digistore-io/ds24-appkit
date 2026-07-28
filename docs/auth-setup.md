@@ -221,3 +221,9 @@ than 6 KB of them the app deletes the ones belonging to other installations
 nothing is touched, so two apps you are working on at the same time both stay
 signed in. Above it you may find yourself signed out of the other one — that is
 the trade, and it is the better half of it.
+
+One limit is honest to name: a jar that filled up past ~16 KB while this app
+was closed kills even the GET — the app never runs, nothing can prune, and only
+the manual clearing above helps. The full reasoning — why every installation
+has its own cookie names in the first place, and why the sweep has a threshold —
+is in `CLAUDE.md` → **Several copies on one machine**.

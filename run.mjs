@@ -315,7 +315,7 @@ const TASKS = {
   },
   "ds24-approval": {
     group: "Digistore24",
-    help: "Request product approval (go-live; reseller from language, --apply; --lang en --apply)",
+    help: "Show + request product approval (dry run shows the status; --apply requests; --lang en)",
     run: (args) => script("scripts/ds24/request-approval.mjs", args),
   },
   "ds24-ipn": {
@@ -333,6 +333,11 @@ const TASKS = {
     group: "Digistore24",
     help: "What Digistore24 says about one order — status, product, links (--order ABC123)",
     run: (args) => script("scripts/ds24/purchase-info.mjs", args),
+  },
+  "ds24-testpay": {
+    group: "Digistore24",
+    help: "Test-purchase key: DEV checkout links carry it by themselves (--recreate rotates, --json)",
+    run: (args) => script("scripts/ds24/testpay.mjs", args),
   },
   "ds24-tunnel": {
     group: "Digistore24",

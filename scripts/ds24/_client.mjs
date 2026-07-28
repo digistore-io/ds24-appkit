@@ -29,11 +29,16 @@ export function requireApiKey() {
 /**
  * Calls a DS24 API function. Params may use bracket notation.
  * Throws on an HTTP error or a logical error (result != success).
+ *
+ * `signal` is for the one caller that runs in front of every session
+ * (_approval.mjs) and must not wait on a slow API; the setup scripts a person
+ * watches deliberately pass none.
  */
-export async function ds24Call(fn, apiKey, params = {}) {
+export async function ds24Call(fn, apiKey, params = {}, { signal } = {}) {
   const body = new URLSearchParams(params).toString();
   const res = await fetch(`${baseUrl()}/api/call/${fn}/format/json`, {
     method: "POST",
+    signal,
     headers: {
       "X-DS-API-KEY": apiKey,
       "Content-Type": "application/x-www-form-urlencoded; charset=utf-8",

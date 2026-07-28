@@ -289,9 +289,13 @@ their way around one skill has then found their way around all of them:
   protected**, and the two stopped being the same list when that file also took
   on a second job: it prunes the session cookies of other local copies of this
   template, which has to happen on a page a signed-out person opens (see
-  **Several copies on one machine** below). So `/login` and `/` are in the
-  matcher and are fully public — being listed protects nothing. A new protected
-  area needs both: the path in the matcher *and* `authorized()` taught about it.
+  **Several copies on one machine** below). So `/login`, `/`, `/plans` and
+  `/optin/*` are in the matcher and are fully public — being listed protects
+  nothing, and for them the proxy deliberately never calls the Auth.js
+  middleware at all (it would re-issue session cookies on every hit to the
+  busiest public pages). A new protected area therefore needs three things: the
+  path in the matcher, the `/dashboard` prefix decision in `proxy()`, *and*
+  `authorized()` taught about it.
   Public by design: the home page, `/login`, `/plans`, `/optin/*`,
   `/account/confirm-email`, the IPN endpoint `/api/ipn` (secured via the
   SHA512 signature) and the MCP endpoint `/api/mcp` (secured by a per-member
@@ -631,11 +635,25 @@ Three things follow, and the third is the one that costs time:
   about it, which is worse than the warning. If some future extension needs
   handling, handle it at the element it touches or not at all.
 
+Three things `node run.mjs smoke` cannot do:
+
+- **Dynamic pages** (`app/…/[id]/page.tsx`) are skipped — without a real ID
+  the request is pointless. You call such pages up by hand once with a
+  real record.
+- **It is signed in as the OWNER, and as nobody else.** So the pages are
+  rendered, but always with every right there is. What it therefore cannot see is
+  the other half of an access rule: what a `member` gets on an owner-only page,
+  what somebody without the plan gets on a gated one, what a blocked account
+  gets. Those need a test (`vitest`, on the rule) or your own eyes — a green
+  smoke test is not evidence that a gate holds.
+- **A green smoke test means "loads", not "is correct".** Whether the content is
+  right is something it does not tell you. For everything to do with money, roles
+  and customer data, a look at the page itself is part of the job.
+
 ### Several copies on one machine — the sign-in that breaks for no reason
 
-The same shape of lesson as above, and the harder one to recognise: an error
-whose stack trace points squarely into your code while the cause is in the
-browser's cookie jar.
+The same shape of lesson as the hydration one above: an error whose stack trace
+points squarely into your code while the cause is in the browser's cookie jar.
 
 The symptom is a sign-in that answers
 
@@ -668,24 +686,11 @@ worked on side by side** — do not "simplify" it away, and do not solve a futur
 version of this by dropping the fingerprints.
 
 There is a third one worth knowing about: `node run.mjs errors` recognises this
-message and says all of the above in four lines. If somebody is looking at it
-right now, the immediate remedy is to clear the cookies for `localhost` in the
+message and says all of the above in four lines. And one honest limit: past
+~16 KB even the GET dies, so the app never runs and cannot rescue itself — a
+state a jar can reach while this app was closed. From there, and as the
+immediate remedy in every case, clear the cookies for `localhost` in the
 browser (DevTools → Application → Cookies).
-
-Three things `node run.mjs smoke` cannot do:
-
-- **Dynamic pages** (`app/…/[id]/page.tsx`) are skipped — without a real ID
-  the request is pointless. You call such pages up by hand once with a
-  real record.
-- **It is signed in as the OWNER, and as nobody else.** So the pages are
-  rendered, but always with every right there is. What it therefore cannot see is
-  the other half of an access rule: what a `member` gets on an owner-only page,
-  what somebody without the plan gets on a gated one, what a blocked account
-  gets. Those need a test (`vitest`, on the rule) or your own eyes — a green
-  smoke test is not evidence that a gate holds.
-- **A green smoke test means "loads", not "is correct".** Whether the content is
-  right is something it does not tell you. For everything to do with money, roles
-  and customer data, a look at the page itself is part of the job.
 
 ## Adding a feature
 
@@ -1486,8 +1491,17 @@ has already created stays at Digistore24 until you deactivate it there.
   reseller/marketplace (`approval_status=pending`). The reseller comes from the
   language (German → Germany/1, otherwise USA/2; overridable via
   `--lang`/`--reseller`/`--siteowner`). A go-live step: only once description and app
-  are mature. Before that only **test purchases** are possible — the vendor sets
-  the [test-purchase cookie](https://help.digistore24.com/hc/de/articles/23901169396241)
+  are mature. Before that only **test purchases** are possible.
+  **The dry run (no `--apply`) is also the status view** — it shows per product
+  whether Digistore24 has approved it (`new`/`pending`/`approved`/`rejected`),
+  and `--apply` skips what is already approved. The session greeting checks the
+  same thing by itself, once a day with one `listProducts` call, and says one
+  line while a product is unrequested, pending or rejected
+  (`scripts/ds24/_approval.mjs`; off with `DIGISTORE_APPROVAL_CHECK=off`). In DEV that is
+  automatic: every checkout link carries the DS24 test-payment parameter by
+  itself (`lib/digistore/testpay.ts`; inspect/rotate with
+  `node run.mjs ds24-testpay`). Outside DEV the vendor sets the
+  [test-purchase cookie](https://help.digistore24.com/hc/de/articles/23901169396241)
 
 **Digistore24 stores public https URLs only — localhost goes through the
 redirect.** Handing it the address the app actually runs on locally ends the
@@ -1607,6 +1621,10 @@ overview). Arguments go straight through — there is no `ARGS="…"` wrapping.
 - `node run.mjs ds24-purchase --order …` — what Digistore24 holds for one order:
   status, product, buyer, links. The first command when a purchase "did not
   arrive"
+- `node run.mjs ds24-testpay` — the Digistore24 test-purchase key: in DEV every
+  checkout link appends it by itself, so a test purchase is just a click on
+  "buy". This command shows the key, `--recreate` rotates it (do that before
+  go-live — the key is account-level). Never active outside DEV
 - `node run.mjs ds24-tunnel` — public address onto the local app **and** the IPN registered
   on it, so a real purchase reaches your machine (runs in the background;
   `node run.mjs status` shows it, `node run.mjs stop` ends it)

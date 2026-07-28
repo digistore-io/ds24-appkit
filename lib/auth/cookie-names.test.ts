@@ -143,6 +143,37 @@ describe("staleAuthCookieNames", () => {
     for (const name of mine) expect(stale).not.toContain(name);
   });
 
+  it("prunes a foreign installation's CHUNKED session cookie — the largest kind", () => {
+    // Auth.js splits a session JWE over ~4 KB into `<name>.0`, `<name>.1`, …
+    // (SessionStore in @auth/core). These are the biggest cookies a copy can
+    // leave behind — a rule that spared them would fire and remove nothing.
+    const chunks = [
+      { name: "authjs.session-token.deadbeef.0", value: "e".repeat(3900) },
+      { name: "authjs.session-token.deadbeef.1", value: "e".repeat(3900) },
+      { name: "authjs.session-token.deadbeef.10", value: "e".repeat(700) },
+    ];
+    const stale = staleAuthCookieNames([...overThreshold(), ...chunks], DEV);
+    for (const chunk of chunks) expect(stale).toContain(chunk.name);
+  });
+
+  it("spares its own chunks — even when the fingerprint is all digits", () => {
+    // Stripping the chunk index must never strip the fingerprint. About one in
+    // forty secrets hashes to eight DIGITS, and on such an unchunked name the
+    // naive strip would remove the identity — search one deterministically.
+    let secret = 0;
+    while (!/^\d{8}$/.test(installationFingerprint(String(secret)))) secret++;
+    const env = { ...DEV, AUTH_SECRET: String(secret) };
+    const own = devCookies(env)!;
+    const mine = [
+      own.sessionToken.name,
+      `${own.sessionToken.name}.0`,
+      `${own.sessionToken.name}.1`,
+    ];
+    const jar = [...overThreshold(), ...mine.map((name) => ({ name, value: "x".repeat(3900) }))];
+    const stale = staleAuthCookieNames(jar, env);
+    for (const name of mine) expect(stale).not.toContain(name);
+  });
+
   it("leaves everything that is not this template's naming scheme alone", () => {
     const strangers = [
       { name: "authjs.session-token", value: "x".repeat(499) },

@@ -84,12 +84,22 @@ Once, before selling:
    for a specific marketplace `--siteowner <id> --apply`. Products can
    only be sold publicly once Digistore24 has approved them. Only request
    approval when the product description and the app are mature.
+   Whether it was **granted** you can check any time with
+   `node run.mjs ds24-approval` (without `--apply` — the dry run shows the
+   current status per product), and the session greeting reports a pending or
+   rejected approval by itself, once a day.
 
    > **Test first — without approval only the test purchase works.** As long as a
-   > product is not approved, only **test purchases** are possible. So that you can
-   > play through the purchase-to-access flow from inside the app, the vendor sets
-   > the test-purchase cookie once (instructions from Digistore24):
-   > <https://help.digistore24.com/hc/de/articles/23901169396241>.
+   > product is not approved, only **test purchases** are possible. On the LIVE
+   > instance the vendor sets the test-purchase cookie once (instructions from
+   > Digistore24): <https://help.digistore24.com/hc/de/articles/23901169396241>.
+   > The automatic test-payment parameter that DEV checkout links carry never
+   > activates here — deliberately (`lib/digistore/testpay.ts`).
+   >
+   > **And rotate the test-purchase key before the launch:**
+   > `node run.mjs ds24-testpay --recreate`. The key is account-level; a copy
+   > from the development phase, pasted onto a live checkout URL, would unlock
+   > test purchases for whoever holds it. Rotating invalidates every old copy.
 4. **Point the IPN at the live domain**: as soon as `APP_URL` points to the
    public domain, `node run.mjs ds24-sync` registers the IPN automatically
    via the API (the URL is always `/api/ipn`) and writes the generated SHA512

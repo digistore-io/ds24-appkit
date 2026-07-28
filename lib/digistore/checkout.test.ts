@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
 // SPDX-License-Identifier: MIT
 
+import { readFileSync } from "node:fs";
 import { describe, it, expect, afterEach } from "vitest";
 import {
   offerFor,
@@ -164,5 +165,25 @@ describe("blockerFor", () => {
     // Absent is not the same as null: nobody resolved this plan, so the page
     // must not offer a button for it.
     expect(blockerFor(new Map(), "ghost")).toBe("error");
+  });
+});
+
+describe("testpay wiring", () => {
+  // resolveOne() ends in a live createBuyUrl call, so the wiring is pinned on
+  // the source (the runtime behaviour — gate, fail-open, decoration — is
+  // covered in testpay.test.ts). What these two assertions protect: the
+  // decorated URL must never enter the shared buy_url_cache, whose rows are
+  // served to every visitor.
+  const checkoutSrc = readFileSync(new URL("./checkout.ts", import.meta.url), "utf8");
+  const buyUrlSrc = readFileSync(new URL("./buyUrl.ts", import.meta.url), "utf8");
+
+  it("decorates the URL AFTER getOrCreateBuyUrl, on the returned value", () => {
+    expect(checkoutSrc).toMatch(/url:\s*await withTestpayParam\(url\)/);
+  });
+
+  it("keeps the decoration out of buyUrl.ts — the cache stores clean URLs", () => {
+    // Moving withTestpayParam "closer to the URL creation" would write the
+    // testpay parameter into buy_url_cache and hand it to every visitor.
+    expect(buyUrlSrc).not.toMatch(/testpay/i);
   });
 });

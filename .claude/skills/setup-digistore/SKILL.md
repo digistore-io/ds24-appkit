@@ -1,6 +1,7 @@
 ---
 name: setup-digistore
 description: Sets up Digistore24 billing for the app — fetch the API key into the `.env` via `node run.mjs ds24-connect`, then create products with `node run.mjs ds24-sync` and register the IPN connection (webhook + SHA512 passphrase) via API, test the connection and generate checkout links. The agent runs the commands itself. Use this as soon as the app is meant to receive sales or process completed purchases.
+requires: 0.5.0
 ---
 <!-- Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA — SPDX-License-Identifier: MIT -->
 
@@ -229,8 +230,20 @@ deliberately no interface for entering or generating a key.
      re-registers it.
 4. **Test a purchase from the app (before the approval):** new products are
    initially **not approved** at Digistore24 — then only **test purchases** are
-   possible. So that the vendor can run through the real checkout from within
-   the app, they set the test-purchase cookie once, following this DS24 guide:
+   possible. **In DEV that works by itself:** every checkout link the app builds
+   carries the Digistore24 test-payment parameter (fetched via the API, cached
+   in `.dev/testpay.json` — `lib/digistore/testpay.ts`). Click a plan card and
+   the checkout opens in test-payment mode, approved or not; there is nothing
+   to set up and no cookie to set. `node run.mjs ds24-testpay` shows the key,
+   `--recreate` rotates it.
+   Two things to know: the parameter **never activates outside DEV** (an
+   allowlist like the development login; hard off: `DS24_TESTPAY=off` in
+   `.env`), and the key is **account-level — treat it like a secret**. Pasted
+   onto any checkout URL of this vendor account, live ones included, it would
+   unlock test purchases there too. That is why it lives in `.dev/`
+   (gitignored) and is rotated before go-live.
+   **Outside DEV** — e.g. on a STAGING domain — the manual way remains: the
+   vendor sets the test-purchase cookie once, following this DS24 guide:
    <https://help.digistore24.com/hc/de/articles/23901169396241>. The approval
    (`node run.mjs ds24-approval --apply`, sets `approval_status = pending`;
    reseller derived automatically from the language — German → 1, otherwise USA

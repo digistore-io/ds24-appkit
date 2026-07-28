@@ -15,10 +15,12 @@
 // app/dashboard/layout.tsx throws them out — see lib/users/blocked.ts.
 //
 // ⚠️ THE MATCHER SAYS WHERE THIS RUNS. IT DOES NOT SAY WHAT IS PROTECTED.
-// The refusal is `authorized()` in auth.config.ts, and it returns true for
-// every path outside `/dashboard`. So a path listed below is not protected by
-// being listed — it is protected by that callback. The two used to be the same
-// list, and they stopped being one when this file also got a second job (below).
+// Protection is the `/dashboard` prefix decision in `proxy()` below plus
+// `authorized()` in auth.config.ts. Every other matched path is public and is
+// matched only for the cookie sweep — running the session machinery there too
+// would decrypt and RE-ISSUE the session JWT on every hit to the busiest
+// public pages (@auth/core re-sets the cookie on each session read), in every
+// environment, for a sweep that is DEV-only anyway.
 import NextAuth from "next-auth";
 import {
   NextResponse,
@@ -72,7 +74,11 @@ const guarded = auth as unknown as NextMiddleware;
  * It has to happen HERE because it has to happen on a GET: a server component
  * may not set a cookie, and by the time an action POST is refused with 431
  * there is no request left to answer. That is also why the matcher below covers
- * the two pages somebody lands on while signed out.
+ * the public pages somebody lands on while signed out.
+ *
+ * One honest limit: past ~16 KB even the GET dies with 431 and this code never
+ * runs — a jar can reach that state while this app was closed. From there only
+ * clearing the cookies in the browser helps; `node run.mjs errors` says so.
  */
 function pruneStaleCookies(request: NextRequest, response: Response): Response {
   const stale = staleAuthCookieNames(request.cookies.getAll(), {
@@ -89,8 +95,33 @@ function pruneStaleCookies(request: NextRequest, response: Response): Response {
   return patched;
 }
 
+/**
+ * Runs the Auth.js middleware and REFUSES TO FAIL OPEN.
+ *
+ * On the middleware path `handleAuth` always returns a Response. The one way to
+ * get anything else out of `auth` is next-auth's runtime dispatch
+ * (`args[0] instanceof Request`) misfiring — its own source carries a comment
+ * saying that check has failed before — after which the API-routes branch
+ * returns the SESSION OR NULL instead. A `?? NextResponse.next()` here would
+ * turn exactly that failure into a public dashboard, silently. So anything
+ * that is not a Response is an error, loudly: a 500 beats an open door.
+ */
+async function protect(request: NextRequest, event: NextFetchEvent): Promise<Response> {
+  const answer = await guarded(request, event);
+  if (!(answer instanceof Response)) {
+    throw new Error("Auth middleware returned no Response — refusing to fail open.");
+  }
+  return answer;
+}
+
 export default async function proxy(request: NextRequest, event: NextFetchEvent) {
-  const response = (await guarded(request, event)) ?? NextResponse.next();
+  // The session machinery runs ONLY where something is protected. The other
+  // matched paths are public: for them the answer is always "carry on", and
+  // asking Auth.js first would re-issue session cookies on every hit (see the
+  // warning at the top of the file).
+  const response = request.nextUrl.pathname.startsWith("/dashboard")
+    ? await protect(request, event)
+    : NextResponse.next();
   return pruneStaleCookies(request, response);
 }
 
@@ -98,14 +129,14 @@ export const config = {
   // Two different reasons to be in this list, and they must not be confused —
   // see the warning at the top of the file.
   //
-  //   /dashboard/:path*  is PROTECTED (authorized() refuses without a session)
-  //   /login, /          are only VISITED — the proxy runs there to clean up
-  //                      the cookies of other local copies, and protects
-  //                      nothing. Both stay public.
+  //   /dashboard/:path*   is PROTECTED — protect() above + authorized()
+  //   /, /login, /plans,  are only SWEPT — the public pages a signed-out
+  //   /optin/:path*       person actually lands on, including the Digistore24
+  //                       thank-you redirect into /optin/…. All stay public.
   //
-  // Everything NOT matched here is public AND unswept. Add a new protected area
-  // here *and* teach authorized() about it.
-  // Staying public by design: home page, login, auth routes, /plans, opt-in,
-  // IPN webhook.
-  matcher: ["/dashboard/:path*", "/login", "/"],
+  // Everything NOT matched here is public AND unswept. A new protected area
+  // needs three things: the path here, the prefix decision in proxy(), and
+  // authorized() in auth.config.ts.
+  // Staying public by design: auth routes, /account/confirm-email, IPN webhook.
+  matcher: ["/dashboard/:path*", "/login", "/", "/plans", "/optin/:path*"],
 };

@@ -20,6 +20,14 @@ Digistore24** (`digistore24.com`) — there is exactly **one** set of products a
 > Because all environments go against the live products, DEV/STAGING work with
 > **Digistore24 test purchases** (test payment method) — no real money,
 > but real products/IPNs.
+>
+> **In DEV the test payment sets itself up:** every checkout link the app
+> builds carries the Digistore24 test-payment parameter (fetched via the API,
+> cached in `.dev/testpay.json` — see `lib/digistore/testpay.ts`, inspect with
+> `node run.mjs ds24-testpay`). Like the development sign-in it is an
+> allowlist: only `APP_ENV=development`, only on localhost, never under
+> `NODE_ENV=production`, hard off with `DS24_TESTPAY=off`. On STAGING (a public
+> domain) the vendor sets the DS24 test-purchase cookie in the browser instead.
 
 `APP_ENV` (`development` | `staging` | `production`) does not only name the
 environment — **hard rules** hang off it:

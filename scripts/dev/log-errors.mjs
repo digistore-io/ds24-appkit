@@ -71,7 +71,10 @@ function readFrom(fromOffset) {
  * answered 200 and noticed nothing.
  */
 const ERROR_START = [
-  /^(?:⨯\s+)?(?:\[(?:intl|browser)\]\s+)?(?:Uncaught\s+)?\w*Error(?::|\b.*\bat\b)/,
+  // `Uncaught (in promise)` is the browser's wording for a rejected promise
+  // nobody caught — the async half of the same class, and in fetch-heavy
+  // client code the more common one.
+  /^(?:⨯\s+)?(?:\[(?:intl|browser)\]\s+)?(?:Uncaught\s+(?:\(in promise\)\s+)?)?\w*Error(?::|\b.*\bat\b)/,
   /^(?:⨯\s+)?(?:\[(?:intl|browser)\]\s+)?unhandledRejection\b/,
   /^(?:⨯\s+)?(?:\[(?:intl|browser)\]\s+)?Warning:.*hydrat/i,
   /^(?:⨯\s+)?.*\bHydration failed\b/,
@@ -137,13 +140,15 @@ const HINTS = [
   {
     when: /unexpected response was received from the server/i,
     say:
-      "the browser's cookies for localhost no longer fit in one request. Every copy\n" +
+      "usually the browser's cookies for localhost no longer fit in one request —\n" +
+      "    the giveaway is this page's GET in the log with NO POST after it. Every copy\n" +
       "    of this template ever started on this machine leaves a session cookie there,\n" +
       "    cookies ignore ports, and past ~16 KB Node answers 431 BEFORE Next.js sees\n" +
-      "    the request — so the log shows the GET and no POST at all. The stack trace\n" +
-      "    names the sign-in page, which is the one place the fault is not.\n" +
-      "    Clear the cookies for localhost (DevTools → Application → Cookies) and it is\n" +
-      "    gone. The app prunes them itself from now on — lib/auth/cookie-names.ts.",
+      "    the request. The stack trace names the page that was waiting, which is the\n" +
+      "    one place the fault is not. Clear the cookies for localhost (DevTools →\n" +
+      "    Application → Cookies); below the point where even the GET dies, the app\n" +
+      "    prunes them itself (lib/auth/cookie-names.ts). If a POST IS in the log,\n" +
+      "    this is something else — most often a stale tab talking to a rebuilt server.",
   },
   {
     when: /unhandledRejection/,

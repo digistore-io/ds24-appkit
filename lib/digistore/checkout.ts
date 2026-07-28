@@ -16,6 +16,7 @@ import { getOrCreateBuyUrl, type BuyerContext, type Offer } from "./buyUrl";
 import type { ProductDef } from "./products";
 import { publicUrlFor } from "./public-url";
 import { ds24ApiKey, hasDigistoreApiKey } from "./settings";
+import { withTestpayParam } from "./testpay";
 import { tokenCustomMarker } from "@/lib/tokens/packages";
 
 /** Why there is no checkout link (never a broken or faked one). */
@@ -192,7 +193,13 @@ async function resolveOne(
       ctx: { ...ctx, customTracking: ctx.customTracking ?? customTrackingFor(def) },
       thankyouUrl: optinThankyouUrl(),
     });
-    return { url };
+    // DEV only: append the Digistore24 test-payment parameter, so a developer
+    // can buy through the real checkout without setting the cookie by hand.
+    // Strictly AFTER getOrCreateBuyUrl — a decorated URL must never enter the
+    // shared buy_url_cache (a cached row is served to every visitor). Do not
+    // move this "closer to the URL creation" in buyUrl.ts for that reason.
+    // Outside DEV, and on any failure, this is a no-op (lib/digistore/testpay.ts).
+    return { url: await withTestpayParam(url) };
   } catch (err) {
     // Visible in `node run.mjs logs` — the page itself must not show a stack trace.
     console.error(`[checkout] createBuyUrl failed for "${def.key}":`, err);
