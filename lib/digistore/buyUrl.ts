@@ -8,6 +8,42 @@
 // payment_plan[...] — not maintained inside Digistore. The result is a
 // short-lived (24h) signed checkout URL. It is cached per offering; if the
 // offering changes, a new URL is created.
+//
+// ============================================================================
+// WHAT THIS FILE RETURNS IS NOT FINISHED — read this before building your own
+// checkout on it.
+//
+// Every URL from here is UNDECORATED. In DEV a checkout link additionally
+// carries the Digistore24 test-payment parameter, which is what lets a
+// developer buy through the real checkout by clicking "buy" — no cookie, and it
+// works on a product the marketplace has not approved yet. That parameter is
+// appended by withTestpayParam() (lib/digistore/testpay.ts), and this file
+// deliberately does not call it.
+//
+// The normal route needs nothing from you: checkoutLinkFor() and
+// checkoutLinksFor() (lib/digistore/checkout.ts) wrap this layer and already
+// decorate. Reach for a registry product and you are done. If you genuinely
+// build your own path on createBuyUrl/getOrCreateBuyUrl, the LAST step is
+// yours:
+//
+//   const url = await getOrCreateBuyUrl({ … });
+//   return await withTestpayParam(url);   // no-op outside DEV, never throws
+//
+// Two rules on it, and both are load-bearing:
+//
+//   1. DEV AND LOCALHOST ONLY — never anywhere a customer can reach. The
+//      parameter takes TEST payments: whoever opens such a link gets the
+//      product without paying, and the IPN grants real entitlements. The gate
+//      is isTestpayActive(), an allowlist of independent conditions, and
+//      withTestpayParam() re-checks it itself. Never re-implement that gate at
+//      a call site, never loosen it, and never append the raw parameter by
+//      hand — the key is account-level and works on live checkout URLs too.
+//   2. AFTER the cache, never before. getOrCreateBuyUrl writes its result into
+//      buy_url_cache, which is keyed per offering with no member dimension — a
+//      decorated URL written there is served to every later visitor. That is
+//      why the decoration sits in checkout.ts and not in this file, and
+//      checkout.test.ts fails the build if it moves here.
+// ============================================================================
 import crypto from "crypto";
 import { ds24Post } from "./client";
 import { identifiesMember } from "./custom";
@@ -138,6 +174,12 @@ export function isUnknownAffiliateError(err: unknown, affiliate: string): boolea
  * entirely. If that retry fails too, the ORIGINAL error is thrown: it names the
  * actual cause, the retry only says that a link without an affiliate failed as
  * well.
+ *
+ * The URL comes back UNDECORATED. In DEV a checkout link has to end in
+ * `withTestpayParam(url)` or there is no way to make a test purchase locally;
+ * outside DEV that call is a no-op and appending the parameter by hand would
+ * hand the product out for free. See the file header — and prefer
+ * `checkoutLinkFor()`, which does all of it already.
  */
 export async function createBuyUrl(
   apiKey: string,
@@ -252,6 +294,12 @@ export interface GetOrCreateArgs {
  *   there would be handed to every later visitor.
  * - If the offering changes (offerHash) or the TTL has expired, a new one is
  *   created and the cache updated.
+ *
+ * Like `createBuyUrl`, it returns an UNDECORATED URL, and here the ordering is
+ * the point: the row written to `buy_url_cache` must stay clean, because it is
+ * handed to every later visitor. So a DEV path appends the test-payment
+ * parameter to the RETURN VALUE — `await withTestpayParam(url)` — and never
+ * before this function. See the file header for the environment rule.
  */
 export async function getOrCreateBuyUrl(args: GetOrCreateArgs): Promise<string> {
   const ctx = args.ctx ?? {};

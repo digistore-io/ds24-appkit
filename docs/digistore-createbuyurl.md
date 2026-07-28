@@ -11,8 +11,19 @@ Implementation: `lib/digistore/buyUrl.ts`.
 
 ## Usage
 
+**Most of the time there is nothing to build here.** A plan out of
+`config/digistore-products.json` gets its link from `checkoutLinkFor(def, ctx)`
+(one offering, click time) or `checkoutLinksFor(defs, ctx)` (a whole page) in
+`lib/digistore/checkout.ts`. Those wrap everything below — the offer mapping,
+the thank-you URL, the cache *and* the DEV test-payment parameter — and they
+return `{ url: null, blocker }` instead of throwing, so a page never renders a
+dead button. Reach for them first.
+
+The layer underneath, for a checkout you genuinely build yourself:
+
 ```ts
 import { getOrCreateBuyUrl } from "@/lib/digistore/buyUrl";
+import { withTestpayParam } from "@/lib/digistore/testpay";
 import { ds24ApiKey } from "@/lib/digistore/settings";
 
 const url = await getOrCreateBuyUrl({
@@ -28,7 +39,12 @@ const url = await getOrCreateBuyUrl({
   },
   thankyouUrl: `${appUrl}/optin/[ORDER_ID]`, // DS24 replaces [ORDER_ID]/[BUYER_EMAIL]
 });
-// -> open url for the buyer (link/redirect)
+
+// The last step, and it is not optional — see below.
+// In DEV this appends the test-payment parameter; everywhere else it is a
+// no-op, and it never throws.
+return await withTestpayParam(url);
+// -> open the returned url for the buyer (link/redirect)
 ```
 
 ## Caching (important)
@@ -45,6 +61,56 @@ const url = await getOrCreateBuyUrl({
   token package sets it on every offering (`tokens:<key>`), and those URLs
   stay shared — otherwise every token card would trigger a live Digistore24
   call on each page view. See `lib/digistore/custom.ts`.
+
+## Test payments in DEV — the link is not finished without it
+
+`getOrCreateBuyUrl` and `createBuyUrl` return an **undecorated** URL. In DEV a
+checkout link additionally carries the Digistore24 **test-payment parameter**,
+and that is what makes a local test purchase a single click: the checkout opens
+in test mode, on a product the marketplace has not approved yet, with no cookie
+to set. The parameter is fetched once via the undocumented `getTestpayKey`
+(name, value and `expires_at` all come from the response) and cached in
+`.dev/testpay.json`. `node run.mjs ds24-testpay` shows it, `--recreate` rotates
+it.
+
+```ts
+import { withTestpayParam } from "@/lib/digistore/testpay";
+
+return await withTestpayParam(url);   // the last step of any checkout path
+```
+
+Forgetting it does not break anything visibly — which is why it gets forgotten.
+The app works, the checkout opens, and the developer simply has no way to buy
+anything locally and goes looking for the cookie instead.
+
+Three rules, and the first one is the one that matters:
+
+- **DEV and localhost only.** ⚠️ The parameter takes **test payments**: anyone
+  who opens a link carrying it gets the product **without paying**, and the IPN
+  that follows grants real entitlements. So it must never reach a URL a customer
+  can open. You do not implement that check — `withTestpayParam()` re-checks
+  `isTestpayActive()` itself on every call, an allowlist where anything not
+  clearly recognised as development counts as production (a typo in `APP_ENV`
+  lands on "production", not on "development"). **Never re-implement or loosen
+  that gate at a call site, and never append the parameter by hand:** the key is
+  **account-level**, so pasted onto a live checkout URL of the same vendor
+  account it unlocks free purchases there too. Treat it like a secret; that is
+  why it lives in gitignored `.dev/` and never in `.env`. Hard off:
+  `DS24_TESTPAY=off`.
+- **After the cache, never before.** Decorate the **return value**, as above.
+  `getOrCreateBuyUrl` writes its result into `buy_url_cache`, a table keyed per
+  offering with no member dimension — a decorated URL written there is handed to
+  every later visitor. This is why `lib/digistore/buyUrl.ts` deliberately does
+  not decorate, and `lib/digistore/checkout.test.ts` fails the build if the call
+  moves into it.
+- **It never breaks the checkout.** No API key, a DS24 error, a timeout, an
+  unwritable `.dev/` — every failure returns the undecorated URL with one
+  `console.warn`, and a failed fetch is not retried for ~5 minutes.
+
+Outside DEV — a STAGING domain, or the live one before approval — the way to a
+test purchase is the vendor's
+[test-purchase cookie](https://help.digistore24.com/hc/de/articles/23901169396241),
+set once per browser.
 
 ## Rules (from the reference implementation)
 

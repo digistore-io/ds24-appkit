@@ -171,9 +171,10 @@ describe("blockerFor", () => {
 describe("testpay wiring", () => {
   // resolveOne() ends in a live createBuyUrl call, so the wiring is pinned on
   // the source (the runtime behaviour — gate, fail-open, decoration — is
-  // covered in testpay.test.ts). What these two assertions protect: the
-  // decorated URL must never enter the shared buy_url_cache, whose rows are
-  // served to every visitor.
+  // covered in testpay.test.ts). What these assertions protect: the decorated
+  // URL must never enter the shared buy_url_cache, whose rows are served to
+  // every visitor — and the layer underneath must SAY so, because an agent
+  // building its own checkout on createBuyUrl reads that file and not this one.
   const checkoutSrc = readFileSync(new URL("./checkout.ts", import.meta.url), "utf8");
   const buyUrlSrc = readFileSync(new URL("./buyUrl.ts", import.meta.url), "utf8");
 
@@ -184,6 +185,36 @@ describe("testpay wiring", () => {
   it("keeps the decoration out of buyUrl.ts — the cache stores clean URLs", () => {
     // Moving withTestpayParam "closer to the URL creation" would write the
     // testpay parameter into buy_url_cache and hand it to every visitor.
-    expect(buyUrlSrc).not.toMatch(/testpay/i);
+    //
+    // Tested as the IMPORT and the CALL, not as the word: the file has to be
+    // free of the decoration while EXPLAINING it in prose (the assertion
+    // below). A blanket /testpay/i match forbids the signpost along with the
+    // mistake — which is how the signpost came to be missing in the first
+    // place. So the call is looked for in code only, with the comments (and
+    // the worked example inside them) stripped out.
+    const code = buyUrlSrc
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/^\s*\/\/.*$/gm, "");
+    expect(code).not.toMatch(/withTestpayParam\s*\(/);
+    expect(buyUrlSrc).not.toMatch(/from\s+["']\.\/testpay["']/);
+  });
+
+  it("signposts the omission where a hand-written checkout would read it", () => {
+    // The gap this protects against is real: an app built on this template had
+    // an agent create a checkout with createBuyUrl and never fetch a testpay
+    // key, leaving the developer with no local test purchase. The funnel in
+    // checkout.ts is correct; the layer underneath simply never said that what
+    // it returns is undecorated. Both entry points must carry it.
+    const createBuyUrlDoc = buyUrlSrc.slice(0, buyUrlSrc.indexOf("export async function createBuyUrl"));
+    const getOrCreateDoc = buyUrlSrc.slice(
+      buyUrlSrc.indexOf("export function isUserSpecific"),
+      buyUrlSrc.indexOf("export async function getOrCreateBuyUrl"),
+    );
+    for (const section of [createBuyUrlDoc, getOrCreateDoc]) {
+      expect(section).toMatch(/withTestpayParam/);
+    }
+    // ...and it must name the environment rule, not just the function: the
+    // parameter takes free "payments", so appending it outside DEV is fraud.
+    expect(buyUrlSrc).toMatch(/isTestpayActive/);
   });
 });

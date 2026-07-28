@@ -274,6 +274,19 @@ There are **two paths**, and `/plans` uses both (`app/plans/page.tsx`):
 `getOrCreateBuyUrl` (`lib/digistore/buyUrl.ts`) is the layer underneath. All of
 it needs a **`writable`** key.
 
+⚠️ **Take one of the two paths above unless you have a reason not to — the
+layer underneath returns an UNFINISHED URL.** It does not carry the DEV
+test-payment parameter, so a checkout built by hand on `createBuyUrl` /
+`getOrCreateBuyUrl` leaves the developer with no way to make a local test
+purchase, and nothing anywhere reports a fault. If you do build your own path,
+its last step is `await withTestpayParam(url)` (`lib/digistore/testpay.ts`) —
+on the **return value**, after the cache, never inside `buyUrl.ts`, because a
+decorated URL in `buy_url_cache` is served to every visitor. The parameter
+activates in **DEV on localhost only** and the function re-checks that itself;
+never re-implement or loosen the gate, and never append the parameter by hand —
+it takes free "payments" and the key works on this vendor's live checkout URLs
+too. Full rules: `docs/digistore-createbuyurl.md`.
+
 A complete custom payment plan travels with the call — one base product per
 plan is enough, price/currency/interval are decided by the app at runtime.
 
