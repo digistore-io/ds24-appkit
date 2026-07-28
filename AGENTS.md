@@ -1494,6 +1494,10 @@ has already created stays at Digistore24 until you deactivate it there.
   can sell a German and an English offering and each is submitted where it
   belongs. A product that names no language falls back to `APP_LANG` and then to
   German; `--lang`/`--reseller`/`--siteowner` override it for the whole run.
+  **Only the four resellers approve products** — Germany (1), USA (2), UK (3),
+  Ireland (4). Any other siteowner is a **Direct Seller**, where no approval
+  step exists at all: the command says so and writes nothing, and the greeting
+  and doctor stay silent rather than nag about a step that does not apply.
   A go-live step: only once description and app
   are mature. Before that only **test purchases** are possible. In DEV that is
   automatic: every checkout link carries the DS24 test-payment parameter by
@@ -1504,8 +1508,10 @@ has already created stays at Digistore24 until you deactivate it there.
   reads back what Digistore24 actually decided per product
   (`new`/`pending`/`approved`/`rejected`), and `--apply` skips a product that is
   already approved at the marketplace it would write to. If the status cannot be
-  read, `--apply` **refuses** rather than setting an approved product back to
-  pending (`--force` overrides). The session greeting asks the same question by
+  read, or the account is not active at that marketplace, `--apply` **refuses**
+  rather than setting an approved product back to pending; `--status` likewise
+  takes only `pending` (`--force` lifts all three — never the approved-skip).
+  The session greeting asks the same question by
   itself, once a day with one `listProducts` call, and says one line while a
   product is unrequested, pending or rejected; `node run.mjs doctor` reports the
   same answer from the same cache. A product counts as approved as soon as **one**

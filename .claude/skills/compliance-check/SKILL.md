@@ -136,6 +136,14 @@ trace on disk:
 1. **Who is the contracting party for the purchase — you or Digistore24 as
    reseller?** This decides whether AGB and the right-of-withdrawal notice are
    yours at all. It is in the Digistore24 contract, not in the code.
+   The technical setup **hints** at the answer and is worth naming when you ask,
+   so the user is not guessing from memory: selling through a reseller means a
+   `DIGISTORE_SITEOWNER_ID` of 1 (Germany), 2 (USA), 3 (UK) or 4 (Ireland), and
+   products that carry an approval status there; a **Direct Seller** sells on
+   their own account, has no product approval at all, and is then normally the
+   contracting party themselves. Offer that as evidence, never as the verdict —
+   the contract decides, and this question is the one place in this skill where
+   guessing wrong changes which legal texts the app has to carry.
 2. **How many people work in the business, and what is the annual turnover?**
    Two thresholds hang off this and nothing else: BFSG (under 10 **and**
    ≤ €2m → exempt for services) and the DSA transparency report (under 50

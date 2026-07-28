@@ -7,7 +7,7 @@
 // Without --apply this is the STATUS VIEW: it reads the current approval per
 // product from listProducts (approval_status_list) and prints it. With --apply
 // it sets the status per product via updateProduct:
-//   data[approval_status][<siteowner_id>] = <status>   (default: "pending")
+//   data[approval_status][<siteowner_id>] = pending
 //
 // Background (updateProduct.expectedArgs): approval_status is "by_siteowner" —
 // the approval is requested per siteowner and only takes effect for siteowners
@@ -21,7 +21,8 @@
 // falls back to APP_LANG and then to German. So one app can sell a German and
 // an English product and each is submitted where it belongs. See _resellers.mjs.
 //
-// --lang / --reseller / --siteowner override that for EVERY product in the run.
+// --lang / --reseller / --siteowner override that for EVERY product in the run
+// and take precedence over DIGISTORE_SITEOWNER_ID in the .env.
 //
 // Usage:
 //   node scripts/ds24/request-approval.mjs                     # status view (dry run)
@@ -29,55 +30,103 @@
 //   node scripts/ds24/request-approval.mjs --lang en --apply   # force USA reseller (2)
 //   node scripts/ds24/request-approval.mjs --reseller US --apply
 //   node scripts/ds24/request-approval.mjs --siteowner <id> --apply  # any marketplace
-//   [--key pro] [--status <new|pending|approved|rejected>] [--force]
+//   [--key pro] [--force]
 // Env: DIGISTORE_API_KEY (writable), optionally APP_LANG,
-//      DIGISTORE_SITEOWNER_ID.
+//      DIGISTORE_SITEOWNER_ID, DIGISTORE_APPROVAL_CHECK.
 import {
-  KNOWN_STATUSES,
-  approvalStatusOf,
   dropApprovalCache,
+  hasApprovalList,
+  isMarketplaceActive,
+  resellerEntry,
   statusesFrom,
   writeApprovalCache,
 } from "./_approval.mjs";
 import { ds24Call, requireApiKey, parseArgs } from "./_client.mjs";
-import { extractProducts, idOf, readProducts } from "./_products.mjs";
-import { resolveReseller } from "./_resellers.mjs";
+import { extractProducts, readProducts } from "./_products.mjs";
+import { isKnownLanguage, isReseller, resolveReseller } from "./_resellers.mjs";
 
 const args = parseArgs(process.argv.slice(2));
 const apply = Boolean(args.apply);
 const force = Boolean(args.force);
-const onlyKey = args.key ? String(args.key) : null;
-const status = args.status ? String(args.status) : "pending";
+
+/**
+ * `parseArgs` yields the boolean `true` for a flag whose value is missing or is
+ * itself a flag. Left unchecked, `--siteowner --apply` posted
+ * `data[approval_status][true]=pending` to the live API, and `--lang --apply`
+ * routed every product — German ones included — to the USA while announcing
+ * "(via --lang)". A value-taking flag with no value is a typo, not an intent.
+ */
+function flagValue(name) {
+  const value = args[name];
+  if (value === undefined) return undefined;
+  if (value === true) {
+    console.error(`ERROR: --${name} needs a value (e.g. --${name} <value>).`);
+    process.exit(2);
+  }
+  return String(value);
+}
+
+const onlyKey = flagValue("key") ?? null;
 const appLang = process.env.APP_LANG || "de";
 
-// The reader knows exactly four values (_approval.mjs → KNOWN_STATUSES). A
-// free-text status would be written to Digistore24 and then normalize to
-// "unreadable" on the way back, so the product would vanish from the greeting,
-// from doctor and from this very view — permanently, and without a word.
-if (!KNOWN_STATUSES.includes(status)) {
+// **Only "pending" is ever a legitimate thing to write here.** `new` un-requests
+// a product that is already in the queue; `approved` and `rejected` are the
+// reseller's verdicts, and a vendor writing "approved" onto their own product
+// marks it sellable to every reader of this data — the greeting goes quiet,
+// doctor turns green and --apply skips it for ever, for a product no reseller
+// ever looked at. An earlier round restricted the flag to the four values the
+// READER can parse; readability was the wrong criterion.
+const status = flagValue("status") ?? "pending";
+if (status !== "pending" && !force) {
   console.error(
-    `ERROR: unknown --status "${status}". Known: ${KNOWN_STATUSES.join(", ")}.\n` +
-      `       (Only "pending" is worth setting by hand — the reseller sets the rest.)`,
+    `ERROR: --status "${status}" is not something to write here. Only "pending" requests an\n` +
+      `       approval; "approved"/"rejected" are the reseller's verdicts and "new" withdraws\n` +
+      `       a request. Pass --force if you really mean to write it.`,
   );
   process.exit(2);
 }
 
 // An explicit flag applies to the whole run; without one, each product is
-// resolved from its own language further down.
+// resolved from its own language further down. DIGISTORE_SITEOWNER_ID is the
+// fallback, NOT an override — it used to be read into the same slot as
+// --siteowner and win, so `--reseller US --apply` on a machine with the
+// variable set silently wrote somewhere else and reported "given explicitly"
+// about a value nobody had given.
+const flagged = args.siteowner !== undefined || args.reseller !== undefined || args.lang !== undefined;
+const envSiteowner = flagged ? undefined : process.env.DIGISTORE_SITEOWNER_ID;
+
 let forced = null;
-if (args.siteowner ?? args.reseller ?? args.lang ?? process.env.DIGISTORE_SITEOWNER_ID) {
+if (flagged || envSiteowner) {
   try {
     forced = resolveReseller({
-      siteowner: args.siteowner ?? process.env.DIGISTORE_SITEOWNER_ID,
-      reseller: args.reseller,
-      lang: args.lang ?? appLang,
+      siteowner: flagValue("siteowner") ?? envSiteowner,
+      reseller: flagValue("reseller"),
+      lang: flagValue("lang"),
     });
   } catch (err) {
     console.error(`ERROR: ${err.message}`);
     process.exit(2);
   }
+  // **Only the four RESELLERS have a product approval.** Any other siteowner is
+  // a Direct Seller: the vendor sells on their own account and there is nobody
+  // to submit a product to, so there is no approval to request, no status to
+  // read back and nothing this command can usefully do. Writing the field
+  // anyway would put a value nobody acts on onto a live product — and an
+  // earlier version of this script did exactly that, having mistaken "the
+  // marketplace is not in the response" for "a private marketplace we cannot
+  // see".
+  if (!isReseller(forced.id)) {
+    console.log(
+      `Siteowner ${forced.id} is a Direct Seller, not one of the Digistore24 resellers\n` +
+        `(1 Germany, 2 USA, 3 UK, 4 Ireland). Direct Sellers have no product approval —\n` +
+        `there is nothing to request here, and nothing you need to do before selling.`,
+    );
+    process.exit(0);
+  }
   const label = forced.reseller ? `${forced.reseller.name} [id=${forced.id}]` : `siteowner ID ${forced.id}`;
-  const why = { siteowner: "given explicitly", reseller: "via --reseller", lang: "via --lang" }[forced.source];
+  const why = flagged
+    ? { siteowner: "via --siteowner", reseller: "via --reseller", lang: "via --lang" }[forced.source]
+    : "from DIGISTORE_SITEOWNER_ID in the .env";
   console.log(`Marketplace for every product: ${label} (${why})`);
 } else {
   console.log(`Marketplace: per product, from its language (fallback APP_LANG="${appLang}")`);
@@ -92,15 +141,25 @@ const entries = Object.entries(config.products).filter(
 // Read before writing. listProducts carries the current status per reseller
 // (approval_status_list — probed, not documented; see _approval.mjs). The dry
 // run is that view, and --apply needs it to refuse a step backwards.
+//
+// `statusRead` means "I got a list I can use", not "the call resolved":
+// extractProducts answers [] for any response shape it does not recognise, and
+// treating that as a successful read let --apply past its own gate and then
+// persist an all-unknown answer into the shared cache.
 let statusRead = false;
 let list = [];
 try {
   list = extractProducts(await ds24Call("listProducts", apiKey));
-  statusRead = true;
+  statusRead = list.length > 0;
+  if (!statusRead) {
+    console.error("WARN: Digistore24 returned no product list — the status below cannot be shown.");
+  }
 } catch (err) {
   console.error(`WARN: could not read the current approval status (${err.message}).`);
 }
-const byId = new Map(list.filter((p) => p && typeof p === "object").map((p) => [String(idOf(p)), p]));
+const byId = new Map(
+  list.filter((p) => p && typeof p === "object").map((p) => [String(p.product_id ?? p.id), p]),
+);
 
 // Writing blind is the one thing this script must not do. `updateProduct` with
 // approval_status=pending on a product the reseller has already APPROVED is a
@@ -118,6 +177,7 @@ if (apply && !statusRead && !force) {
 
 let synced = false;
 let applied = false;
+let attempted = false;
 let refused = 0;
 
 try {
@@ -129,13 +189,28 @@ try {
     synced = true;
 
     // Per product, unless a flag forced one marketplace for the whole run.
-    const target = forced ?? resolveReseller({ lang: def.language || appLang });
+    const language = typeof def.language === "string" ? def.language : "";
+    if (!forced && language && !isKnownLanguage(language)) {
+      console.error(
+        `WARN: "${key}" has language "${language}", which is not a Digistore24 language code — ` +
+          `it will be treated as non-German. Use "de", "en", … if that is not what you meant.`,
+      );
+    }
+    const target = forced ?? resolveReseller({ lang: language || appLang });
     const siteowner = target.id;
     const where = target.reseller ? target.reseller.name : `siteowner ${siteowner}`;
 
-    const current = approvalStatusOf(byId.get(String(def.productId)) ?? null, siteowner);
-    const known = current !== null;
-    const currentNote = known ? `currently "${current}"` : "status unknown";
+    const product = byId.get(String(def.productId)) ?? null;
+    const entry = resellerEntry(product, siteowner);
+    const current = entry ? String(entry.approval_status ?? "").trim().toLowerCase() : null;
+    // The target is always one of the four resellers by now (checked above and
+    // guaranteed by the language rule), so a missing entry means the list could
+    // not be read for this product — not that the marketplace is exotic. An
+    // earlier version treated the two as one and sent requests into the void.
+    const currentNote = entry ? `currently "${current}"` : "status unknown";
+    if (statusRead && !hasApprovalList(product)) {
+      console.error(`WARN: "${key}" carries no approval list in the response — status unknown.`);
+    }
 
     // Already approved for THIS marketplace is the end state. Deliberately not
     // the aggregated status: a product approved in Germany may still have a
@@ -153,7 +228,20 @@ try {
       continue;
     }
 
-    if (!known && !force) {
+    // A marketplace the account is not active for cannot act on the request.
+    // Writing there reports success, changes nothing anybody will look at, and
+    // the read side filters the entry out — so the product keeps being reported
+    // as never submitted, for ever, and repeating the command never helps.
+    if (entry && !isMarketplaceActive(entry) && !force) {
+      console.error(
+        `· REFUSED: "${key}" — your account is not active at ${where}, so a request there ` +
+          `would never be looked at. Pass --force to send it anyway.`,
+      );
+      refused++;
+      continue;
+    }
+
+    if (!entry && !force) {
       console.error(
         `· REFUSED: "${key}" (product_id=${def.productId}) — its status at ${where} could not be ` +
           `read, so an existing approval cannot be ruled out. Pass --force to request anyway.`,
@@ -162,6 +250,7 @@ try {
       continue;
     }
 
+    attempted = true;
     await ds24Call("updateProduct", apiKey, {
       product_id: String(def.productId),
       [`data[approval_status][${siteowner}]`]: status,
@@ -173,15 +262,28 @@ try {
   // In a `finally` because a throw halfway through the loop still leaves the
   // requests that already went out — and a cache describing the state before
   // them, which the greeting would then report for the rest of the day.
-  if (applied) {
+  //
+  // `attempted`, not `applied`: a call whose response was lost still reached
+  // Digistore24, and caching the pre-write state with a fresh timestamp would
+  // report "not submitted" about a product that was.
+  if (attempted) {
     dropApprovalCache();
-  } else if (statusRead && !onlyKey) {
+  } else if (
+    statusRead &&
+    !onlyKey &&
+    refused === 0 &&
+    String(process.env.DIGISTORE_APPROVAL_CHECK ?? "").toLowerCase() !== "off"
+  ) {
     // Nothing was written, but we just read the live truth. Handing it to the
     // cache is what stops the greeting saying "pending" for the rest of the day
     // about products the reseller approved an hour ago.
-    const synced_entries = entries.filter(([, def]) => def.productId);
-    if (synced_entries.length > 0) {
-      writeApprovalCache({ checkedAt: Date.now(), statuses: statusesFrom(synced_entries, list) });
+    //
+    // Not when the kill switch is on — this command would otherwise re-create
+    // the very file the switch exists to remove, and doctor would start talking
+    // again until the next session start deleted it.
+    const syncedEntries = entries.filter(([, def]) => def.productId);
+    if (syncedEntries.length > 0) {
+      writeApprovalCache({ checkedAt: Date.now(), statuses: statusesFrom(syncedEntries, list) });
     }
   }
 }

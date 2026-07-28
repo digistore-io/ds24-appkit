@@ -47,6 +47,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isDue } from "../dev/update-check.mjs";
 import { extractProducts, idOf, readProducts } from "./_products.mjs";
+import { isReseller } from "./_resellers.mjs";
 
 // Resolved from this file, not from the cwd — `_products.mjs` resolves the
 // registry the same way, and the two must agree. A cwd-relative path let
@@ -98,9 +99,51 @@ function isActive(entry) {
  * asks the aggregated question instead — `aggregateApprovalStatus`.
  */
 export function approvalStatusOf(product, siteownerId) {
+  return readStatus(resellerEntry(product, siteownerId));
+}
+
+/**
+ * The raw `approval_status_list` entry for one siteowner, or null.
+ *
+ * The write side needs to tell three states apart that `approvalStatusOf`
+ * flattens into one `null`: the list could not be read at all (refuse — an
+ * approval cannot be ruled out), the list is fine but carries no entry for this
+ * marketplace (a private siteowner Digistore24 does not report on — proceed),
+ * and the entry exists but its marketplace is inactive (pointless — refuse).
+ */
+export function resellerEntry(product, siteownerId) {
   const list = product?.approval_status_list;
   if (!Array.isArray(list)) return null;
-  return readStatus(list.find((e) => String(e?.reseller_id) === String(siteownerId)));
+  return list.find((e) => String(e?.reseller_id) === String(siteownerId)) ?? null;
+}
+
+/** Is the response's approval list readable at all for this product? */
+export function hasApprovalList(product) {
+  return Array.isArray(product?.approval_status_list);
+}
+
+/**
+ * Does product approval apply to this vendor at all?
+ *
+ * `true` when at least one of the four RESELLERS is active for the account,
+ * `false` when the list is readable and none is — that vendor is a **Direct
+ * Seller**, sells on their own account, and has nobody to submit a product to.
+ * `null` when the list cannot be read, which is a different thing entirely and
+ * must not be silenced as "does not apply".
+ *
+ * Without this the greeting nags a Direct Seller "not submitted for approval
+ * yet" for the life of their project, about a step that does not exist for
+ * them, and no amount of running the command ever clears it.
+ */
+export function approvalApplies(product) {
+  const list = product?.approval_status_list;
+  if (!Array.isArray(list)) return null;
+  return list.some((e) => isActive(e) && isReseller(e?.reseller_id));
+}
+
+/** Can this marketplace act? Only an explicit "N" says no — see isActive. */
+export function isMarketplaceActive(entry) {
+  return isActive(entry);
 }
 
 /**
@@ -117,17 +160,58 @@ export function approvalStatusOf(product, siteownerId) {
 export function aggregateApprovalStatus(product) {
   const list = product?.approval_status_list;
   if (!Array.isArray(list)) return null;
-  const found = new Set(list.filter(isActive).map(readStatus).filter(Boolean));
+  const found = new Set(list.filter(countsForApproval).map(readStatus).filter(Boolean));
   return PRECEDENCE.find((status) => found.has(status)) ?? null;
+}
+
+/**
+ * Which entries have anything to say about approval: an active marketplace
+ * that is one of the four RESELLERS. A Direct Seller entry carries no approval
+ * concept, so counting it would invent a verdict out of a field that means
+ * nothing there.
+ */
+function countsForApproval(entry) {
+  return isActive(entry) && isReseller(entry?.reseller_id);
+}
+
+/**
+ * Did any active marketplace reject this product?
+ *
+ * Recorded ALONGSIDE the aggregate, not inside it. The precedence above is
+ * about sellability and puts `pending` ahead of `rejected` — which is right for
+ * "can I sell this?", and quietly wrong for "is there something I have to do?":
+ * a product rejected in Germany and still queued in the USA aggregates to
+ * `pending`, and the German rejection — the one thing the vendor has to act on,
+ * and the reason this whole feature exists — is never mentioned again, because
+ * nothing will ever move the US entry.
+ *
+ * So the aggregate keeps deciding whether to speak, and this decides what to
+ * say when it does. An approved product still says nothing: it sells.
+ */
+export function rejectedSomewhere(product) {
+  const list = product?.approval_status_list;
+  if (!Array.isArray(list)) return false;
+  return list.filter(countsForApproval).some((e) => readStatus(e) === "rejected");
 }
 
 /** Product keys grouped by state. Unreadable statuses (null) appear nowhere. */
 export function classifyStatuses(statuses) {
-  const grouped = { approved: [], pending: [], rejected: [], unrequested: [], unknown: [] };
+  const grouped = {
+    approved: [],
+    pending: [],
+    rejected: [],
+    unrequested: [],
+    unknown: [],
+    // Direct Seller: approval does not exist for this vendor. Its own bucket
+    // rather than "approved", because it is not a verdict — and no surface
+    // reports it, because there is nothing to do about it.
+    notApplicable: [],
+  };
   // A cache written by another version — or by hand — may hold anything.
   if (!statuses || typeof statuses !== "object" || Array.isArray(statuses)) return grouped;
   for (const [key, entry] of Object.entries(statuses)) {
-    if (entry?.status === "approved") grouped.approved.push(key);
+    if (entry?.applies === false) grouped.notApplicable.push(key);
+    else if (entry?.status === "approved") grouped.approved.push(key);
     else if (entry?.status === "pending") grouped.pending.push(key);
     else if (entry?.status === "rejected") grouped.rejected.push(key);
     else if (entry?.status === "new") grouped.unrequested.push(key);
@@ -158,13 +242,25 @@ function cachedIds(cache) {
  * products (then it is not an old answer, it is an answer to another
  * question), a week when everything is approved, otherwise a day.
  *
- * The product comparison comes FIRST. Putting it behind the all-approved
- * shortcut is how the first version of this let a freshly synced product go
- * unmentioned for a day — the shortcut bailed out before the comparison was
- * ever reached, and the test passed because it asserted the returned number
- * rather than whether the cache was refetched.
+ * Three orderings in here are each a bug that was actually shipped:
+ *
+ * **A quiet cache holds for a day.** `{ statuses: null }` is not an unusable
+ * cache, it is a recorded "we asked and could not find out" — and it has to
+ * expire like any other answer. Returning 0 for it made `isDue` true at the
+ * same millisecond it was written, so an offline machine paid for a fresh
+ * authenticated call at every single session start, for ever. That is the
+ * whole budget this file exists to keep, undone by the fix for a different bug.
+ *
+ * **The product comparison comes before the all-approved shortcut.** Behind
+ * it, a freshly synced product went unmentioned for a day.
+ *
+ * **A cache with no usable timestamp is always due**, because nothing else can
+ * bound it.
  */
 export function ttlFor(cache, productIds) {
+  const checkedAt = Number(cache?.checkedAt);
+  if (!Number.isFinite(checkedAt) || checkedAt <= 0) return 0;
+  if (cache.statuses === null) return DAY;
   const cached = cachedIds(cache);
   if (!cached) return 0;
   const wanted = productIds.map(String).sort();
@@ -194,9 +290,16 @@ function nameSome(keys) {
  */
 export function describeApproval(result) {
   const grouped = classifyStatuses(result?.statuses);
-  if (grouped.rejected.length > 0) {
+  // A rejection at ANY marketplace, on a product that is not sellable yet.
+  // The aggregate may call such a product "pending" (see rejectedSomewhere),
+  // and then this is the only place the rejection is ever mentioned.
+  const rejected = Object.entries(result?.statuses ?? {})
+    .filter(([, e]) => e?.rejected && e?.status !== "approved")
+    .map(([key]) => key);
+  if (rejected.length > 0 || grouped.rejected.length > 0) {
+    const keys = rejected.length > 0 ? rejected : grouped.rejected;
     return (
-      `[DS24: approval REJECTED for ${nameSome(grouped.rejected)} — read the reason in ` +
+      `[DS24: approval REJECTED for ${nameSome(keys)} — read the reason in ` +
       `your Digistore24 account, fix it there, then node run.mjs ds24-approval --apply]`
     );
   }
@@ -212,6 +315,20 @@ export function describeApproval(result) {
       `real sales start once Digistore24 approves.]`
     );
   }
+  // Said out loud rather than swallowed: doctor reports this state as a failed
+  // check, and the two surfaces read the same cache, so silence here was the
+  // "greeting and doctor disagree" bug in a new place. It also means something
+  // real — a product deleted at Digistore24, a key pointing at another account,
+  // or the undocumented response shape having changed under us.
+  if (grouped.unknown.length > 0) {
+    return (
+      `[DS24: approval status unreadable for ${grouped.unknown.length} product(s) — ` +
+      `the product may be gone at Digistore24, or the API key belongs to another account. ` +
+      `Check: node run.mjs ds24-approval]`
+    );
+  }
+  // `notApplicable` is deliberately not reported anywhere: a Direct Seller has
+  // no approval step, so there is nothing to do and nothing to say.
   return null;
 }
 
@@ -221,9 +338,15 @@ export function describeApproval(result) {
  * that lived inline shipped with a kill switch that silenced the greeting and
  * left doctor talking, and no test could have caught it.
  */
-export function shouldCheck({ killSwitch, apiKey, productIds }) {
+export function shouldCheck({ killSwitch, apiKey, productIds, siteowner = "" }) {
   if (String(killSwitch ?? "").toLowerCase() === "off") return false;
   if (!apiKey) return false;
+  // A configured siteowner that is not one of the four RESELLERS is a Direct
+  // Seller, and product approval does not exist there — so there is nothing to
+  // check, and the reminder would be a permanent false alarm. An UNSET variable
+  // says nothing either way and is not treated as a Direct Seller; the response
+  // itself answers that case (approvalApplies).
+  if (String(siteowner ?? "").trim() !== "" && !isReseller(siteowner)) return false;
   return Array.isArray(productIds) && productIds.length > 0;
 }
 
@@ -237,15 +360,27 @@ export function writeApprovalCache(result) {
   }
 }
 
-/** The cached answer, or null when there is none this code can use. */
+/**
+ * The cached answer, or null when there is none this code can use.
+ *
+ * An answer nobody has refreshed in a month is not a finding, it is a
+ * leftover — the check was switched off, the key was removed, or the products
+ * were unsynced. Reporting it as current is how doctor came to announce "not
+ * requested yet" long after a product had been approved.
+ *
+ * A cache with no usable timestamp is rejected outright rather than waved
+ * through. The guard used to read `Number(checkedAt) > 0 && tooOld`, so a
+ * missing, zero, negative or non-numeric `checkedAt` skipped the age check
+ * entirely — and doctor reads this file with no `isDue` behind it, so exactly
+ * the hand-written and foreign-version caches the bound exists for were the
+ * ones reported as today's answer for ever.
+ */
 export function readApprovalCache(now = Date.now()) {
   try {
     const cache = JSON.parse(readFileSync(CACHE_PATH, "utf8"));
-    // An answer nobody has refreshed in a month is not a finding, it is a
-    // leftover — the check was switched off, the key was removed, or the
-    // products were unsynced. Reporting it as current is how doctor came to
-    // announce "not requested yet" long after a product had been approved.
-    if (Number(cache?.checkedAt) > 0 && now - Number(cache.checkedAt) > MAX_CACHE_AGE) return null;
+    const checkedAt = Number(cache?.checkedAt);
+    if (!Number.isFinite(checkedAt) || checkedAt <= 0) return null;
+    if (now - checkedAt > MAX_CACHE_AGE) return null;
     return cache;
   } catch {
     return null;
@@ -276,12 +411,19 @@ export function statusesFrom(entries, list) {
   const byId = new Map(
     list.filter((p) => p && typeof p === "object").map((p) => [String(idOf(p)), p]),
   );
-  /** @type {Record<string, { productId: string, status: string | null }>} */
+  /** @type {Record<string, { productId: string, status: string | null, rejected?: boolean, applies?: boolean }>} */
   const statuses = {};
   for (const [key, def] of entries) {
+    const product = byId.get(String(def.productId)) ?? null;
+    const applies = approvalApplies(product);
     statuses[key] = {
       productId: String(def.productId),
-      status: aggregateApprovalStatus(byId.get(String(def.productId)) ?? null),
+      status: aggregateApprovalStatus(product),
+      rejected: rejectedSomewhere(product),
+      // Only ever written as `false` — `null` (could not tell) must stay
+      // distinguishable from "does not apply", or an unreadable response would
+      // be silenced as if the vendor were a Direct Seller.
+      ...(applies === false ? { applies: false } : {}),
     };
   }
   return statuses;
@@ -313,14 +455,30 @@ export async function approvalReport(now = Date.now()) {
     }
     const productIds = entries.map(([, def]) => String(def.productId));
 
+    const killSwitch = process.env.DIGISTORE_APPROVAL_CHECK;
+    const siteowner = process.env.DIGISTORE_SITEOWNER_ID;
+    const directSeller = String(siteowner ?? "").trim() !== "" && !isReseller(siteowner);
     if (!shouldCheck({
-      killSwitch: process.env.DIGISTORE_APPROVAL_CHECK,
+      killSwitch,
       apiKey: process.env.DIGISTORE_API_KEY,
       productIds,
+      siteowner,
     })) {
-      // doctor reads the file directly and knows nothing about the switch or
-      // the key, so leaving it behind would keep a silenced check talking.
-      dropApprovalCache();
+      // doctor reads the file directly and knows nothing about the switch, so
+      // leaving the cache behind would keep a silenced check talking.
+      //
+      // A missing KEY does not, though. It looks identical to a `.env` that was
+      // simply not found — `scripts/lib/env.mjs` loads that file relative to the
+      // current directory, while the registry and this cache are both resolved
+      // from the script's own location. So a greeting fired with a different cwd
+      // would erase a perfectly good answer. That state ages out through
+      // MAX_CACHE_AGE instead.
+      //
+      // The switch and an empty registry are safe to act on: both are read from
+      // a fixed path, so they mean what they say wherever the command ran.
+      if (String(killSwitch ?? "").toLowerCase() === "off" || productIds.length === 0 || directSeller) {
+        dropApprovalCache();
+      }
       return null;
     }
 
@@ -349,11 +507,18 @@ export async function approvalReport(now = Date.now()) {
     writeApprovalCache(result);
     return result;
   } catch {
-    // Reached when something outside the inner guards threw — a malformed
-    // response shape, an unwritable `.dev/`. Without remembering a quiet
-    // answer here, every single session start would pay for a fresh
-    // authenticated API call, for ever, with nobody able to notice.
+    // Reached when something outside the inner guards threw — most realistically
+    // the lazy import above, i.e. the unreadable `.env` this whole restructure
+    // exists for.
+    //
+    // **A known answer outranks this.** Overwriting it with a quiet marker was
+    // how a `chmod 000 .env` — a file mode, nothing more — silently erased a
+    // live `rejected` verdict and left both surfaces with nothing to say. Only
+    // when there is no usable answer at all is the quiet marker written, and
+    // then it holds for the day like any other (see ttlFor).
     try {
+      const known = readApprovalCache(now);
+      if (known?.statuses) return known;
       writeApprovalCache({ checkedAt: now, statuses: null });
     } catch {
       /* nothing left to do */

@@ -265,8 +265,14 @@ export async function inspect({ quick = false } = {}) {
   // product sat at `pending` — unable to sell anything — got a green tick from
   // the command people run right before going live, while the greeting two
   // lines up said the opposite.
-  const approvalGroups = classifyStatuses(readApprovalCache()?.statuses);
-  const approvalCount = Object.values(approvalGroups).reduce((n, keys) => n + keys.length, 0);
+  const approvalCache = readApprovalCache();
+  const approvalGroups = classifyStatuses(approvalCache?.statuses);
+  // `notApplicable` is left out of the count on purpose: a Direct Seller has no
+  // approval step, so the check has nothing to report — not even a green tick,
+  // which would imply a hurdle was cleared that never existed.
+  const approvalCount = Object.entries(approvalGroups)
+    .filter(([bucket]) => bucket !== "notApplicable")
+    .reduce((n, [, keys]) => n + keys.length, 0);
   if (approvalCount > 0) {
     const parts = [];
     if (approvalGroups.rejected.length > 0) parts.push(`rejected: ${approvalGroups.rejected.join(", ")}`);
@@ -276,23 +282,37 @@ export async function inspect({ quick = false } = {}) {
       parts.push(`waiting for Digistore24: ${approvalGroups.pending.join(", ")}`);
     if (approvalGroups.unknown.length > 0)
       parts.push(`status could not be read: ${approvalGroups.unknown.join(", ")}`);
+    // Answered from a file, so say how old it is. Without the date this reads
+    // as "measured just now", and the one thing a cached verdict must never do
+    // is look live.
+    const days = Math.floor((Date.now() - Number(approvalCache.checkedAt)) / 86_400_000);
+    const asOf = days < 1 ? "checked today" : `as of ${days} day(s) ago`;
     add({
       id: "ds24-approval",
       label: "Digistore24 product approval",
       ok: parts.length === 0,
-      detail: `${parts.join("; ")} — only test purchases work until a product is approved`,
+      detail: `${parts.join("; ")} (${asOf}) — only test purchases work until a product is approved`,
       severity: "info",
-      // A rejected product must NOT simply be resubmitted: the reason is in the
-      // vendor's Digistore24 account, and the go-live skill says the second
-      // attempt is slower than the first. This field is consumed as data by the
-      // setup tooling, so the distinction belongs in it, not only in prose.
+      // The fix has to match the state, because `fix[platform]` is consumed as
+      // data by the setup tooling — a command that refuses for the state it was
+      // offered for is a loop the tooling walks.
+      //
+      //   rejected  → the reason is in the vendor's account; resubmitting it
+      //               unchanged gets it rejected again, more slowly
+      //   unknown   → `--apply` refuses precisely this state, so pointing at it
+      //               would send the tooling round in a circle
       fix: everywhere(
-        approvalGroups.rejected.length > 0
+        approvalGroups.unknown.length > 0 && parts.length === 1
           ? {
-              command: "node run.mjs ds24-approval --apply",
-              note: "for a REJECTED product read the reason in your Digistore24 account and fix it there FIRST — resubmitting it unchanged gets rejected again",
+              command: "node run.mjs ds24-approval",
+              note: "the status could not be read — check that the product still exists at Digistore24 and that DIGISTORE_API_KEY belongs to that account. `--apply` deliberately refuses this state",
             }
-          : { command: "node run.mjs ds24-approval --apply" },
+          : approvalGroups.rejected.length > 0
+            ? {
+                command: "node run.mjs ds24-approval --apply",
+                note: "for a REJECTED product read the reason in your Digistore24 account and fix it there FIRST — resubmitting it unchanged gets rejected again",
+              }
+            : { command: "node run.mjs ds24-approval --apply" },
       ),
     });
   }

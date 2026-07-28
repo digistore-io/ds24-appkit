@@ -9,17 +9,26 @@
 // and when it stays silent), and the three preconditions that decide whether
 // the check asks the API at all — the last of these shipped broken once
 // because it had no seam to test.
-import { describe as suite, expect, it } from "vitest";
+import { afterAll, beforeAll, describe as suite, expect, it } from "vitest";
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import {
+  CACHE_PATH,
+  MAX_CACHE_AGE,
   aggregateApprovalStatus,
   allApproved,
+  approvalApplies,
   approvalStatusOf,
   classifyStatuses,
   describeApproval,
+  dropApprovalCache,
+  readApprovalCache,
+  rejectedSomewhere,
   shouldCheck,
   statusesFrom,
   ttlFor,
+  writeApprovalCache,
 } from "./_approval.mjs";
+import { isKnownLanguage, isReseller, resellerForLang } from "./_resellers.mjs";
 
 const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
@@ -133,11 +142,19 @@ suite("classifyStatuses", () => {
       rejected: ["c"],
       unrequested: ["d"],
       unknown: ["e"],
+      notApplicable: [],
     });
   });
 
   it("takes anything a hand-edited or foreign cache can hold", () => {
-    const empty = { approved: [], pending: [], rejected: [], unrequested: [], unknown: [] };
+    const empty = {
+      approved: [],
+      pending: [],
+      rejected: [],
+      unrequested: [],
+      unknown: [],
+      notApplicable: [],
+    };
     expect(classifyStatuses(null)).toEqual(empty);
     // A truthy non-object used to slip through and be reported as a clean pass.
     expect(classifyStatuses("broken")).toEqual(empty);
@@ -157,10 +174,36 @@ suite("describeApproval", () => {
     expect(describeApproval(result({ a: "approved", b: "approved" }))).toBeNull();
   });
 
-  it("says nothing when it could not answer", () => {
+  it("says nothing when there is no answer at all", () => {
     expect(describeApproval(null)).toBeNull();
     expect(describeApproval({ checkedAt: 0, statuses: null })).toBeNull();
-    expect(describeApproval(result({ a: null }))).toBeNull();
+  });
+
+  it("speaks up when a status could not be read — doctor reports that state too", () => {
+    // Staying silent here while doctor showed a failed check was the
+    // "two surfaces disagree" bug in a new place. It also means something real:
+    // a product deleted at Digistore24, or a key for another account.
+    const line = describeApproval(result({ a: null, b: "approved" }));
+    expect(line).toContain("unreadable for 1 product(s)");
+  });
+
+  it("names a rejection the aggregate hid behind a pending elsewhere", () => {
+    const line = describeApproval({
+      checkedAt: 1,
+      statuses: { a: { productId: "1", status: "pending", rejected: true } },
+    });
+    expect(line).toContain('REJECTED for "a"');
+  });
+
+  it("stays silent about a rejection on a product that sells anyway", () => {
+    // Approved somewhere means sellable — the vendor's own rule, and nothing
+    // to nag about.
+    expect(
+      describeApproval({
+        checkedAt: 1,
+        statuses: { a: { productId: "1", status: "approved", rejected: true } },
+      }),
+    ).toBeNull();
   });
 
   it("points at the go-live step while nothing was requested", () => {
@@ -198,8 +241,10 @@ suite("describeApproval", () => {
 });
 
 suite("ttlFor", () => {
+  // A real timestamp: a cache with no usable `checkedAt` is always due now,
+  // and every fixture here is about the product/approval comparison instead.
   const cache = (statuses: Record<string, [string, string | null]>) => ({
-    checkedAt: 0,
+    checkedAt: 1_700_000_000_000,
     statuses: Object.fromEntries(
       Object.entries(statuses).map(([k, [productId, status]]) => [k, { productId, status }]),
     ),
@@ -229,10 +274,20 @@ suite("ttlFor", () => {
     expect(ttlFor(approvedCache, ["10"])).toBe(0);
   });
 
-  it("treats an unusable cache as always due", () => {
+  it("keeps a quiet answer for the day — this is the whole API budget", () => {
+    // `{ statuses: null }` is what every failure path writes: "we asked and
+    // could not find out". Treating it as unusable made `isDue` true at the
+    // millisecond it was written, so an offline machine paid for a fresh
+    // authenticated listProducts call at EVERY session start, for ever. The
+    // regression shipped because the previous test asserted `0` for this.
+    expect(ttlFor({ checkedAt: 1, statuses: null }, ["10"])).toBe(DAY);
+  });
+
+  it("treats a cache with no usable timestamp as always due", () => {
     expect(ttlFor(null, ["10"])).toBe(0);
     expect(ttlFor({ checkedAt: 0, statuses: null }, ["10"])).toBe(0);
-    expect(ttlFor({ checkedAt: 0, statuses: "broken" }, ["10"])).toBe(0);
+    expect(ttlFor({ checkedAt: "yesterday", statuses: null }, ["10"])).toBe(0);
+    expect(ttlFor({ checkedAt: 1, statuses: "broken" }, ["10"])).toBe(0);
   });
 });
 
@@ -271,8 +326,157 @@ suite("shouldCheck — the three preconditions AC 3 turns on", () => {
   });
 });
 
+suite("rejectedSomewhere — the fact the precedence hides", () => {
+  it("is true when an active marketplace rejected, even if another is pending", () => {
+    // The aggregate calls this "pending" (sellability), and nothing will ever
+    // move the pending entry — so without this flag the rejection the vendor
+    // must act on is never mentioned again.
+    expect(aggregateApprovalStatus(product({ "1": "rejected", "2": "pending" }))).toBe("pending");
+    expect(rejectedSomewhere(product({ "1": "rejected", "2": "pending" }))).toBe(true);
+  });
+
+  it("ignores a rejection at a marketplace the account cannot use", () => {
+    expect(rejectedSomewhere(product({ "1": "new", "3": "rejected" }, ["3"]))).toBe(false);
+  });
+
+  it("is false when nothing readable rejected", () => {
+    expect(rejectedSomewhere(product({ "1": "new" }))).toBe(false);
+    expect(rejectedSomewhere(null)).toBe(false);
+  });
+});
+
+suite("Direct Sellers have no approval at all", () => {
+  it("knows which siteowners are resellers", () => {
+    expect(["1", "2", "3", "4"].every(isReseller)).toBe(true);
+    expect(isReseller(1)).toBe(true);
+    for (const id of ["5", "987654", "", null, undefined, "abc"]) {
+      expect(isReseller(id)).toBe(false);
+    }
+  });
+
+  it("does not apply when no reseller is active for the account", () => {
+    // The Direct Seller shape: the four resellers are all inactive (or absent),
+    // so there is nobody to submit a product to.
+    expect(approvalApplies(product({ "1": "new", "2": "new" }, ["1", "2"]))).toBe(false);
+    expect(approvalApplies({ approval_status_list: [] })).toBe(false);
+    expect(approvalApplies(product({ "987654": "new" }))).toBe(false);
+  });
+
+  it("does apply as soon as one reseller is active", () => {
+    expect(approvalApplies(product({ "1": "new", "3": "new" }, ["3"]))).toBe(true);
+  });
+
+  it("answers null when it cannot tell — that is not the same as 'does not apply'", () => {
+    // Silencing an unreadable response as if the vendor sold direct would hide
+    // a real problem behind a legitimate-looking quiet.
+    expect(approvalApplies({ id: "1" })).toBeNull();
+    expect(approvalApplies(null)).toBeNull();
+  });
+
+  it("never invents a verdict from a Direct Seller entry", () => {
+    // A siteowner outside 1–4 has no approval concept, so its field means
+    // nothing — counting it would report an approval nobody granted.
+    expect(aggregateApprovalStatus(product({ "987654": "approved" }))).toBeNull();
+    expect(rejectedSomewhere(product({ "987654": "rejected" }))).toBe(false);
+  });
+
+  it("keeps a Direct Seller out of every reported bucket", () => {
+    const grouped = classifyStatuses({
+      direct: { productId: "1", status: null, applies: false },
+      real: { productId: "2", status: "new" },
+    });
+    expect(grouped.notApplicable).toEqual(["direct"]);
+    expect(grouped.unknown).toEqual([]);
+    expect(grouped.unrequested).toEqual(["real"]);
+  });
+
+  it("says nothing at all for a Direct Seller", () => {
+    expect(
+      describeApproval({
+        checkedAt: 1,
+        statuses: { a: { productId: "1", status: null, applies: false } },
+      }),
+    ).toBeNull();
+  });
+
+  it("does not even ask the API when the configured siteowner is a Direct Seller", () => {
+    const base = { killSwitch: undefined, apiKey: "key", productIds: ["10"] };
+    expect(shouldCheck({ ...base, siteowner: "2" })).toBe(true);
+    expect(shouldCheck({ ...base, siteowner: "987654" })).toBe(false);
+    // Unset says nothing either way — the response answers that case.
+    expect(shouldCheck({ ...base, siteowner: undefined })).toBe(true);
+    expect(shouldCheck({ ...base, siteowner: "" })).toBe(true);
+  });
+});
+
+suite("isKnownLanguage — the guard on a silent, money-relevant choice", () => {
+  it("accepts Digistore24's own codes, with or without a region", () => {
+    for (const code of ["de", "en", "fr", "es", "nl", "it", "pt", "pl", "sl", "de-AT", "de_CH", "EN"]) {
+      expect(isKnownLanguage(code)).toBe(true);
+    }
+  });
+
+  it("rejects the plausible typos that route a German product to the USA", () => {
+    // resellerForLang only tests startsWith("de"), so each of these silently
+    // becomes "not German" — which is a different marketplace, not a cosmetic
+    // difference.
+    for (const code of ["german", "ger", "deutsch2", "", "xx", "1"]) {
+      expect(isKnownLanguage(code)).toBe(false);
+    }
+    expect(resellerForLang("german").country).toBe("US");
+    expect(resellerForLang("deutsch").country).toBe("DE"); // starts with "de" — fine either way
+  });
+});
+
+suite("the cache on disk", () => {
+  let saved: string | null = null;
+
+  beforeAll(() => {
+    saved = existsSync(CACHE_PATH) ? readFileSync(CACHE_PATH, "utf8") : null;
+  });
+  afterAll(() => {
+    if (saved === null) rmSync(CACHE_PATH, { force: true });
+    else writeFileSync(CACHE_PATH, saved);
+  });
+
+  it("writes and reads back what it was given", () => {
+    const result = { checkedAt: Date.now(), statuses: { a: { productId: "1", status: "new" } } };
+    writeApprovalCache(result);
+    expect(readApprovalCache()).toEqual(result);
+  });
+
+  it("drops the file, and dropping a missing file is not an error", () => {
+    writeApprovalCache({ checkedAt: Date.now(), statuses: null });
+    dropApprovalCache();
+    expect(existsSync(CACHE_PATH)).toBe(false);
+    expect(() => dropApprovalCache()).not.toThrow();
+    expect(readApprovalCache()).toBeNull();
+  });
+
+  it("refuses an answer nobody refreshed in a month", () => {
+    // doctor reads this file with no `isDue` behind it, so a leftover would
+    // otherwise be reported as today's verdict for ever.
+    writeApprovalCache({ checkedAt: Date.now() - MAX_CACHE_AGE - 1000, statuses: {} });
+    expect(readApprovalCache()).toBeNull();
+  });
+
+  it("refuses a cache whose timestamp cannot be trusted", () => {
+    // The class of cache the age bound exists for — hand-written, or from
+    // another version — is exactly the class whose `checkedAt` is unusable.
+    for (const checkedAt of [0, -1, "yesterday", null, undefined]) {
+      writeFileSync(CACHE_PATH, JSON.stringify({ checkedAt, statuses: {} }));
+      expect(readApprovalCache()).toBeNull();
+    }
+  });
+
+  it("survives a file that is not JSON at all", () => {
+    writeFileSync(CACHE_PATH, "{{ not json");
+    expect(readApprovalCache()).toBeNull();
+  });
+});
+
 suite("statusesFrom", () => {
-  type Statuses = Record<string, { productId: string; status: string | null }>;
+  type Statuses = Record<string, { productId: string; status: string | null; rejected?: boolean }>;
   const entries: [string, { productId: string }][] = [
     ["fokus", { productId: "715507" }],
     ["gone", { productId: "999999" }],
@@ -284,8 +488,16 @@ suite("statusesFrom", () => {
     const statuses: Statuses = statusesFrom(entries, [
       { ...product({ "1": "approved" }), id: "715507" },
     ]);
-    expect(statuses.fokus).toEqual({ productId: "715507", status: "approved" });
-    expect(statuses.gone).toEqual({ productId: "999999", status: null });
+    expect(statuses.fokus).toEqual({ productId: "715507", status: "approved", rejected: false });
+    expect(statuses.gone).toEqual({ productId: "999999", status: null, rejected: false });
+  });
+
+  it("records a rejection alongside the aggregate, so the line can name it", () => {
+    const statuses: Statuses = statusesFrom(entries, [
+      { ...product({ "1": "rejected", "2": "pending" }), id: "715507" },
+    ]);
+    expect(statuses.fokus.status).toBe("pending");
+    expect(statuses.fokus.rejected).toBe(true);
   });
 
   it("survives a response carrying junk elements", () => {

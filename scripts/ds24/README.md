@@ -83,9 +83,8 @@ node run.mjs ds24-approval                            # dry run = the status vie
 node run.mjs ds24-approval --apply                    # marketplace per product language
 node run.mjs ds24-approval --lang en --apply        # force USA reseller (id 2)
 node run.mjs ds24-approval --reseller US --apply    # a specific reseller: DE|US|GB|IE
-node run.mjs ds24-approval --siteowner <id> --apply # any (even private) marketplace
-# a different status: --status new|pending|approved|rejected  (only "pending" is worth setting)
-# --force: request even when the current status could not be read
+node run.mjs ds24-approval --siteowner <id> --apply # a specific reseller by id (1|2|3|4)
+# --force: override the refusals below (and --status, which otherwise only takes "pending")
 ```
 
 The reseller IDs are hard-coded in `_resellers.mjs` (source:
@@ -93,11 +92,23 @@ The reseller IDs are hard-coded in `_resellers.mjs` (source:
 
 The dry run shows the **current** status per product (`new`/`pending`/
 `approved`/`rejected`, read from `listProducts` → `approval_status_list`).
-`--apply` skips a product already approved **at the marketplace it would write
-to**, and **refuses** a product whose status could not be read at all — writing
-`pending` over an approval is a step whose effect Digistore24 does not
-document, and the guard against it is exactly the status that failed to read.
-`--force` overrides both refusals.
+
+`--apply` **skips** a product already approved **at the marketplace it would
+write to** — that skip is unconditional, and `--force` does not lift it,
+because re-requesting an approval is never the thing you wanted. It **refuses**
+three states instead, and each refusal `--force` does lift:
+
+| Refused | Why |
+|---|---|
+| the status could not be read at all | writing `pending` over an approval is a step Digistore24 does not document, and the guard against it is exactly the status that failed to read |
+| your account is not active at the target marketplace (`is_siteowner_active: "N"`) | the request would never be looked at, and the read side filters that entry out — so the product would be reported as never submitted for ever |
+| `--status` anything but `pending` | `new` withdraws a request; `approved`/`rejected` are the reseller's verdicts, and writing `approved` onto your own product silences the greeting, turns doctor green and makes `--apply` skip it for ever |
+
+**Only the four resellers (1 Germany, 2 USA, 3 UK, 4 Ireland) have a product
+approval.** Any other siteowner is a **Direct Seller**: the vendor sells on
+their own account and there is no approval step at all. The command says so and
+writes nothing, and the greeting and the doctor check stay silent for such a
+vendor — see `docs/digistore-integration.md`.
 
 The read side lives in `_approval.mjs`, which also feeds the once-a-day line in
 the session greeting and the `info` check in doctor (cache:

@@ -251,8 +251,31 @@ language, because the alternative is submitting your English offering to the
 German marketplace.
 
 `--lang`, `--reseller` and `--siteowner` override the rule for every product in
-the run; `--siteowner` also reaches a private marketplace, which the language
-rule can never name. The ids come from `scripts/ds24/_resellers.mjs`.
+the run. The ids come from `scripts/ds24/_resellers.mjs`.
+
+### Direct Sellers have no product approval — and then none of this applies
+
+**Only the four resellers approve products:** Germany (1), USA (2), UK (3),
+Ireland (4). Any other siteowner is a **Direct Seller** — the vendor sells on
+their own account, and Digistore24 has no approval step there at all. Nothing to
+request, nothing to wait for, nothing that has to happen before selling.
+
+That is not a detail, it is the difference between a reminder and a permanent
+false alarm, so the whole feature switches itself off for such a vendor:
+
+- `node run.mjs ds24-approval` with a Direct Seller siteowner says so and exits
+  without writing anything. Requesting an approval there would put a value on a
+  live product that nobody will ever act on.
+- The session greeting and the doctor check stay **silent**, and the cache is
+  dropped. Two independent signals reach that conclusion: a
+  `DIGISTORE_SITEOWNER_ID` outside 1–4 (then the API is not even asked), and a
+  response in which no reseller is active for the account.
+- A `approval_status` on a non-reseller entry is ignored rather than read as a
+  verdict — the field means nothing there, and counting it would report an
+  approval nobody granted.
+
+"Could not read the status" and "does not apply" are kept apart throughout. The
+first is worth saying out loud; the second is worth saying nothing about.
 
 ### Reading the approval status back
 
@@ -297,14 +320,22 @@ answers more slowly than that costs a day of silence, not a slow greeting.
 
 **`--apply` refuses rather than guessing.** It skips a product already
 `approved` **at the marketplace it would write to** (a product approved in
-Germany may still have a legitimate request to make in the USA), and if the
-current status could not be read at all — the API failed, or the product is not
-in the response — it refuses that product instead of writing. The reseller side
-acts on `pending` products only, and whether re-writing `pending` over an
-approval resets it is undocumented; that is not a thing to find out on a live
-account. `--force` overrides, and `--status` accepts only the four known values,
-because a value the reader cannot parse would make the product disappear from
-all three surfaces above.
+Germany may still have a legitimate request to make in the USA; that skip is
+unconditional — `--force` does not lift it, because re-requesting an approval is
+never what you wanted). It **refuses**, and `--force` lifts each of these:
+
+- **the status could not be read at all** — the API failed, or the product is
+  not in the response. The reseller side acts on `pending` products only, and
+  whether re-writing `pending` over an approval resets it is undocumented; that
+  is not a thing to find out on a live account.
+- **your account is not active at the target marketplace**
+  (`is_siteowner_active: "N"`). The request would never be looked at, and the
+  read side filters that entry out — so the product would go on being reported
+  as never submitted, for ever, with repeating the command changing nothing.
+- **`--status` anything but `pending`.** `new` withdraws a request, and
+  `approved`/`rejected` are the reseller's verdicts. A vendor writing `approved`
+  onto their own product silences the greeting, turns the doctor check green and
+  makes `--apply` skip it for ever — for a product no reseller ever looked at.
 
 **Deliberately not built:** no in-app notice and no checkout blocker for an
 unapproved product. Test purchases work before approval, so blocking the

@@ -18,14 +18,60 @@ export const RESELLERS = {
   IE: { id: "4", name: "Digistore24 MSLW Limited (Ireland)", country: "IE" },
 };
 
-/** Derive the reseller from the language: German → Germany, otherwise USA. */
+const RESELLER_IDS = new Set(Object.values(RESELLERS).map((r) => r.id));
+
+/**
+ * Is this siteowner one of the four RESELLERS — the only ones that have a
+ * product approval at all?
+ *
+ * **A siteowner that is not in this set is a Direct Seller**, and Digistore24
+ * has no approval concept for one: the vendor sells on their own account, and
+ * there is nobody to submit a product to. Everything this project does around
+ * approval — requesting it, reading it back, the reminder in the session
+ * greeting — simply does not apply there, and pretending otherwise produces
+ * either a meaningless write or a reminder that can never be satisfied.
+ *
+ * So this is not a validation nicety. It is the difference between a feature
+ * and a permanent false alarm.
+ */
+export function isReseller(siteownerId) {
+  return RESELLER_IDS.has(String(siteownerId ?? "").trim());
+}
+
+/**
+ * The language codes Digistore24 itself uses on a product (probed 2026-07-28:
+ * de, en, fr, es, nl, it, pt, pl, sl). Region suffixes are fine — "de-AT" and
+ * "de_CH" are German.
+ */
+const KNOWN_LANGUAGES = ["de", "en", "fr", "es", "nl", "it", "pt", "pl", "sl"];
+
+const normalizeLang = (lang) => String(lang ?? "").trim().toLowerCase();
+
+/**
+ * Is this a language code we recognise? Used to WARN rather than to decide —
+ * the rule below still has to answer something for every input.
+ *
+ * It exists because the decision is money-relevant and silent: "german" and
+ * "ger" do not start with "de", so a product a non-developer labelled that way
+ * is submitted to the USA marketplace with no hint that anything was
+ * misunderstood. `startsWith("de")` cannot tell a wrong code from a foreign one.
+ */
+export function isKnownLanguage(lang) {
+  const value = normalizeLang(lang);
+  if (!value) return false;
+  return KNOWN_LANGUAGES.some((code) => value === code || value.startsWith(`${code}-`) || value.startsWith(`${code}_`));
+}
+
+/**
+ * Derive the reseller from a language: German → Germany, otherwise USA.
+ *
+ * WHOSE language is the caller's decision and it matters — `request-approval`
+ * passes the PRODUCT's, so an app selling in two languages submits each product
+ * where it belongs. Passing the app's `APP_LANG` for all of them is the older
+ * behaviour and is now only the fallback for a product that names none.
+ */
 export function resellerForLang(lang) {
-  return String(lang || "")
-    .trim()
-    .toLowerCase()
-    .startsWith("de")
-    ? RESELLERS.DE
-    : RESELLERS.US;
+  return normalizeLang(lang).startsWith("de") ? RESELLERS.DE : RESELLERS.US;
 }
 
 /**

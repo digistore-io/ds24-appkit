@@ -228,9 +228,13 @@ deliberately no interface for entering or generating a key.
      another project overwrite the `domain_id`, is this product in the
      connection's `product_ids`? `node run.mjs ds24-ipn --auto --apply`
      re-registers it.
-4. **Test a purchase from the app (before the approval):** new products are
-   initially **not approved** at Digistore24 — then only **test purchases** are
-   possible. **In DEV that works by itself:** every checkout link the app builds
+4. **Test a purchase from the app (before the approval):** a product sold
+   through one of the four Digistore24 **resellers** — Germany (1), USA (2),
+   UK (3), Ireland (4) — is initially **not approved**, and then only **test
+   purchases** are possible. (**A Direct Seller has no approval step at all**;
+   the whole subject does not apply to them, and nothing in this app will ask
+   them about it. See `docs/digistore-integration.md`.)
+   **In DEV that works by itself:** every checkout link the app builds
    carries the Digistore24 test-payment parameter (fetched via the API, cached
    in `.dev/testpay.json` — `lib/digistore/testpay.ts`). Click a plan card and
    the checkout opens in test-payment mode, approved or not; there is nothing
@@ -245,10 +249,12 @@ deliberately no interface for entering or generating a key.
    **Outside DEV** — e.g. on a STAGING domain — the manual way remains: the
    vendor sets the test-purchase cookie once, following this DS24 guide:
    <https://help.digistore24.com/hc/de/articles/23901169396241>. The approval
-   (`node run.mjs ds24-approval --apply`, sets `approval_status = pending`;
-   reseller derived automatically from the language — German → 1, otherwise USA
-   → 2) is only requested once the product description and the app are mature —
-   a go-live step (skill `go-live`).
+   (`node run.mjs ds24-approval --apply`, sets `approval_status = pending`) is
+   only requested once the product description and the app are mature — a
+   go-live step (skill `go-live`). Which marketplace it goes to follows **each
+   product's own `language`** in `config/digistore-products.json` (German → 1,
+   anything else → 2), so an app selling in two languages submits each product
+   where it belongs; the command's dry run prints the target per product.
 
 ## Generating checkout links (with cache)
 

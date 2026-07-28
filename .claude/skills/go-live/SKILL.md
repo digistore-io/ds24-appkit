@@ -81,11 +81,24 @@ Once, before selling:
    → sets `approval_status = pending` per product (via `updateProduct`). The
    marketplace follows **the product's own** `language` in
    `config/digistore-products.json`: German → Germany reseller (id 1), anything
-   else → USA (id 2); unset falls back to `APP_LANG`, then German. **Check that
-   field before you run this** if the app sells in more than one language — the
-   alternative is submitting the English offering to the German marketplace.
+   else → USA (id 2). The field is optional and the shipped sample products do
+   not carry it — without it a product falls back to `APP_LANG` and then to
+   German, which is right for an app that sells in one language. **If this app
+   sells in more than one, add `"language"` to each product before you run
+   this**, or the English offering goes to the German marketplace. The dry run
+   prints the target marketplace per product, so check that line before
+   `--apply`.
    `--lang en --apply` forces one language for the whole run, `--siteowner <id>
-   --apply` a specific (even private) marketplace. Products can
+   --apply` a specific reseller.
+
+   > **Selling as a Direct Seller? Then skip this step entirely.** Only the four
+   > resellers — Germany (1), USA (2), UK (3), Ireland (4) — approve products. A
+   > vendor selling on their own account has no approval step, nothing to
+   > request and nothing to wait for. The command says so and writes nothing,
+   > and the session greeting stays silent. Do not go looking for an approval
+   > that does not exist.
+
+   Products can
    only be sold publicly once Digistore24 has approved them. Only request
    approval when the product description and the app are mature.
 
@@ -93,11 +106,14 @@ Once, before selling:
    `node run.mjs ds24-approval` (without `--apply` — the dry run is the status
    view), and the session greeting reports a pending or rejected approval by
    itself, once a day, as does `node run.mjs doctor`. A product counts as
-   approved once **one** marketplace has approved it. Two refusals to expect
-   rather than fight: `--apply` skips a product already approved at the
-   marketplace it would write to, and refuses one whose status it could not
-   read — resubmitting an approved product is a step Digistore24 does not
-   document. Pass `--force` only if you know why.
+   approved once **one** marketplace has approved it. Refusals to expect rather
+   than fight: `--apply` **skips** a product already approved at the marketplace
+   it would write to (always — `--force` does not lift that one), and
+   **refuses** a product whose status it could not read, a marketplace your
+   account is not active at, and any `--status` other than `pending`.
+   Resubmitting an approved product is a step Digistore24 does not document, and
+   writing `approved` yourself would silence every reminder for a product no
+   reseller ever saw. Pass `--force` only if you know why.
 
    > **A rejected product is not resubmitted unchanged.** The reason is in the
    > vendor's Digistore24 account; fix it there first, otherwise the second
