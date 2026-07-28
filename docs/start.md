@@ -2,7 +2,7 @@
 
 # Start here
 
-**Version 1 · 2026-07-27** — say which version you are following if anything below
+**Version 2 · 2026-07-28** — say which version you are following if anything below
 goes wrong; it makes the answer findable.
 
 You are reading this because somebody pasted a prompt into you that said *"read
@@ -74,23 +74,70 @@ Three things that catch people out, every time:
 
 On Windows, work in **Git Bash** (it comes with git) or WSL2 — not PowerShell.
 
-### A2. Get the project
+### A2. Get the project — as **their** repository, not ours
+
+**Do not `git clone https://github.com/digistore-io/ds24-appkit`.** That is the
+step to get right, and it is the one that gets skipped, because cloning looks
+like the obvious move and fails silently: the copy points at a repository they
+cannot write to, so the first `git push` is refused and everything they build
+lives on one machine, with no history anywhere else. This is not a repository to
+contribute to — it is a starting point to take a copy of.
+
+`ds24-appkit` is a **GitHub template repository**, so taking that copy is one
+step. What they get is a repository of their own, with the same files and no
+shared history. Nothing in the project needs a link back to ours, so a copy made
+this way loses nothing.
+
+Ask first what the repository should be called and whether it may be public.
+**Private is the right default** — it is their product.
+
+**If `gh` is there and signed in, do it yourself.** Check, do not assume:
+
+```bash
+gh auth status
+```
+
+Answers "Logged in" → one command, and it clones as well:
+
+```bash
+gh repo create my-app --template digistore-io/ds24-appkit --private --clone
+cd my-app
+```
+
+**Otherwise the person does it in the browser.** It is three clicks and no
+install — do not install `gh` for this, and do not run `gh auth login` for them
+(it opens a browser and wants a code typed in; they are the one at the screen).
+Tell them:
+
+1. open https://github.com/digistore-io/ds24-appkit
+2. press the green **"Use this template"** → **"Create a new repository"**
+3. give it a name, choose **Private**, **"Create repository"**
+4. copy the address of the new repository and paste it back to you
+
+Then you clone *that* one:
+
+```bash
+git clone https://github.com/<them>/<their-app>
+cd <their-app>
+```
+
+**Only if they have no GitHub account and do not want one**, clone ours after
+all — and say the sentence that goes with it, once, plainly: this copy has no
+repository behind it, so their work exists only on this computer, and a
+disk that dies takes the product with it. It is repaired later with
+`git remote set-url origin <their new repo>`, nothing has to be rebuilt.
 
 ```bash
 git clone https://github.com/digistore-io/ds24-appkit
 cd ds24-appkit
 ```
 
-If they would rather own the repository themselves — and most people building a
-product should — have them press **"Use this template"** on that GitHub page
-first, then clone their own copy instead.
-
 ### A3. Restart yourself inside the folder
 
 **This is the step that goes wrong most often.** Your session has to be running
-*in* the `ds24-appkit` folder — the one with `package.json` in it. Started one
-level up, you will not find the project's guidance or its skills, and everything
-after this will feel oddly empty.
+*in* the project folder — the one with `package.json` in it, whatever they named
+their repository. Started one level up, you will not find the project's guidance
+or its skills, and everything after this will feel oddly empty.
 
 So: end this session, and start again in that folder — `claude`, `codex`,
 `gemini` or `opencode`, whichever you are.
