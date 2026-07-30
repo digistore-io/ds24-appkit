@@ -67,6 +67,10 @@ export const aiUsage = pgTable(
     cachedInputTokens: integer("cached_input_tokens").notNull().default(0),
     cacheWriteTokens: integer("cache_write_tokens").notNull().default(0),
     thinkingTokens: integer("thinking_tokens").notNull().default(0),
+    // Pictures produced. 0 on every text call. A count and not a token,
+    // because image models bill per picture — folding it into `output_tokens`
+    // would make one column mean two things and mis-price both.
+    images: integer("images").notNull().default(0),
     // Billed but not itemised — the standing guard of FR-43a. Expected to stay
     // 0 across all five shipped providers, which is what makes a non-zero
     // reading a signal rather than noise.

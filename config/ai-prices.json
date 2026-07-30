@@ -3,7 +3,7 @@
   "_currencyComment": "One default currency, and any entry may name its own — an installation drawing on providers who bill differently stays honest that way. Nothing is converted and no two currencies are ever added together. Recommended: EUR for a German installation, USD for an English one. A recommendation, not a rule: a provider bills in what it bills in.",
   "_defaultsComment": "The four entries below are the default models 'auto' picks (lib/ai/providers/ids.mjs), so the cost page has a number whichever key you put in the .env. They were taken from each vendor's own pricing page on the date above and they go stale — re-check them before you rely on the figure, and add a line whenever you pin a different model. OpenRouter is deliberately absent: it reports the actual cost of every call back to us, so a price on file would only be a worse copy of what the invoice already says.",
   "defaultCurrency": "USD",
-  "updated": "2026-07-26",
+  "updated": "2026-07-30",
   "models": {
     "anthropic/claude-sonnet-5": {
       "input": 3,
@@ -22,6 +22,19 @@
     "mistral/mistral-large-latest": {
       "input": 0.5,
       "output": 1.5
+    },
+    "openai/gpt-image-2": {
+      "_note": "Per image at medium quality, 1024x1024. Low is ~0.006, high ~0.211.",
+      "image": 0.053,
+      "input": 5,
+      "output": 30
+    },
+    "gemini/gemini-3.1-flash-image": {
+      "_note": "Per image at 1K. 2K is ~0.101, 4K ~0.151.",
+      "image": 0.067,
+      "input": 0.5,
+      "output": 3
     }
-  }
+  },
+  "_imageComment": "Image models are billed PER PICTURE, so their entry carries an \"image\" rate in whole currency units — not per million like the token rates beside it. Several of them bill for the prompt as well, and then both halves are on the entry and both are charged. The figures below are the vendors' own per-image prices at the default quality; a different quality or a larger size costs more, so re-read the vendor's page before you rely on the number."
 }

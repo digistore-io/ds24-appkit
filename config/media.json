@@ -1,0 +1,52 @@
+{
+  "_comment": "What this app may hold and hand out: pictures, video, recordings and the files a vendor sells. Four kinds, and each one has its own ceiling, its own accepted types and its own address lifetime — because a picture and a forty-minute recording are not the same problem. A type that is not listed under any kind is refused before a single byte is written. Check it with: node run.mjs media-check. Details: docs/visuals.md.",
+  "_whereItLives": "The BYTES live in object storage, not in this app and not on its disk — MEDIA_DRIVER in the .env, and the local disk is DEV only. An app that stores files on the machine it runs on loses them at the next redeploy and shows different files from each node once there are two. lib/env-guard.ts refuses to start rather than let that reach STAGING or PROD.",
+  "_uploadCeiling": "The ceilings below are what fits THROUGH the app, because that is how an upload travels today: the request carries the bytes, the app checks them and puts them away. A lesson recording of several hundred megabytes needs the other path — the browser writing straight to the bucket — and that is deliberately not built yet. docs/visuals.md says what it involves.",
+  "enabled": true,
+
+  "kinds": {
+    "image": {
+      "_comment": "SVG is deliberately absent. An SVG is a document that may carry script, and the one thing this app must never do is hand a visitor a file another visitor wrote that can run code. PNG, JPEG and WebP cannot.",
+      "maxBytes": 10485760,
+      "mimeTypes": ["image/jpeg", "image/png", "image/webp", "image/gif"],
+      "signedUrlSeconds": 300
+    },
+    "video": {
+      "_comment": "Six hours, because a player re-requests byte ranges as somebody scrubs through it and an address that expired mid-view looks like a broken video. The cost is that the address can be passed on for that long — for paid content that is a real trade, and docs/visuals.md states it.",
+      "maxBytes": 52428800,
+      "mimeTypes": ["video/mp4", "video/webm"],
+      "signedUrlSeconds": 21600
+    },
+    "audio": {
+      "maxBytes": 52428800,
+      "mimeTypes": ["audio/mpeg", "audio/ogg", "audio/wav"],
+      "signedUrlSeconds": 21600
+    },
+    "file": {
+      "_comment": "The PDF or the archive a buyer paid for. Set its visibility to \"entitled\" and name the plan, and hasPlan() decides who may fetch it — the same call that gates every other paid thing in this app.",
+      "maxBytes": 52428800,
+      "mimeTypes": ["application/pdf", "application/zip"],
+      "signedUrlSeconds": 300
+    }
+  },
+
+  "mayUpload": {
+    "_comment": "Who may put WHAT in, by role. A member uploads pictures and documents; archives are the operator's, because a customer who can hand every other customer a .zip is not a media feature. Every type here must also appear under some kind above — media-check says so if it does not.",
+    "member": ["image/jpeg", "image/png", "image/webp", "application/pdf"],
+    "owner": [
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+      "image/gif",
+      "video/mp4",
+      "video/webm",
+      "audio/mpeg",
+      "audio/ogg",
+      "audio/wav",
+      "application/pdf",
+      "application/zip"
+    ]
+  },
+
+  "maxUploadsPerHour": 30
+}

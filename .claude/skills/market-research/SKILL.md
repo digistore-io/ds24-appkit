@@ -54,13 +54,46 @@ one or two problems that are frequent, painful and solvable.
 
 ## Phase 4 — Product proposal
 
-Derive **one concrete SAAS proposal** from that (2 variants to choose from if
-needed):
+**Ask one question before you write a single feature down.** It is the earliest
+place the rule in `CLAUDE.md` → *How a skill works* (**"Anything the customer
+will SEE is proposed, never assumed"**) applies — here it shapes the product
+rather than a page.
+
+> "What does your customer end up holding? A text they still have to put
+> somewhere themselves — or something finished they can look at, show or
+> publish?"
+
+**Then let the answer change how every feature is WORDED** — it is not a note
+to add beside the list, it is the list. An app that "generates sales copy" and
+one that "generates a finished sales page with a picture" are two different
+products, built two different ways, and only one of them is something somebody
+pays for every month. The difference is decided here, long before anybody writes
+code: `build-app` can only build out what this file says.
+
+So: *"produces the ad text"* is a feature that has not had this question asked
+of it. *"produces a finished ad — headline, body and image — that the customer
+can post"* is the same feature after it has.
+
+Three shapes the answer usually takes, to make it concrete:
+
+| Instead of | The finished thing |
+|---|---|
+| a block of sales copy | a rendered sales page under its own address, with a hero image, that the customer can share |
+| a number ("your score: 73") | a result card they can download and show somebody |
+| a list of suggestions | the same suggestions as cards with previews |
+
+**This is not a request for more features.** It is the same feature, delivered
+one step further along — and that step is usually where the willingness to pay
+is. Keep the scope small; make the OUTPUT finished.
+
+Now derive **one concrete SAAS proposal** (2 variants to choose from if needed):
 - **Problem** (one clear statement) and **target user** (from phase 2).
 - **Value proposition** in one sentence.
+- **What the customer ends up holding** — one line, from the question above.
 - **MVP feature scope:** 3–5 core features — **deliberately small** and
   buildable on this template (auth + data model + a few pages, access tied to
-  the purchase).
+  the purchase). Each one describes what the customer RECEIVES, not what the app
+  computes.
 - **Digistore billing:** What is the "product"? One-off purchase, subscription
   or membership? How does the purchase unlock the value (the IPN records it, the
   app asks the entitlement API — see `docs/entitlements.md`)?
@@ -75,6 +108,18 @@ Present the proposal and **iterate** until the user is satisfied.
 
 Write the result into a short **product brief** at `docs/product-brief.md`
 (problem, target user, value proposition, MVP features, billing model, sources).
+
+**One line in it has a fixed shape**, because `build-app` reads it back — it is
+how the next skill knows what to propose instead of asking the question again:
+
+```md
+**Output artifact:** a finished sales page with a hero image, under its own
+address, that the customer can share
+```
+
+Write it exactly like that — the bold label, then the thing itself in one
+sentence. Not "a sales page (see features)"; the sentence has to stand on its own.
+
 Then continue with the skill **`build-app`** (archetype, data model, pages) and
 **`setup-digistore`** (connecting the billing).
 
@@ -88,3 +133,6 @@ Then continue with the skill **`build-app`** (archetype, data model, pages) and
   the "bigger" market opportunity without access.
 - **Fit the sales model:** Digistore24 is strong with digital products, courses,
   memberships and tools — aim the proposal at that.
+- **Finish the output, not the feature list.** The usual way a proposal from
+  this skill disappoints is not too few features — it is each one stopping one
+  step short of what the customer wanted to hold (Phase 4).

@@ -27,11 +27,12 @@
 // for real customers, and for this template's operators that is the worse
 // failure. So the table is written once on the way out and never queried during
 // a call. That is the whole performance story.
-import { adapterFor } from "./providers/registry";
+import { adapterFor, imageAdapterFor } from "./providers/registry";
 import {
   DEFAULT_TIMEOUT_MS,
   ProviderError,
   type ChatMessage,
+  type GeneratedImage,
   type PromptBlock,
   type StreamEvent,
   type Usage,
@@ -182,5 +183,94 @@ export async function* streamTask(
     // else. Without it, exactly the calls somebody walked away from would be
     // the ones missing from the bill.
     record();
+  }
+}
+
+// ── Pictures ────────────────────────────────────────────────────────────────
+
+export interface ImageTaskInput {
+  /** What to draw. Reaches the provider verbatim. */
+  prompt: string;
+  /** How many. One unless there is a reason — each one is billed. */
+  n?: number;
+  /** Provider-shaped, e.g. `"1024x1024"`. Ignored where a provider has none. */
+  size?: string;
+  /** Whom this is for, when there is somebody. Recorded, never sent. */
+  memberId?: string | null;
+}
+
+export interface ImageTaskResult {
+  images: GeneratedImage[];
+  usage: Usage | null;
+  provider: string;
+  model: string;
+}
+
+/**
+ * Runs an image task and waits for the picture.
+ *
+ * Same shape and same order as `runTask` — binding first, adapter second, call
+ * third, record last — so a call refused for a missing key is still recorded
+ * with the provider and model it would have used.
+ *
+ * **It returns bytes and stores nothing.** Putting a picture away is
+ * `lib/media/generate.ts`, which is the only place that knows about both this
+ * layer and the store. Keeping them apart is what stops the AI layer growing a
+ * dependency on a bucket, and it is why `generateImage()` can charge tokens and
+ * this cannot.
+ *
+ * A provider that cannot draw throws `unknownModel` from the registry rather
+ * than being discovered here — and `node run.mjs ai-check` says so long before,
+ * at the moment the binding is written.
+ */
+export async function runImageTask(
+  task: TaskId,
+  input: ImageTaskInput,
+): Promise<ImageTaskResult> {
+  const binding = bindingFor(task);
+  const started = Date.now();
+
+  const base = {
+    task,
+    provider: binding.provider,
+    model: binding.model,
+    memberId: input.memberId ?? null,
+  };
+
+  try {
+    const { adapter, key } = imageAdapterFor(binding.provider);
+    const result = await adapter.createImage(
+      {
+        model: binding.model,
+        prompt: input.prompt,
+        n: input.n ?? 1,
+        size: input.size,
+        timeoutMs: binding.timeoutMs || DEFAULT_TIMEOUT_MS,
+        providerOptions: binding.providerOptions,
+      },
+      key,
+    );
+
+    finish({
+      ...base,
+      usage: result.usage,
+      outcome: "ok",
+      latencyMs: Date.now() - started,
+    });
+
+    return {
+      images: result.images,
+      usage: result.usage,
+      provider: binding.provider,
+      model: binding.model,
+    };
+  } catch (error) {
+    finish({
+      ...base,
+      usage: null,
+      outcome: outcomeOf(error),
+      latencyMs: Date.now() - started,
+    });
+    throw error;
   }
 }

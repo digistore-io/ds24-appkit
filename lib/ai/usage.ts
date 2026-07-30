@@ -87,6 +87,7 @@ export function rowFor(record: UsageRecord): typeof aiUsage.$inferInsert {
     cachedInputTokens: usage?.cachedInputTokens ?? 0,
     cacheWriteTokens: usage?.cacheWriteTokens ?? 0,
     thinkingTokens: usage?.thinkingTokens ?? 0,
+    images: usage?.images ?? 0,
     unexplainedTokens: usage ? unexplainedTokens(usage) : 0,
     usageReported: usage !== null,
 
@@ -115,7 +116,8 @@ export function logLine(record: UsageRecord): string {
   const cost = costOf(record.provider, record.model, u);
   const tokens = u
     ? `in=${u.inputTokens} out=${u.outputTokens} cached=${u.cachedInputTokens}` +
-      (u.thinkingTokens ? ` thinking=${u.thinkingTokens}` : "")
+      (u.thinkingTokens ? ` thinking=${u.thinkingTokens}` : "") +
+      (u.images ? ` images=${u.images}` : "")
     : "usage=none";
 
   const money =

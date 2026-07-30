@@ -54,6 +54,13 @@ export interface EnvCheckInput {
   NODE_ENV?: string;
   AUTH_SECRET?: string;
   emailConfigured: boolean;
+  /**
+   * Which media driver this machine is set to, and whether its bucket is
+   * configured. See `mediaProblem()` below for why this is a start condition
+   * rather than a warning.
+   */
+  MEDIA_DRIVER?: string;
+  mediaBucketConfigured?: boolean;
 }
 
 /**
@@ -103,5 +110,73 @@ export function checkEnvironment(env: EnvCheckInput): string[] {
     );
   }
 
+  const media = mediaProblem(environment, env);
+  if (media) problems.push(media);
+
   return problems;
+}
+
+/**
+ * Media on a real environment: object storage, or the app does not start.
+ *
+ * ── Why this is a refusal and not a warning ────────────────────────────────
+ * `MEDIA_DRIVER=local` writes files to the machine's own disk. On one node that
+ * works perfectly, which is exactly the problem: the failure it produces
+ * appears only AFTER success. The first redeploy loses everything stored so
+ * far. The second node makes an upload land on one disk and the next request be
+ * answered by the other, so a file is there about half the time — which reaches
+ * the operator as "customers say pictures disappear sometimes" and cannot be
+ * reproduced on the machine anybody tests on.
+ *
+ * A warning is the wrong instrument for a fault that is invisible until it is
+ * expensive. So this is the same shape as the mail rule above: STAGING and PROD
+ * do not start without somewhere real to put things.
+ *
+ * ── Why an unconfigured bucket counts too ──────────────────────────────────
+ * `MEDIA_DRIVER=s3` with no endpoint or no credentials is not "media off", it
+ * is an app that accepts uploads and fails at the moment it tries to store one
+ * — after the customer has waited for their file to travel. Failing at start is
+ * the honest version, and `setup-hosting` books the bucket alongside the
+ * database so that reaching this message is unusual.
+ */
+export function mediaProblem(
+  environment: AppEnv,
+  env: { MEDIA_DRIVER?: string; mediaBucketConfigured?: boolean },
+): string | null {
+  if (environment === "development") return null;
+
+  const driver = (env.MEDIA_DRIVER ?? "").trim().toLowerCase();
+
+  if (driver === "" || driver === "local") {
+    return (
+      `APP_ENV=${environment}: MEDIA_DRIVER is "${driver || "unset"}", which ` +
+      "stores uploaded files on this machine's own disk. That is a development " +
+      "convenience and not storage: the next redeploy loses every file, and a " +
+      "second instance cannot see what the first one wrote — so a customer's " +
+      "picture is there roughly half the time, and nobody can reproduce it. " +
+      "Set MEDIA_DRIVER=s3 and point it at a bucket (Amazon S3, DigitalOcean " +
+      "Spaces, Cloudflare R2, Backblaze B2, Hetzner Object Storage — any of " +
+      "them). The skill `setup-hosting` books one; `node run.mjs media-check` " +
+      "verifies it."
+    );
+  }
+
+  if (driver !== "s3") {
+    return (
+      `APP_ENV=${environment}: MEDIA_DRIVER="${driver}" is not a driver. ` +
+      'Use "s3". See docs/visuals.md.'
+    );
+  }
+
+  if (env.mediaBucketConfigured === false) {
+    return (
+      `APP_ENV=${environment}: MEDIA_DRIVER=s3, but the bucket is not ` +
+      "configured. Needs MEDIA_S3_ENDPOINT, MEDIA_S3_BUCKET, " +
+      "MEDIA_S3_ACCESS_KEY_ID and MEDIA_S3_SECRET_ACCESS_KEY. Without them an " +
+      "upload fails after the customer has already waited for it to travel. " +
+      "Check with: node run.mjs media-check"
+    );
+  }
+
+  return null;
 }

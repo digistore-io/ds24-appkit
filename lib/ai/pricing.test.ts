@@ -42,6 +42,9 @@ describe("priceFor", () => {
     expect(priceFor(TABLE, "anthropic", "m")).toEqual({
       input: 3,
       output: 15,
+      // A text model draws nothing, so its per-picture rate is zero rather
+      // than absent — the cost sum adds every term unconditionally.
+      image: 0,
       cachedInput: 0.3,
       cacheWrite: 3.75,
       thinking: 15,
@@ -207,5 +210,55 @@ describe("pricesUpdatedAt", () => {
     // through, and everything else becomes "no date on record".
     expect(pricesUpdatedAt()).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(Number.isNaN(Date.parse(`${pricesUpdatedAt()}T00:00:00.000Z`))).toBe(false);
+  });
+});
+
+describe("images", () => {
+  const TABLE_WITH_IMAGE = {
+    defaultCurrency: "USD",
+    models: {
+      // An image model billed per picture AND for its prompt tokens.
+      "openai/draws": { input: 5, output: 40, image: 0.04 },
+      // One billed per picture only. A complete price, not a broken one.
+      "gemini/draws": { image: 0.03 },
+      // Neither. Nothing to price with.
+      "openai/nothing": { currency: "EUR" },
+    },
+  };
+
+  it("reads an entry that is priced per picture only", () => {
+    const price = priceFor(TABLE_WITH_IMAGE, "gemini", "draws");
+    if (!price) throw new Error("expected a price");
+    expect(price.image).toBe(0.03);
+    // Requiring token rates here would leave every image call unpriced, and the
+    // cost page would then report "could not account for" about a price we have.
+    expect(price.input).toBe(0);
+    expect(price.output).toBe(0);
+  });
+
+  it("still refuses an entry with no usable rate at all", () => {
+    expect(priceFor(TABLE_WITH_IMAGE, "openai", "nothing")).toBeNull();
+  });
+
+  it("prices a picture per piece, not per million", () => {
+    const price = priceFor(TABLE_WITH_IMAGE, "gemini", "draws");
+    if (!price) throw new Error("expected a price");
+    // 0.03 currency units = 30_000 micros. Quoting images per million would put
+    // a six-zero conversion between the vendor's price page and this file.
+    expect(costMicros({ images: 1 }, price)).toBe(30_000);
+    expect(costMicros({ images: 4 }, price)).toBe(120_000);
+  });
+
+  it("adds the picture and the prompt tokens where a model bills both", () => {
+    const price = priceFor(TABLE_WITH_IMAGE, "openai", "draws");
+    if (!price) throw new Error("expected a price");
+    // 1000 input tokens at 5/M = 5000 micros, plus one picture at 0.04 = 40_000.
+    expect(costMicros({ inputTokens: 1000, images: 1 }, price)).toBe(45_000);
+  });
+
+  it("charges nothing for pictures on a text model", () => {
+    const price = priceFor(TABLE, "anthropic", "m");
+    if (!price) throw new Error("expected a price");
+    expect(costMicros({ inputTokens: 1000, images: 0 }, price)).toBe(3000);
   });
 });

@@ -18,6 +18,8 @@ export interface Price {
   cachedInput: number;
   cacheWrite: number;
   thinking: number;
+  /** Per PICTURE, in whole currency units — not per million. See `pricing.mjs`. */
+  image: number;
   currency: string;
 }
 

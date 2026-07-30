@@ -1,6 +1,9 @@
 node_modules/
 .next/
 .dev/
+# Uploaded and generated files, on the DEV driver (lib/media/local.ts).
+# Online these live in a bucket — see .env.example.
+.data/
 dist/
 out/
 *.log

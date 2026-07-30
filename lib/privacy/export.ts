@@ -35,7 +35,7 @@
 // fails the build when one grows a table the other does not have. That is the
 // realistic drift: somebody adds a table, updates the export they happened to
 // be looking at, and the other one quietly starts answering incompletely.
-import { asc, eq, inArray, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 
 import { db } from "@/db";
@@ -48,6 +48,7 @@ import {
   grants,
   impersonations,
   invoices,
+  media,
   orders,
   subscriptions,
   tokenAccounts,
@@ -75,6 +76,7 @@ export const MEMBER_EXPORT_SECTIONS = [
   "chatMessages",
   "aiUsage",
   "impersonations",
+  "media",
 ] as const;
 
 /**
@@ -232,6 +234,7 @@ export async function buildMemberExport(memberId: string): Promise<MemberExport>
     chatRows,
     usageRows,
     impersonationRows,
+    mediaRows,
   ] = await Promise.all([
     orderIds.length
       ? db
@@ -305,6 +308,29 @@ export async function buildMemberExport(memberId: string): Promise<MemberExport>
       .leftJoin(users, eq(users.id, impersonations.operatorId))
       .where(eq(impersonations.memberId, memberId))
       .orderBy(asc(impersonations.startedAt)),
+
+    // What this person uploaded. `owner`-visible rows only: those are theirs.
+    // Product imagery an operator uploaded carries their id too, and it belongs
+    // to the app rather than to them — which is why the foreign key is
+    // `set null` and not `cascade`.
+    //
+    // The FILE is not in here, and it should not be: an export is a JSON
+    // document, and a member who wants their pictures back downloads them from
+    // the app. What belongs here is the record that they exist, what they are
+    // called and when they arrived. `filename` is in because they chose it.
+    db
+      .select({
+        id: media.id,
+        kind: media.kind,
+        mime: media.mime,
+        filename: media.filename,
+        bytes: media.bytes,
+        alt: media.alt,
+        createdAt: media.createdAt,
+      })
+      .from(media)
+      .where(and(eq(media.ownerId, memberId), eq(media.visibility, "owner")))
+      .orderBy(asc(media.createdAt)),
   ]);
 
   return {
@@ -350,5 +376,6 @@ export async function buildMemberExport(memberId: string): Promise<MemberExport>
     chatMessages: chatRows,
     aiUsage: usageRows,
     impersonations: impersonationRows,
+    media: mediaRows,
   };
 }

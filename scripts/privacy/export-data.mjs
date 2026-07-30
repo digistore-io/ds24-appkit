@@ -167,6 +167,19 @@ try {
         where i.member_id = ${memberId} order by i.started_at`
     : [];
 
+  // --- What they uploaded ------------------------------------------------------
+  // The rows, not the files. An export is a JSON document; somebody who wants
+  // their pictures back downloads them from the app. `owner`-visible only —
+  // product imagery an operator uploaded carries their id too and belongs to
+  // the application, not to them.
+  const mediaRows = memberId
+    ? await sql`
+        select id, kind, mime, filename, bytes, alt, created_at
+        from media
+        where owner_id = ${memberId} and visibility = 'owner'
+        order by created_at`
+    : [];
+
   // --- The raw webhooks --------------------------------------------------------
   // Held for 60 days for diagnosis and pruned after that
   // (lib/digistore/ipn-log.ts), so this is usually shorter than the order list.
@@ -207,6 +220,7 @@ try {
       ],
       alsoIncluded: [
         "`aiUsage[]` is what this person's use of the AI features consumed — task, provider, model, token counts, timestamps. It contains NO prompt and NO answer, because that table holds none. It is here because it records this person's activity, not because it records their words.",
+        "`media[]` is what this person uploaded — kind, media type, the filename THEY chose, size and when it arrived. The files themselves are not in this document; they are in object storage and the app serves them. An uploaded photo can carry more than it appears to, so note that the app strips location and camera data from images on the way in — but NOT from video, which keeps whatever the recording device wrote (docs/data-protection.md).",
         "`impersonations[]` is every time an operator signed in as this person to look at their account — who, when, and for how long. It records ACCESS, not activity: what was done while inside is not captured anywhere, deliberately. A row with `ended_by: \"abandoned\"` was closed automatically when its 30 minutes ran out, which says when the session was due to end, not that the operator was present until then.",
       ],
       notHeldAtAll: [
@@ -230,6 +244,7 @@ try {
     chatMessages,
     aiUsage,
     impersonations,
+    media: mediaRows,
     webhookEvents,
   };
 
@@ -245,7 +260,7 @@ try {
   console.error(
     found === 0
       ? `\nℹ Nothing found for ${email}. That is itself a valid answer to a subject access request — but check the spelling first.${where}`
-      : `\n✓ ${email}: account ${account ? "yes" : "no"}, ${orders.length} order(s), ${subscriptions.length} subscription(s), ${grants.length} grant(s), ${tokenLedger.length} ledger entr${tokenLedger.length === 1 ? "y" : "ies"}, ${chatMessages.length} chat message(s), ${aiUsage.length} AI call(s), ${impersonations.length} impersonation(s), ${webhookEvents.length} webhook event(s).${where}`,
+      : `\n✓ ${email}: account ${account ? "yes" : "no"}, ${orders.length} order(s), ${subscriptions.length} subscription(s), ${grants.length} grant(s), ${tokenLedger.length} ledger entr${tokenLedger.length === 1 ? "y" : "ies"}, ${chatMessages.length} chat message(s), ${aiUsage.length} AI call(s), ${impersonations.length} impersonation(s), ${mediaRows.length} media item(s), ${webhookEvents.length} webhook event(s).${where}`,
   );
 } finally {
   await sql.end({ timeout: 5 });

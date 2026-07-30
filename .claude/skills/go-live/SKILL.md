@@ -1,7 +1,7 @@
 ---
 name: go-live
 description: Brings the app online and proves that a purchase really unlocks access. Runs the pre-flight check, hands the hosting itself to setup-hosting (host, CLI, secrets, managed Postgres, migration hook, domain), then does the live part — Digistore products and approval, the IPN on the live domain, a smoke test, a test purchase and a re-check of security/performance against the live instance. Use this when the app is built, secured and scaled — before marketing.
-requires: 0.6.0
+requires: 0.7.0
 ---
 <!-- Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA — SPDX-License-Identifier: MIT -->
 
@@ -24,6 +24,15 @@ does it really sell once it is up.
   app aborts at startup (`lib/env-guard.ts`), because the development login does
   not exist there and nobody could sign in. `node run.mjs mail-setup` if it is
   missing. This is the single most common reason a first deploy fails.
+- **Somewhere for files to live.** The second thing that stops the app booting,
+  for the same reason and in the same file as mail: on a host, a local disk is
+  not storage. The next deploy takes every uploaded file with it, and with two
+  instances a customer's picture is present about half the time — a fault that
+  only appears after the app is successful and cannot be reproduced on one
+  machine. `node run.mjs media-check` says where files go and, with a bucket
+  configured, proves it by writing, reading and deleting a throwaway object.
+  Booking one is part of **`setup-hosting`** (step 6b); this is the check that
+  it really happened.
 - **Migrations ready:** `drizzle/` up to date (`npm run db:generate` after schema changes).
 - **Legally ready:** `node run.mjs legal-check`. It exits non-zero on the things
   that must not meet a customer — an Impressum still carrying the shipped
@@ -40,9 +49,9 @@ does it really sell once it is up.
 
 Start that skill and let it finish. It picks the host with the user (Railway,
 Render, Fly.io or DigitalOcean), says what it costs before anything is booked,
-installs the CLI, authenticates, creates the app and the managed Postgres, sets
-every environment variable, wires `npm run db:migrate` into the deploy and puts
-a domain on it. The reference behind it is [`docs/DEPLOY.md`](../../docs/DEPLOY.md).
+installs the CLI, authenticates, creates the app, the managed Postgres and the
+media bucket, sets every environment variable, wires `npm run db:migrate` into the deploy and puts
+a domain on it. The reference behind it is [`docs/DEPLOY.md`](../../../docs/DEPLOY.md).
 
 Come back here when the app answers on its domain.
 

@@ -32,10 +32,15 @@ describe("isRealEnvironment", () => {
 });
 
 describe("checkEnvironment", () => {
+  // "Everything a real environment needs". It grows whenever a new start
+  // condition is added, which is the point: a test named "is satisfied when
+  // everything is set" has to keep meaning that.
   const complete = {
     APP_ENV: "production",
     AUTH_SECRET: "secret",
     emailConfigured: true,
+    MEDIA_DRIVER: "s3",
+    mediaBucketConfigured: true,
   };
 
   it("lets DEV through without mail delivery", () => {
@@ -65,16 +70,94 @@ describe("checkEnvironment", () => {
   });
 
   it("reports several problems at once", () => {
-    expect(
-      checkEnvironment({
-        APP_ENV: "production",
-        AUTH_SECRET: undefined,
-        emailConfigured: false,
-      }),
-    ).toHaveLength(2);
+    // Named rather than counted: somebody deploying a half-configured app
+    // should see everything that is wrong in one go, not fix one thing and
+    // meet the next on the following attempt.
+    const problems = checkEnvironment({
+      APP_ENV: "production",
+      AUTH_SECRET: undefined,
+      emailConfigured: false,
+    });
+    expect(problems.some((m) => /email delivery/.test(m))).toBe(true);
+    expect(problems.some((m) => /AUTH_SECRET/.test(m))).toBe(true);
+    expect(problems.some((m) => /MEDIA_DRIVER/.test(m))).toBe(true);
+    expect(problems).toHaveLength(3);
   });
 
   it("is satisfied when everything is set", () => {
     expect(checkEnvironment(complete)).toEqual([]);
   });
+});
+
+describe("media storage in a real environment", () => {
+  const base = { AUTH_SECRET: "s", emailConfigured: true };
+
+  it("lets development do whatever it likes", () => {
+    // A fresh clone has no bucket and must still start.
+    expect(checkEnvironment({ ...base, APP_ENV: "development" })).toEqual([]);
+    expect(
+      checkEnvironment({ ...base, APP_ENV: "development", MEDIA_DRIVER: "local" }),
+    ).toEqual([]);
+  });
+
+  for (const environment of ["staging", "production"]) {
+    it(`refuses to start ${environment} on the local disk`, () => {
+      // The decision a later reader is most likely to soften, because on ONE
+      // node the local disk works perfectly. The failure it prevents appears
+      // only after the app is successful: the next redeploy loses every file,
+      // and a second instance cannot see what the first one wrote.
+      const problems = checkEnvironment({
+        ...base,
+        APP_ENV: environment,
+        MEDIA_DRIVER: "local",
+        mediaBucketConfigured: false,
+      });
+      expect(problems).toHaveLength(1);
+      expect(problems[0]).toContain("MEDIA_DRIVER");
+      expect(problems[0]).toContain("redeploy");
+    });
+
+    it(`refuses ${environment} with MEDIA_DRIVER unset at all`, () => {
+      // Unset must not be a quieter way of saying "local".
+      const problems = checkEnvironment({ ...base, APP_ENV: environment });
+      expect(problems).toHaveLength(1);
+      expect(problems[0]).toContain("MEDIA_DRIVER");
+    });
+
+    it(`refuses ${environment} when s3 is chosen but not configured`, () => {
+      // Not "media off" — an app that accepts an upload and fails at the moment
+      // it tries to store it, after the customer has waited for the file to
+      // travel.
+      const problems = checkEnvironment({
+        ...base,
+        APP_ENV: environment,
+        MEDIA_DRIVER: "s3",
+        mediaBucketConfigured: false,
+      });
+      expect(problems).toHaveLength(1);
+      expect(problems[0]).toContain("MEDIA_S3_ENDPOINT");
+    });
+
+    it(`starts ${environment} with a configured bucket`, () => {
+      expect(
+        checkEnvironment({
+          ...base,
+          APP_ENV: environment,
+          MEDIA_DRIVER: "s3",
+          mediaBucketConfigured: true,
+        }),
+      ).toEqual([]);
+    });
+
+    it(`refuses ${environment} on a driver that does not exist`, () => {
+      const problems = checkEnvironment({
+        ...base,
+        APP_ENV: environment,
+        MEDIA_DRIVER: "ftp",
+        mediaBucketConfigured: true,
+      });
+      expect(problems).toHaveLength(1);
+      expect(problems[0]).toContain("not a driver");
+    });
+  }
 });

@@ -205,6 +205,102 @@ Two worked examples of what a task can be, neither of which ships:
 
 ---
 
+## Pictures
+
+`image` is a task like any other, and it is bound the same way — but two of the
+five companies cannot do it, so it is the one task where the provider is not
+interchangeable.
+
+| | |
+|---|---|
+| **OpenAI** | yes — `gpt-image-2` |
+| **Gemini** | yes — `gemini-3.1-flash-image` |
+| **OpenRouter** | yes, and it reports what the call actually cost |
+| **Anthropic** | no. Claude reads pictures and does not make them |
+| **Mistral** | not through this template. It can, but only as an agent tool whose result arrives as a file to download afterwards — a different protocol rather than a different endpoint |
+
+That is why `node run.mjs ai-check` says, when your only key is Anthropic's:
+
+> Task "image" needs a provider that can produce image, and the key on this
+> machine is for anthropic — which cannot. Add one of these to .env as well:
+> `OPENAI_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`. Your other tasks
+> keep running on the key you already have.
+
+**At check time, not at your customer's first click.** A second key is fine —
+the assistant keeps running on the first one.
+
+### Making one
+
+```ts
+import { generateImage } from "@/lib/media/generate";
+
+const [hero] = await generateImage({
+  prompt: "a quiet kitchen table at sunrise, warm light, no people",
+  alt: "A kitchen table in early morning light",
+  visibility: "public",
+  memberId,
+});
+```
+
+You get a stored `media` row back — the picture is already in the bucket, and
+`mediaUrlFor(hero)` is the address to put on a page. The whole media side is
+[`docs/visuals.md`](visuals.md).
+
+**`alt` is required, and it is not derived from the prompt.** No image API
+returns a description of what it drew; a prompt reads *"photorealistic, 8k,
+cinematic lighting"* and is a set of instructions to a machine, where
+alternative text is a sentence for a person. Using one as the other would
+produce accessibility that is technically present and useless — and worse than
+missing, because nothing would then report it. Whoever asked for the picture
+knows what it is for; that is the sentence to write.
+
+### What it costs
+
+Images are billed **per picture**, so their entry in `config/ai-prices.json`
+carries an `image` rate in whole currency units — not per million like the token
+rates beside it:
+
+```json
+"openai/gpt-image-2": { "image": 0.053, "input": 5, "output": 30 }
+```
+
+Both halves are charged where a model bills both. The figure is the vendor's own
+price at the default quality; a larger size or a higher quality costs more, so
+re-read their page before relying on it. `node run.mjs ai-check` prints it per
+picture rather than per thousand tokens.
+
+It lands on `/dashboard/admin/ai-costs` with everything else, grouped by task —
+which is the point of tasks: *"pictures €12, the assistant €38"* tells an
+Operator which feature to change, where *"gpt-image-2 €12"* does not.
+
+### Charging your customer for it
+
+The same three steps as any other metered work, in the same order:
+
+```ts
+const COST = 5;
+
+// 1. CHECK — before anything expensive runs.
+const account = await getTokenAccount(session.user.id);
+if (!hasSufficientBalance(account?.balance ?? 0, COST)) {
+  return { error: t("insufficientBalance") };
+}
+
+// 2. WORK
+const [image] = await generateImage({ prompt, alt, ownerId: session.user.id });
+
+// 3. CHARGE
+await spendTokens({ amount: COST, note: "image generation" });
+```
+
+**Check → work → charge**, and the middle one is the expensive part —
+charging first bills for a picture that may never arrive, and working with no
+check in front gives it away. `generateImage()` deliberately does not charge:
+that belongs in the Server Action, where a person is present and the price is
+yours. `template/CLAUDE.md` → *Charging tokens* has the rest.
+
+---
+
 ## The one rule about prompts
 
 **`system` is a list of blocks, and everything stable goes first.**

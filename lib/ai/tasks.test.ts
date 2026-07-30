@@ -14,8 +14,8 @@ import {
   mergedBinding,
   resolveBinding,
 } from "./task-rules.mjs";
-import { PROVIDER_DEFAULT_MODELS } from "./providers/ids.mjs";
-import { TASKS, allBindings, isTaskId, taskConfigProblems } from "./tasks";
+import { PROVIDER_DEFAULT_IMAGE_MODELS, PROVIDER_DEFAULT_MODELS } from "./providers/ids.mjs";
+import { TASKS, allBindings, isTaskId, taskConfigProblems, taskKind } from "./tasks";
 import { PROVIDER_IDS } from "./providers/types";
 import { PROVIDER_IDS as MJS_PROVIDER_IDS, PROVIDER_ENV_VARS } from "./providers/ids.mjs";
 
@@ -41,15 +41,23 @@ describe("the two copies of each list agree", () => {
 });
 
 describe("the shipped registry", () => {
-  it("declares exactly one task, because one task exists", () => {
-    // Content generation and moderation are what the layer MAKES POSSIBLE and
-    // live as worked examples in the docs — not here, because a bound task
-    // nobody calls is a line `ai-check` complains about for ever.
-    expect([...TASKS]).toEqual(["chat"]);
+  it("declares the two tasks that exist, and no more", () => {
+    // `chat` is the assistant; `image` is a picture. Both have code that calls
+    // them. Moderation and content generation are what the layer MAKES
+    // POSSIBLE and live as worked examples in the docs — not here, because a
+    // bound task nobody calls is a line `ai-check` complains about for ever.
+    expect([...TASKS]).toEqual(["chat", "image"]);
+  });
+
+  it("knows which kind of provider each task needs", () => {
+    // The reason two of the five companies are not interchangeable here.
+    expect(taskKind("chat")).toBe("text");
+    expect(taskKind("image")).toBe("image");
   });
 
   it("recognises its own tasks and nothing else", () => {
     expect(isTaskId("chat")).toBe(true);
+    expect(isTaskId("image")).toBe(true);
     expect(isTaskId("chatt")).toBe(false);
     expect(isTaskId(undefined)).toBe(false);
   });
@@ -181,7 +189,13 @@ describe("bindingProblems", () => {
   it("is silent on a coherent config", () => {
     expect(
       bindingProblems(
-        { default: { provider: "anthropic", model: "m" } },
+        {
+          default: { provider: "anthropic", model: "m" },
+          // The image task needs a company that draws. Naming one here is what
+          // makes this config coherent rather than merely well-formed — see
+          // the capability tests below.
+          tasks: { image: { provider: "openai", model: "m" } },
+        },
         ALL_PROVIDERS,
       ),
     ).toEqual([]);
@@ -212,7 +226,13 @@ describe("bindingProblems", () => {
     // something the layer can supply: naming the company is the decision, and
     // its current general-purpose model is the obvious consequence.
     expect(
-      bindingProblems({ default: { provider: "anthropic", model: "  " } }, ALL_PROVIDERS),
+      bindingProblems(
+        {
+          default: { provider: "anthropic", model: "  " },
+          tasks: { image: { provider: "openai", model: "  " } },
+        },
+        ALL_PROVIDERS,
+      ),
     ).toEqual([]);
     expect(resolveBinding({ default: { provider: "anthropic", model: "  " } }, "chat", ALL_PROVIDERS))
       .toMatchObject({ provider: "anthropic", model: PROVIDER_DEFAULT_MODELS.anthropic });
@@ -303,10 +323,17 @@ describe("bindingProblems", () => {
     expect(
       bindingProblems(
         {
-          default: {
-            provider: "anthropic",
-            model: "m",
-            providerOptions: { cacheTtl: "1h", thinking: { type: "adaptive" } },
+          // On the TASK and not on the default. A `default.providerOptions` is
+          // inherited by every task — including the image one, which runs
+          // somewhere else — and the check would then be right to complain
+          // about Anthropic vocabulary reaching OpenAI. Putting a company's
+          // options beside the task bound to that company is the shape a real
+          // config has, and the reason `mergedBinding` merges rather than
+          // replaces.
+          default: { provider: "anthropic", model: "m" },
+          tasks: {
+            chat: { providerOptions: { cacheTtl: "1h", thinking: { type: "adaptive" } } },
+            image: { provider: "openai", model: "m" },
           },
         },
         ALL_PROVIDERS,
@@ -335,10 +362,86 @@ describe("bindingProblems", () => {
     // An unknown provider has no environment variable to be missing, so
     // complaining about both would send somebody chasing a second error that
     // disappears when they fix the first.
+    // Scoped to the chat task: the default reaches both, and two tasks naming
+    // the same bad provider would honestly be two problems.
     const problems = bindingProblems(
-      { default: { provider: "cohere", model: "m" } },
-      [],
+      {
+        default: { provider: "openai", model: "m" },
+        tasks: { chat: { provider: "cohere", model: "m" } },
+      },
+      ["openai"],
     );
     expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain("cohere");
+  });
+});
+
+// ── Who can draw ────────────────────────────────────────────────────────────
+//
+// The check that makes the image task usable rather than merely present: two of
+// the five companies produce no pictures, and without this the mistake reaches
+// the first customer who presses the button, with the reason in a server log
+// nobody is watching.
+
+describe("a task whose provider cannot do the work", () => {
+  it("refuses an image task bound by name to a company that draws nothing", () => {
+    const problems = bindingProblems(
+      {
+        default: { provider: "openai", model: "m" },
+        tasks: { image: { provider: "anthropic", model: "m" } },
+      },
+      ALL_PROVIDERS,
+    );
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain("anthropic");
+    expect(problems[0]).toContain("cannot produce image");
+    // And it says which ones would, because "not this one" is half an answer.
+    expect(problems[0]).toContain("openai");
+  });
+
+  it("tells apart a machine with the WRONG key from one with NO key", () => {
+    // The distinction is the whole value of the message. Somebody holding a
+    // perfectly good Anthropic key should not be told to go and find a key.
+    const wrongKey = bindingProblems({}, ["anthropic"]);
+    expect(wrongKey.some((p) => /the key on this machine is for anthropic/.test(p))).toBe(true);
+    expect(wrongKey.some((p) => /no provider key at all/.test(p))).toBe(false);
+
+    const noKey = bindingProblems({}, []);
+    expect(noKey.some((p) => /no provider key at all/.test(p))).toBe(true);
+  });
+
+  it("names only the keys that would actually help", () => {
+    // Listing all five for an image task would send somebody to Mistral, where
+    // the same problem waits.
+    const problems = bindingProblems({}, []);
+    const imageProblem = problems.find((p) => p.includes('Task "image"'));
+    expect(imageProblem).toBeDefined();
+    expect(imageProblem).not.toContain("MISTRAL_API_KEY");
+    expect(imageProblem).not.toContain("ANTHROPIC_API_KEY");
+    expect(imageProblem).toContain("OPENAI_API_KEY");
+  });
+
+  it("is silent when the key on the machine can draw", () => {
+    expect(bindingProblems({}, ["gemini"])).toEqual([]);
+    expect(bindingProblems({}, ["openrouter"])).toEqual([]);
+  });
+
+  it("resolves an image task to an image model, never a text one", () => {
+    // `"auto"` landing on a company's general-purpose model would make the
+    // shipped binding the one combination that never works.
+    const binding = resolveBinding({}, "image", ["gemini"]);
+    expect(binding.model).toBe(PROVIDER_DEFAULT_IMAGE_MODELS.gemini);
+    expect(binding.model).not.toBe(PROVIDER_DEFAULT_MODELS.gemini);
+  });
+
+  it("never resolves a binding to a null model", () => {
+    // Every combination, including the ones nobody would write on purpose. A
+    // null model is an unresolved binding, and half the app reads it.
+    for (const task of TASKS) {
+      for (const keys of [[], ["anthropic"], ["mistral"], ["openai"], ALL_PROVIDERS]) {
+        const binding = resolveBinding({}, task, keys);
+        expect(binding.model, `${task} with ${keys.join("+") || "no keys"}`).toBeTruthy();
+      }
+    }
   });
 });

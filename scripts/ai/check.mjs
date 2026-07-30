@@ -28,13 +28,16 @@ import { join } from "node:path";
 
 import {
   PROVIDERS_REPORTING_COST,
+  PROVIDER_CAPABILITIES,
   PROVIDER_ENV_VARS,
   PROVIDER_IDS,
+  providersThatCan,
 } from "../../lib/ai/providers/ids.mjs";
 import {
   AUTO,
   TASKS,
   bindingProblems,
+  kindOfTask,
   mergedBinding,
   resolveBinding,
 } from "../../lib/ai/task-rules.mjs";
@@ -73,7 +76,10 @@ const configured = PROVIDER_IDS.filter((id) => Boolean(process.env[PROVIDER_ENV_
 console.log("Providers\n");
 for (const id of PROVIDER_IDS) {
   const has = configured.includes(id);
-  console.log(`  ${has ? "✓" : "·"} ${id.padEnd(11)} ${has ? "key set" : PROVIDER_ENV_VARS[id] + " not set"}`);
+  const can = (PROVIDER_CAPABILITIES[id] ?? []).join(" + ");
+  console.log(
+    `  ${has ? "✓" : "·"} ${id.padEnd(11)} ${(has ? "key set" : PROVIDER_ENV_VARS[id] + " not set").padEnd(30)} ${can}`,
+  );
 }
 
 if (configured.length === 0) {
@@ -104,8 +110,17 @@ for (const task of TASKS) {
   // "mistral" here has to be able to see that they never typed it.
   const via = declared.provider === AUTO ? `  (via "${AUTO}")` : "";
 
+  const kind = kindOfTask(task);
+
+  // An image call is not priced like a text call: it is billed per picture, and
+  // quoting it as "1000 in / 500 out" would be an estimate of the wrong thing.
   const estimate = price
-    ? formatMicros(estimateMicros(price, SAMPLE_INPUT_TOKENS, SAMPLE_OUTPUT_TOKENS), price.currency)
+    ? kind === "image"
+      ? `${formatMicros(Math.round((price.image ?? 0) * 1_000_000), price.currency)} per picture`
+      : formatMicros(
+          estimateMicros(price, SAMPLE_INPUT_TOKENS, SAMPLE_OUTPUT_TOKENS),
+          price.currency,
+        )
     : PROVIDERS_REPORTING_COST.includes(binding.provider)
       ? `${binding.provider} reports the real cost of every call — no estimate needed`
       : "no price on file";
@@ -117,13 +132,21 @@ for (const task of TASKS) {
     unpriced.push(priceKey(binding.provider, binding.model));
   }
 
-  console.log(`  ${task}`);
+  console.log(`  ${task}  (${kind})`);
   console.log(
     `    provider   ${binding.provider}${via}${bound ? "" : "  (inherited from default)"}`,
   );
   console.log(`    model      ${binding.model}${via}`);
-  console.log(`    maxTokens  ${binding.maxTokens}`);
+  if (kind === "text") console.log(`    maxTokens  ${binding.maxTokens}`);
   console.log(`    per call   ~ ${estimate}`);
+
+  // The one thing a key alone does not tell you. Said here, beside the task, so
+  // it is answered at the moment somebody wonders — the problems block below
+  // repeats it as an error only when it is actually wrong.
+  if (kind !== "text") {
+    const able = providersThatCan(kind);
+    console.log(`    needs      a provider that can produce ${kind}: ${able.join(", ")}`);
+  }
 }
 
 // ── 3. Money ────────────────────────────────────────────────────────────────

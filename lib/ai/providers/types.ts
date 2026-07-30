@@ -114,6 +114,15 @@ export interface Usage {
   /** Written to cache. Anthropic only; 0 elsewhere. */
   cacheWriteTokens: number;
   /**
+   * Images produced. 0 for every text call.
+   *
+   * A count and not a token, deliberately: image models are billed per picture
+   * (or per picture AND per prompt token), and folding that into `outputTokens`
+   * would make one number mean two things and quietly mis-price both. The price
+   * table has its own `image` rate beside the token rates for the same reason.
+   */
+  images: number;
+  /**
    * Reasoning tokens, where the provider itemises them.
    *
    * Gemini bills these and cannot switch them off on its stronger models,
@@ -160,6 +169,7 @@ export function emptyUsage(): Usage {
     outputTokens: 0,
     cachedInputTokens: 0,
     cacheWriteTokens: 0,
+    images: 0,
     thinkingTokens: 0,
     reportedTotalTokens: null,
     reportedCostMicros: null,
@@ -280,6 +290,70 @@ export interface Adapter {
   readonly id: ProviderId;
   complete(req: NormalizedRequest, key: string): Promise<Result>;
   stream(req: NormalizedRequest, key: string): AsyncIterable<StreamEvent>;
+}
+
+// ── Producing a picture ─────────────────────────────────────────────────────
+
+/**
+ * What this app asks for when it wants an image.
+ *
+ * Deliberately smaller than the text request. There is no `system`, no message
+ * history and no cache ordering, because none of the image APIs have those —
+ * modelling them anyway would be inventing a shape none of the providers can
+ * satisfy, which is the mistake `providerOptions` exists to avoid (AD-13).
+ */
+export interface ImageRequest {
+  /** The provider's own model id. Never translated between providers. */
+  model: string;
+  /** What to draw. Reaches the provider verbatim. */
+  prompt: string;
+  /** How many. One unless a caller has a reason. */
+  n: number;
+  /**
+   * Provider-shaped, e.g. `"1024x1024"`. Passed through when the provider has
+   * such a parameter and ignored where it does not — the sizes on offer differ
+   * per model and normalising them would mean maintaining a table of what each
+   * vendor currently allows.
+   */
+  size?: string;
+  timeoutMs: number;
+  providerOptions?: Record<string, unknown>;
+}
+
+/** One picture, as bytes plus what is known about it. */
+export interface GeneratedImage {
+  bytes: Uint8Array;
+  /** From the provider's own answer, never guessed from the model name. */
+  mime: string;
+  width: number | null;
+  height: number | null;
+  /**
+   * The prompt the provider actually used, where it says so.
+   *
+   * OpenAI rewrites a prompt before drawing and returns what it used. Worth
+   * keeping: it is the difference between "why does this not look like what I
+   * asked for" and an answer.
+   */
+  revisedPrompt: string | null;
+}
+
+export interface ImageResult {
+  images: GeneratedImage[];
+  usage: Usage | null;
+}
+
+/**
+ * A provider that can draw.
+ *
+ * Separate from `Adapter` rather than an optional method on it, because the two
+ * capabilities are genuinely independent: Anthropic and Mistral write text and
+ * draw nothing, and a `complete()` that throws "not supported" would push that
+ * fact to call time. Which providers implement this is data on the registry,
+ * so `node run.mjs ai-check` can say it before anybody asks for a picture.
+ */
+export interface ImageAdapter {
+  readonly id: ProviderId;
+  createImage(req: ImageRequest, key: string): Promise<ImageResult>;
 }
 
 /**

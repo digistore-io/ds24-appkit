@@ -8,7 +8,19 @@
 // moment it is registered.
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { adapterFor, configuredProviders, envVarFor, isConfigured } from "./registry";
+import {
+  adapterFor,
+  configuredProviders,
+  envVarFor,
+  imageAdapterFor,
+  isConfigured,
+  providersWithImages,
+} from "./registry";
+import {
+  PROVIDER_CAPABILITIES,
+  PROVIDER_DEFAULT_IMAGE_MODELS,
+  providersThatCan,
+} from "./ids.mjs";
 import { PROVIDER_IDS, ProviderError, isProviderId, type ProviderId } from "./types";
 
 const ENV_VARS: Record<ProviderId, string> = {
@@ -132,5 +144,78 @@ describe("isConfigured / configuredProviders", () => {
     expect(() => isConfigured(unknown)).not.toThrow();
     expect(isConfigured(unknown)).toBe(false);
     expect(() => envVarFor(unknown)).not.toThrow();
+  });
+});
+
+// ── Capabilities ────────────────────────────────────────────────────────────
+//
+// Two files say which companies can draw: `ids.mjs` as DATA, because
+// `scripts/ai/check.mjs` has to read it without loading the app, and the
+// registry as ADAPTERS, because that is where the code is. A second source of
+// truth is only safe while something checks it against the first — the same
+// deal `PROVIDERS_REPORTING_COST` already has with `usageAccounting`.
+//
+// The failure this prevents is quiet in the worst way: `ai-check` would report
+// that a provider can produce images, an Operator would bind the task to it,
+// and the refusal would arrive at the first customer who pressed the button.
+
+describe("capabilities", () => {
+  it("the data and the adapters agree about who can draw", () => {
+    expect([...providersWithImages()].sort()).toEqual([...providersThatCan("image")].sort());
+  });
+
+  it("every provider that can draw has a default image model", () => {
+    // Without one, `"auto"` resolves to a binding carrying `model: null` — an
+    // unresolved binding, which is what naming defaults exists to prevent.
+    const defaults = PROVIDER_DEFAULT_IMAGE_MODELS as Record<string, string | undefined>;
+    for (const provider of providersThatCan("image")) {
+      expect(defaults[provider], provider).toBeTruthy();
+    }
+  });
+
+  it("every provider can at least write text", () => {
+    for (const provider of PROVIDER_IDS) {
+      expect(PROVIDER_CAPABILITIES[provider], provider).toContain("text");
+    }
+  });
+
+  it("names Anthropic and Mistral as unable to draw, on purpose", () => {
+    // Anthropic's own documentation says Claude reads pictures and does not
+    // make them. Mistral CAN, but only through an agent tool whose result
+    // arrives as a file id to download afterwards — a different protocol rather
+    // than a different endpoint. `ids.mjs` carries that reasoning so nobody
+    // re-derives it from an empty entry.
+    expect(providersThatCan("image")).not.toContain("anthropic");
+    expect(providersThatCan("image")).not.toContain("mistral");
+  });
+});
+
+describe("imageAdapterFor", () => {
+  it("refuses a provider that draws nothing, by name", () => {
+    // The second line of defence. `bindingProblems()` reports the same mistake
+    // at check time, which is where somebody can still act on it.
+    process.env.ANTHROPIC_API_KEY = "k";
+    expect(() => imageAdapterFor("anthropic")).toThrow(/does not produce images/);
+  });
+
+  it("refuses a provider that does not exist", () => {
+    expect(() => imageAdapterFor("cohere" as ProviderId)).toThrow(/no such provider/);
+  });
+
+  it("asks for the key by the name of its environment variable", () => {
+    // Whoever reads this needs to know which line to add to `.env`.
+    expect(() => imageAdapterFor("openai")).toThrow(/OPENAI_API_KEY/);
+  });
+
+  it("hands back the adapter once the key is there", () => {
+    process.env.OPENAI_API_KEY = "test-key";
+    const { adapter, key } = imageAdapterFor("openai");
+    expect(adapter.id).toBe("openai");
+    expect(key).toBe("test-key");
+  });
+
+  it("serves OpenRouter through the same shape", () => {
+    process.env.OPENROUTER_API_KEY = "test-key";
+    expect(imageAdapterFor("openrouter").adapter.id).toBe("openrouter");
   });
 });

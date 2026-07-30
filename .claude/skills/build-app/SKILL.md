@@ -89,13 +89,20 @@ start?"), briefly give them the path (idea → build → payment → security �
 
 Ask the user (or work out) what the app is at its core:
 
-| The app should…                                 | Archetype           | What to do |
-|-------------------------------------------------|---------------------|----------------|
-| Unlock digital content/courses after purchase   | **Content-Access**  | One table per "product"; gate it with `hasPlan(memberId, productKey)` |
-| Send recurring messages after purchase          | **Drip/Automation** | Schedule table + a job in `lib/cron/jobs.ts` (`docs/cron.md`), start at `on_payment` |
-| Provide a tool/feature for buyers only          | **Gated-Tool**      | Feature pages behind `hasPlan(...)` |
-| Manage membership/subscription                  | **Membership**      | `hasPlan(...)` decides access — a cancellation keeps it to the end of the paid period; self-service via `billing-modes` |
-| Bill by usage (e.g. AI usage)                   | **Usage/Tokens**    | Prepaid tokens with auto top-up — skill `billing-modes` |
+| The app should…                                 | Archetype           | What to do | What this kind should show — ✅ = the default (step 1b) |
+|-------------------------------------------------|---------------------|----------------|---|
+| Unlock digital content/courses after purchase   | **Content-Access**  | One table per "product"; gate it with `hasPlan(memberId, productKey)` | ✅ a cover picture per lesson · ✅ a progress bar · the workbook or software as a **downloadable file** (`visibility: "entitled"`) |
+| Send recurring messages after purchase          | **Drip/Automation** | Schedule table + a job in `lib/cron/jobs.ts` (`docs/cron.md`), start at `on_payment` | ✅ a picture with every message · ✅ "how far you have come" as a bar · optionally a welcome video |
+| Provide a tool/feature for buyers only          | **Gated-Tool**      | Feature pages behind `hasPlan(...)` | ✅ **the RESULT is the visible thing** — a rendered sales page rather than sales copy, a result card rather than a number. See below |
+| Manage membership/subscription                  | **Membership**      | `hasPlan(...)` decides access — a cancellation keeps it to the end of the paid period; self-service via `billing-modes` | ✅ a profile picture · badges for what somebody has reached |
+| Bill by usage (e.g. AI usage)                   | **Usage/Tokens**    | Prepaid tokens with auto top-up — skill `billing-modes` | ✅ a consumption chart — the shape already exists in `lib/ai/report.ts` |
+
+**The Gated-Tool row is the one people read past.** For every other archetype
+the visible part is decoration around the product; for this one it IS the
+product. A tool that returns a block of text asks its customer to do the last
+step themselves — and that last step is usually where they would have been
+willing to pay. [`docs/visuals.md`](../../../docs/visuals.md) is the reference for
+what the app can already do here.
 
 All archetypes use the same base: **auth (`auth.ts`)** for who is signed in, and
 the **entitlement API** (`lib/entitlements/manage.ts`) for what they may use.
@@ -124,6 +131,80 @@ same file; `lib/billing-mode.test.ts` fails the build if the two contradict each
 other. Reference: `lib/billing-mode.ts`. Everything else about billing is the
 `billing-modes` skill.
 
+## Step 1b — What the customer gets to SEE
+
+**Before the data model, not after the pages.** Whether a challenge message can
+carry a picture is a column before it is a layout, and finding that out after
+`db-migrate` means a second migration for something the first one could have had.
+
+Read the ✅ column of the archetype above and put it to the user as a numbered
+menu — then **wait**. The rule this follows is in `CLAUDE.md` → *How a skill
+works* (**"Anything the customer will SEE is proposed, never assumed"**); what
+is below is that rule for this step.
+
+**If `docs/product-brief.md` has an `Output artifact:` line, this is not an open
+question any more.** Read it, say what it implies, and ask for confirmation
+instead of a choice:
+
+> "The brief says: *a finished sales page with a hero image*. So each page needs
+> one picture — generated (~$0.05) or uploaded. Generated?"
+
+**Otherwise, the menu.** Say what each row costs and where it would come from —
+those two are what somebody actually decides on, and neither is in the archetype
+table. `node run.mjs ai-check` prints what one generated picture costs today;
+[`docs/visuals.md`](../../../docs/visuals.md) is where the rest of it is:
+
+```
+What should your customer get to see?
+
+  1  a picture with every challenge message     ✅   upload or AI      ~$0.05 each
+  2  "how far you have come" as a bar           ✅   your own data     nothing
+  3  a welcome video on the start page               embed             nothing
+  4  a picture the participant uploads themselves    upload            storage
+
+  0  none of it — text only
+
+Give me numbers, or say "you choose" and I take the ones marked ✅.
+```
+
+**Two archetypes have a single ✅**, and for them this is one row rather than a
+menu — ask it as a yes/no and move on. The ✅ column is the starting point, not
+the whole list: add a row when this particular app obviously wants one (a
+participant uploading their own picture, say). What you must not do is drop the
+step because the list is short.
+
+Three answers, and the last two are as real as the first:
+
+- **Numbers** → exactly those, and nothing else.
+- **"you choose"** → the ✅ rows, no further question. Offer it in the menu
+  itself every time; somebody who trusts the suggestion should not have to read
+  four rows to say so.
+- **`0`** → text only, and **write it into `docs/app.md`** under
+  *Decisions worth remembering*:
+
+  ```md
+  - **No pictures in the challenge messages.** Decided on <date>: the vendor
+    writes the messages themselves and has no picture material. If it comes
+    back, the way in is `docs/visuals.md` → *Putting files in*.
+  ```
+
+  That entry is the whole reason to ask rather than to assume: without it the
+  same suggestion arrives again in three sessions, and somebody spends the
+  conversation a second time.
+
+**Two things not to do here.** Do not ask what a picture should *look* like —
+that is the customer's business, at the moment they use the app, not a decision
+to make at build time. And do not turn a `0` into a negotiation: it is an
+answer, and a skill that argues with it teaches people to stop answering.
+
+**Skip this step entirely for an experiment.** Same boundary as the SAAS rule in
+`CLAUDE.md`: somebody trying the template out gets the small thing they asked
+for, without a menu.
+
+Whatever is chosen, the code for it exists — `docs/visuals.md` is the reference
+(store, upload, generation, and the recipes for charts and video), and
+`node run.mjs media-check` says whether this machine can store a file at all.
+
 ## Step 2 — Extend the data model
 
 - New tables in `db/schema.ts` (or a separate file that is re-exported there —
@@ -137,6 +218,17 @@ other. Reference: `lib/billing-mode.ts`. Everything else about billing is the
   commit (see `docs/database.md`). No `db:push`.
 
 ## Step 3 — Pages & logic
+
+**One question per result surface, asked while you build it:** wherever a page
+hands the customer a RESULT, ask once whether it is a result to look at. Not a
+menu this time — Step 1b already settled what this app shows. This is the
+smaller, per-page version of it, and it exists because Step 1b decides the
+product while this decides a page nobody thought about at the time.
+
+A page that returns nothing but paragraphs is a decision, so make it a visible
+one: either put something there, or note in `docs/app.md` why not.
+[`docs/visuals.md`](../../../docs/visuals.md) is the reference: what the store can
+hold, how a picture gets on a page, and what one generated image costs.
 
 - Protected pages under `app/dashboard/…` (already secured via `proxy.ts`).
 - **Purchase-dependent content asks the entitlement API**, and it needs a
@@ -320,6 +412,9 @@ moment the feature works._
 - **Sells:** <what a customer buys>
 - **For:** <who>
 - **Archetype:** <from step 1>
+- **Output artifact:** <what the customer ends up holding — the line from the
+  product brief, or the answer from step 1b. "a finished sales page with a hero
+  image", not "sales copy">
 
 ## Features
 
@@ -334,16 +429,21 @@ moment the feature works._
 ## Decisions worth remembering
 
 - <what was decided against, and why — this is the part nobody reconstructs>
+- <including a "no" from step 1b: "no pictures in the messages, deliberately,
+  because …" — otherwise it is proposed again next session>
 ```
 
-Two rules about it:
+Three rules about it:
 
 - **Access is quoted, not described.** `hasPlan(memberId, "basis_monatlich")`, not
   "only for paying customers". The next session has to be able to read the gate
   off the line without opening the page.
+- **A decision AGAINST is a decision.** "No pictures in the messages" belongs
+  here as much as a feature does — see Step 1b. What is not written down is
+  proposed again next session, by an agent that has no way of knowing it was
+  already settled.
 - **The decisions section is the valuable half.** A feature can be read out of
-  the code; the reason something is *not* built cannot, and that is what gets
-  proposed again three sessions later.
+  the code; the reason something is *not* built cannot.
 
 The greeting checks this by itself: a page under `app/dashboard/` that
 `docs/app.md` does not mention is named at the next session start.

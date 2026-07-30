@@ -60,6 +60,13 @@ Produce concrete content and put it under `docs/marketing/`:
 Adapt the tone to the target audience. Do not invent false claims/
 testimonials — mark placeholders (e.g. "[insert real customer quote]").
 
+**One thing to say once, when this phase is finished:** if `app/page.tsx` and
+the plans page still carry the template's placeholder wording while this
+document carries the real headline and the real promise, the visitor reads the
+weaker version. Putting it there is ordinary work, not a skill. The video is
+different — a script written here becomes a file, and a file wants somewhere to
+live and a player: that part is **`visuals`** (check `upload`).
+
 ## Phase 5 — measure & iterate
 
 Name 2–3 simple metrics (visitors → checkout clicks → purchases) and how to see

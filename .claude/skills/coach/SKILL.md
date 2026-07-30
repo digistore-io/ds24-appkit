@@ -30,6 +30,7 @@ you get to?" is a question the coach should rarely have to ask.
 |---|---|---|
 | Does the machine work? | the session-start line `[Setup: ok]` / `[Setup: blocked — …]`, otherwise `node run.mjs doctor` | blocked → **`setup-machine`**, before anything else |
 | Is there an idea? | `docs/product-brief.md` | missing and the user cannot say in two sentences what the app does → **`market-research`** |
+| Was it ever decided what the customer HOLDS? | an `Output artifact:` line in `docs/product-brief.md`; failing that, the decisions section of `docs/app.md` | neither says anything, and the app's pages hand out text → **`visuals`** (check `plan`). A brief that says "generates the copy" where the customer wanted a finished page is the commonest reason an app feels thin |
 | Is there an app of their own? | folders under `app/dashboard/` beyond `account`, `admin`, `billing`, `chat`; own tables in `db/schema.ts` | nothing of their own → **`build-app`** |
 | What has been built so far? | `docs/app.md` — the app's own notebook, one entry per feature | pages under `app/dashboard/` that it does not mention → the last session did not write its entry; add it before building anything new (**`build-app`** step 4b holds the shape) |
 | Is payment connected? | `DIGISTORE_API_KEY` in `.env`; ids under `productIdByLanguage` on the products in `config/digistore-products.json`; `DIGISTORE_IPN_PASSPHRASE` + `DIGISTORE_IPN_DOMAIN_ID` | key but no ids → the sync never ran; no passphrase → no IPN, so purchases arrive nowhere → **`setup-digistore`**. A product id for only *some* of the app's languages → the missing ones get an order form in the wrong language → re-run `node run.mjs ds24-sync` and read its warnings |
@@ -92,7 +93,11 @@ below.
 | The assistant answers "I do not know" | her handbook, not her switch → **`ai-chat-knowledge`**, then `node run.mjs kb-check` |
 | Which AI company, what does a call cost, a key is missing | **`ai-providers`**, `node run.mjs ai-check` |
 | "Claude should be able to use my app" | **`mcp-server`**, `node run.mjs mcp-check` |
-| "My customers do not find their way around", "nobody uses it after they buy", "this looks unfinished", "is this understandable?" | **`ux-gateway`**, `node run.mjs ux-check` |
+| "My customers do not find their way around", "nobody uses it after they buy", "is this understandable?" | **`ux-gateway`**, `node run.mjs ux-check` |
+| **"This looks unfinished"** — the one phrase with two answers | Ask which: pages that look hand-built, colours that clash, actions that say nothing → **`ux-gateway`** (check `kit`). Pages that are correct and hand the customer nothing but paragraphs → **`visuals`** (check `plan`). One question is faster than the wrong ten minutes |
+| "My app is only text", "I want pictures in it", "can it make images?", "customers should be able to upload a photo" | **`visuals`** — the catalogue is `docs/visuals.md`, and `node run.mjs media-check` says whether there is anywhere to put a file |
+
+| "Where do I put the PDF my buyers get?" | **`visuals`** (check `sell`) — a file with `visibility: "entitled"` and a Product Key; `hasPlan()` does the rest |
 | "The page is unreadable in dark mode", a colour that vanishes, text nobody can make out | `node run.mjs ux-check` measures every token pair in both modes — then **`ux-gateway`** (check `kit`) |
 | Slow, timing out, will it hold under load | **`performance-gateway`** |
 | Is this safe? Is this route protected? Is there a secret in the code? | **`security-gateway`** |

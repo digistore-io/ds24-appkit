@@ -239,6 +239,14 @@ export async function deleteUser(actor: Actor, targetId: string): Promise<void> 
  * **Deleting them on request would be the violation, not the remedy.** The
  * dialog has to name this before the button is pressed; a person who believed
  * "delete" meant "everything" was not informed.
+ *
+ * ── The one thing a cascade cannot do ─────────────────────────────────────
+ * Uploaded files live in object storage, not in Postgres. A foreign key with
+ * `on delete cascade` removes the ROW describing a file and leaves the file
+ * itself sitting in the bucket for ever — at which point the app has told
+ * somebody their data is gone while still holding it, and nothing left in the
+ * database can find it to finish the job. So the objects are removed FIRST,
+ * and a failure there stops the deletion rather than proceeding without them.
  */
 export async function deleteOwnAccount(): Promise<void> {
   const session = await requireActiveUser();
@@ -250,6 +258,12 @@ export async function deleteOwnAccount(): Promise<void> {
 
   const denial = canDeleteOwnAccount(actor, await countOwners());
   if (denial) throw new UserError(denial);
+
+  // Before the row goes. Imported here rather than at the top of the file so
+  // that the media layer — and the environment reading it does — is only
+  // touched by installations that reach this line.
+  const { deleteOwnedMedia } = await import("@/lib/media/manage");
+  await deleteOwnedMedia(actor.id);
 
   await db.delete(users).where(eq(users.id, actor.id));
 }

@@ -1,6 +1,7 @@
 ---
 name: setup-hosting
 description: Puts the app on a server — picks a host with the user (Railway, Render, Fly.io or DigitalOcean), says what they have to book and what it costs, installs the host's CLI, gets the agent authenticated, creates the app and the managed Postgres, sets every environment variable, wires the migration into the deploy and puts a domain on it. Use this when the user wants to deploy, go online, "put it on a server", asks which host to choose, what hosting costs, or when go-live reaches the hosting step.
+requires: 0.7.0
 ---
 <!-- Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA — SPDX-License-Identifier: MIT -->
 
@@ -11,7 +12,7 @@ Most of them have never deployed anything, do not have an account anywhere, and
 do not know what a managed Postgres is. **You do the deploy. They make three
 decisions and click twice.**
 
-The reference behind this skill is [`docs/DEPLOY.md`](../../docs/DEPLOY.md) —
+The reference behind this skill is [`docs/DEPLOY.md`](../../../docs/DEPLOY.md) —
 what each host costs, what each one traps you with, and the exact commands. Do
 not repeat it back to the user; read it and act.
 
@@ -153,9 +154,57 @@ So before the deploy: `node run.mjs mail-setup` (Postmark or SMTP,
 with everything else. If the user has no sender domain yet, that is a thing to
 solve now, not after the app is online and refusing to boot.
 
+## 6b. A bucket for files — the second thing that stops the app booting
+
+**In production this app does not start on a local disk either.** Same shape as
+mail, same file (`lib/env-guard.ts`), and a different reason worth
+understanding rather than repeating:
+
+> A local disk works perfectly on one machine. That is the problem. The next
+> deploy replaces the machine and takes every uploaded file with it, and the
+> moment there are two instances an upload lands on one disk while the next
+> request is answered by the other — so a customer's picture is there about
+> half the time. None of that appears while anybody is testing, because testing
+> happens on one machine. It appears **after** the app is successful.
+
+Because that failure is invisible until it is expensive, the app refuses rather
+than warns.
+
+**Book object storage with the database, not after it.** Any S3-compatible
+bucket works — the app signs its own requests, so there is no SDK and no
+provider lock:
+
+| Host | Closest to hand |
+|---|---|
+| Railway | Cloudflare R2 or Backblaze B2 (no egress fees on either) |
+| Render | Cloudflare R2, or Amazon S3 in the same region |
+| Fly.io | Tigris (Fly's own, `fly storage create`) or Cloudflare R2 |
+| DigitalOcean | **Spaces** — same account, same panel, one click |
+
+Then five variables go to the host with the rest:
+`MEDIA_DRIVER=s3`, `MEDIA_S3_ENDPOINT`, `MEDIA_S3_BUCKET`,
+`MEDIA_S3_ACCESS_KEY_ID`, `MEDIA_S3_SECRET_ACCESS_KEY`.
+
+Ask for the credentials **scoped to that one bucket**, not an account-wide key.
+Every provider above can do it, and the difference matters the day the key
+leaks: one bucket, or everything the user has there.
+
+Two optional ones worth mentioning once: `MEDIA_S3_REGION` (some providers do
+not care, and `auto` is fine there), and `MEDIA_S3_PUBLIC_BASE_URL` — a CDN or a
+custom domain on the bucket, which makes product images reach visitors without
+touching the app at all.
+
+**Prove it before the deploy, not after:** `node run.mjs media-check` writes a
+throwaway object, reads it back, compares the bytes and deletes it. Credentials
+that look right and a bucket that does not exist are indistinguishable until
+something tries. Reference: [`docs/visuals.md`](../../../docs/visuals.md).
+
+If the app takes no files at all today, it still needs this — the check runs at
+startup and does not ask what the app happens to use.
+
 ## 7. Deploy
 
-Follow the host's section in [`docs/DEPLOY.md`](../../docs/DEPLOY.md). Whatever
+Follow the host's section in [`docs/DEPLOY.md`](../../../docs/DEPLOY.md). Whatever
 the host, five things have to be true when you are finished, and it is worth
 checking them as five separate questions:
 
@@ -165,7 +214,8 @@ checking them as five separate questions:
    goes stale the day the database is rotated.
 3. **Every required environment variable is set** — the table in `docs/DEPLOY.md`.
    Go through it as a list; missing one produces an app that starts and then
-   fails at the one thing the user tests first.
+   fails at the one thing the user tests first. Mail and the media bucket are
+   the two that stop it starting at all (steps 6 and 6b).
 4. **The migration runs before the new version takes traffic** — the pre-deploy
    command / `release_command` / `PRE_DEPLOY` job, running `npm run db:migrate`.
    Not "I will run it by hand after each deploy": that is the step that gets

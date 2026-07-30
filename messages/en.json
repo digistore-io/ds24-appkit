@@ -795,5 +795,20 @@
     "widerruf": {
       "title": "Right of withdrawal"
     }
+  },
+  "media": {
+    "altRequired": "Please describe briefly what the picture shows — people who cannot see it hear this text.",
+    "noAccess": "You do not have access to that.",
+    "noFile": "There was no file in that.",
+    "notAllowedForRole": "You are not allowed to upload this kind of file here.",
+    "notFound": "Not found.",
+    "notSignedIn": "Please sign in to upload a file.",
+    "rateLimited": "Too many uploads in a short time. Try again in an hour.",
+    "storeUnavailable": "File storage is not reachable right now. That is the app's problem, not yours.",
+    "tooLarge": "That file is too large.",
+    "typeMismatch": "The file is not what its name claims it is.",
+    "typeNotAllowed": "This kind of file is not accepted here.",
+    "uploadLabel": "Choose a file",
+    "uploading": "uploading …"
   }
 }

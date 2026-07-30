@@ -148,3 +148,12 @@ export * from "./schema-impersonation";
 // that declares no purposes in config/consent.json, which is the shipped state.
 // See schema-consent.ts and docs/compliance.md.
 export * from "./schema-consent";
+
+// --- Media ---------------------------------------------------------------------
+// `media` — one row per stored picture, video, recording or downloadable file.
+// The BYTES are not here; they live in object storage (lib/media/store.ts), and
+// `deleteMedia()` is what keeps the two in step — a cascade removes the row and
+// leaves the object, which is a deletion request not honoured. Three
+// visibilities: product imagery, a customer's own upload, and the file a buyer
+// paid for (gated by hasPlan()). See schema-media.ts and docs/visuals.md.
+export * from "./schema-media";

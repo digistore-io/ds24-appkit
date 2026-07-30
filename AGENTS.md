@@ -194,6 +194,11 @@ There are guided skills in `.claude/skills/` — use them in this order:
   key in, bind each task to a model and set the prices the cost page reports.
 - **`mcp-server`** — *(optional)* let customers connect Claude to the app: decide
   which capabilities become tools, then switch the MCP interface on.
+- **`visuals`** — *(optional)* make the app something to look at rather than
+  something to read: decide what the customer should SEE, build one of the
+  patterns from the catalogue, switch on image generation or customer uploads,
+  put a file behind a purchase. Use it when somebody says "my app is only text".
+  The reference is [`docs/visuals.md`](docs/visuals.md).
 - **`ux-gateway`** — once the app has pages: the same shape for the experience.
   The first five minutes after a purchase, dead ends, actions that report
   nothing back, hand-built elements, wording, keyboard and small screens —
@@ -230,7 +235,8 @@ next one):
 `setup-digistore` *(→ optional `billing-modes` for subscriptions/prepaid tokens,
 optional `ai-chat-knowledge` for the in-app assistant, optional `ai-providers`
 to choose the AI company, optional `mcp-server` for the AI interface)* →
-**(3) Experience** `ux-gateway` → **(4) Security** `security-gateway` →
+*(optional `visuals` — pictures, video, files, and what the customer actually
+sees)* → **(3) Experience** `ux-gateway` → **(4) Security** `security-gateway` →
 **(5) Scaling** `performance-gateway` → **(6) Legal** `compliance-check` →
 **(7) Live** `go-live` *(which begins with `setup-hosting` — host, database,
 secrets, domain)* → **(8) Marketing** `go-to-market`. Alongside all of it:
@@ -276,6 +282,31 @@ their way around one skill has then found their way around all of them:
 - **Anything that produces a verdict writes it down**, dated, into
   `docs/reports/` — so that "have we already done that?" has an answer next
   month. Anything that produces a plan or a text writes it into `docs/`.
+- **Anything the customer will SEE is proposed, never assumed.** Where an app
+  produces something a person looks at, shows or publishes, the agent lays the
+  possibilities out as a numbered menu and **waits**. It does not pick on the
+  developer's behalf, and it does not quietly build the text-only version
+  either — that is a decision too, and an unmade decision is how an app ends up
+  handing its customers paragraphs.
+
+  Three answers, and all three are valid:
+
+  | | |
+  |---|---|
+  | **numbers** | exactly those get built |
+  | **"you choose"** | take the default and carry on, no further question. The shortcut for somebody who trusts the suggestion, and it must be offered IN the menu rather than hidden in prose |
+  | **"none of it"** | text only — and it goes into `docs/app.md` under the decisions, because a rejected alternative that was not written down is one that gets proposed again three sessions later |
+
+  **When** matters as much as whether: before the data model, because whether a
+  message can carry a picture is a column before it is a layout. **Once**, at
+  that point — not again on every page afterwards. A menu per page would be the
+  same question asked six times, which trains people to answer it without
+  reading; later pages inherit the decision and only ask again where they hand
+  the customer something the first decision did not cover.
+
+  **Trying things out is exempt**, on the same boundary as the SAAS rule above.
+  Somebody who asks for "Hello World" gets Hello World, not a menu.
+
 - **End by naming the next skill and offering to start it.** A skill that stops
   with "you could now…" leaves the user exactly where they were.
 
@@ -1347,6 +1378,22 @@ before you write a model call:
   template's operators is the worse failure. A hard stop belongs on the provider
   account. Do not build one here without reading `docs/ai-providers.md` first.
 
+- **A picture is a task too, and it is the one where the provider is not
+  interchangeable.** `generateImage()` (`lib/media/generate.ts`) asks the
+  `image` task and puts the result in the bucket, so what comes back is a stored
+  `media` row rather than bytes to deal with. **Anthropic makes no images at
+  all** and Mistral only through an agent detour this template does not take, so
+  `ai-check` says so **by name at check time** when your only key is one of
+  those — never at a customer's first click. Adding a second key is fine; the
+  assistant keeps running on the first. Images are billed **per picture**, so
+  `config/ai-prices.json` carries an `image` rate in whole currency units beside
+  the per-million token rates, and the spend lands on the same cost page as
+  everything else. `alt` is required and is deliberately NOT derived from the
+  prompt — a prompt is instructions for a machine, alternative text is a
+  sentence for a person. Charging the Member for one is `spendTokens` in the
+  order check → work → charge, in your Server Action rather than in the library.
+  Details: [`docs/ai-providers.md`](docs/ai-providers.md) → *Pictures*.
+
 `node run.mjs ai-check` shows which task runs on which model, whether the keys
 are there, and what one call costs.
 
@@ -1420,6 +1467,62 @@ customer**. Five things are worth knowing before you touch any of it:
 
 `node run.mjs mcp-check` checks the settings; `--live` mints a temporary key and
 really calls the endpoint, which is the only check that covers the whole path.
+
+## Media — pictures, video, recordings and the files you sell
+
+Anything the app puts in front of a customer that is not text goes through one
+place, `lib/media/`. It has its own guide: **[`docs/visuals.md`](docs/visuals.md)**.
+Six things are worth knowing before you touch any of it:
+
+- **Four kinds from the start — `image`, `video`, `audio`, `file`.** Delivery,
+  the size ceiling and the byte-signature check are decided per kind, so the
+  app that needs a PDF two weeks after launch adds a row to a table rather than
+  a second store beside the first. `file` is how a vendor hands buyers the
+  workbook or the software they paid for.
+- **The bytes live in a bucket, and online there is no alternative.** In DEV
+  they go to `.data/media/` and nothing has to be set up. In STAGING and PROD
+  `MEDIA_DRIVER=local` **stops the app from starting** (`lib/env-guard.ts`),
+  the same way missing mail delivery does. That is not caution: a local disk
+  works perfectly on one node, loses everything on the next redeploy, and on
+  two nodes makes a customer's picture present about half the time — a fault
+  that only appears after the app is successful and cannot be reproduced on the
+  machine anybody tests on. Any S3-compatible provider works; the app signs its
+  own requests (`lib/media/sigv4.mjs`, measured against AWS's published
+  vectors) so no SDK is involved.
+- **A file never travels through the app on its way out.** `public` items come
+  from the bucket or its CDN; `owner` and `entitled` items are authorised by the
+  server component **while it renders** — `mayAccess()` — which then mints an
+  address that expires. Doing it at fetch time instead is impossible rather than
+  merely slower: `next/image` will not follow a redirect to another host. And a
+  `<video>` issues range requests, which the bucket answers by itself and the
+  app would have to reimplement as `206 Partial Content`.
+  `mediaUrlFor()` **grants nothing** — it is the step after `mayAccess()` said
+  yes, and calling it without that check is how a private file becomes public.
+- **Selling a file is a visibility and a Product Key**, not a feature:
+  `visibility: "entitled"` plus `requiresPlan`, and `hasPlan()` decides — the
+  same call that gates everything else. The key is validated when it is
+  written, because `hasPlan()` **throws** on an unknown one: an unchecked value
+  would not mean "no access", it would take the page down.
+- **What a file IS comes from its first bytes** (`lib/media/sniff.ts`), never
+  from the `Content-Type` the request claimed — and `next.config.ts` sets
+  `X-Content-Type-Options: nosniff`, so a wrong answer is not rescued by the
+  browser. Who may upload what is per ROLE (`config/media.json` →
+  `mayUpload`): archives are the operator's, because a customer who can hand
+  every other customer a `.zip` is not a media feature. No SVG anywhere — it is
+  a document that can carry script.
+- **Location data comes off uploaded images, and not off video.** JPEG, PNG and
+  WebP are stripped (`lib/media/exif.ts`); an MP4 keeps whatever the recording
+  device wrote, and `docs/data-protection.md` says so rather than implying a
+  protection that is not there. Deleting an account removes the **objects**, not
+  only the rows — a Postgres cascade does not reach into a bucket.
+
+Uploads travel through the app, which is where they are checked — so there is a
+ceiling, per kind, in `config/media.json`. Beyond it the browser has to write
+straight to the bucket, and that path is deliberately not built yet;
+`docs/visuals.md` says what it involves.
+
+`node run.mjs media-check` writes a throwaway object, reads it back, deletes it,
+and prints what may go in.
 
 ## Plans & Digistore products
 
@@ -1651,6 +1754,7 @@ overview). Arguments go straight through — there is no `ARGS="…"` wrapping.
   is good
 - `node run.mjs ai-check` — which task runs on which model, are the keys there, what does a call cost
 - `node run.mjs mcp-check` — check the MCP server's settings; `--live` really calls it once
+- `node run.mjs media-check` — where uploaded files go, whether that place answers, and what may go in
 - `node run.mjs db-generate` / `node run.mjs db-migrate` — create / apply a migration
 - `node run.mjs db-reset` — clear the local DB, migrate, seed (**locally only**)
 - `node run.mjs cron` — the scheduled jobs: run what is due, `--list` them, `--job <id>` to force one

@@ -25,18 +25,19 @@ the audit against it. Where the two disagree, `docs/ux.md` wins.
 
 ## How to use this skill
 
-Eight checks. You do not have to know which one you want.
+Nine checks. You do not have to know which one you want.
 
 | # | Check | What it looks at | Roughly |
 |---|---|---|---|
-| 1 | **`all`** | everything below, in the right order | 25–45 min |
+| 1 | **`all`** | everything below, in the right order | 30–55 min |
 | 2 | **`first-run`** | the first five minutes: purchase → dashboard. Does the empty app say what to do? | 10 min |
 | 3 | **`flows`** | every path a member takes, including the unhappy ones. Dead ends | 10–15 min |
 | 4 | **`feedback`** | does every action say what happened, and does destructive ask first | 5–10 min |
 | 5 | **`kit`** | the design system: hand-built elements, hard-coded colours, both modes, small screens | 5 min |
 | 6 | **`words`** | wording, i18n gaps, error codes shown raw, empty states with nothing in them | 10 min |
 | 7 | **`access`** | keyboard, focus, names, contrast — WCAG 2.1 AA | 10 min |
-| 8 | **`fix`** | fix the findings of the last report | depends |
+| 8 | **`visuals`** | pages that hand the customer nothing but paragraphs; pictures that are broken, heavy, or contact somebody | 10 min |
+| 9 | **`fix`** | fix the findings of the last report | depends |
 
 **How to dispatch:**
 
@@ -68,7 +69,9 @@ node run.mjs errors         # what the log caught behind a 200
 pair in both modes, hard-coded colours, hand-built elements, icon buttons with
 no name, images with no `alt`, pages under `/dashboard` that are in no menu.
 **Run it first and fold its findings in** — they are already measured, so they
-go straight into the report with a file and a line.
+go straight into the report with a file and a line. One exception: its
+**images with no `alt`** belong under check 8 with the rest of what goes wrong
+with pictures, so that one fix does not become two findings.
 
 Then open the app. Signed in as a **member**, not as the owner — the owner sees
 an admin area the customer will never meet, and every judgement made from the
@@ -153,6 +156,10 @@ usable at all come before the ones that decide whether it is pleasant.
 4. **`kit`** — cheap, measured, and it explains half of "looks unfinished".
 5. **`words`** — after the structure, because rewording a dead end does not fix it.
 6. **`access`** — independent of all of the above; run it whenever.
+7. **`visuals`** — last, because it asks whether the app hands over anything
+   worth looking at, and that is a question about the product rather than about
+   the interface. It is also the one whose fixes are new features, so it is the
+   one somebody may reasonably defer.
 
 Then: one report, one summary, one offer to fix.
 
@@ -241,9 +248,10 @@ Mostly measured. Run `node run.mjs ux-check` and fold the findings in; then look
 at the two things it cannot see.
 
 `ux-check` settles: hard-coded palette colours, raw `<button>`/`<input>`/
-`<select>`/`<textarea>`/`<table>`, images with no `alt`, pages under
-`/dashboard` that are in no menu, and every token pair's contrast in **both**
-modes. Each comes with a file and a line, so each goes straight into the report.
+`<select>`/`<textarea>`/`<table>`, pages under `/dashboard` that are in no menu,
+and every token pair's contrast in **both** modes. Each comes with a file and a
+line, so each goes straight into the report. Its **images with no `alt`** are
+check 8's — see there.
 
 What you still have to look at yourself:
 
@@ -279,7 +287,11 @@ today, in scope the year they grow. Report findings either way; let the severity
 follow the app, not the statute.
 
 Measured by `ux-check`: contrast in both modes, the focus ring at 3:1, icon
-buttons with no name, images with no `alt`.
+buttons with no name.
+
+`ux-check` also measures **images with no `alt`** — but file that finding under
+check 8 with the rest of what goes wrong with pictures. One fix should not
+produce two findings in one report.
 
 By hand, and every one of these is a real failure rather than a nicety:
 
@@ -295,7 +307,61 @@ By hand, and every one of these is a real failure rather than a nicety:
 - **Does every form field have a real `<Label htmlFor>`?** A placeholder is not
   a label — it disappears exactly when somebody needs it.
 
-## 8 · `fix` — fixing what was found
+## 8 · `visuals` — is there anything to look at?
+
+**What this check is for.** An app can pass every check above and still hand its
+customers paragraphs. That is not an accessibility failure or a wording failure;
+it is the product being one step short of what somebody paid for. This check
+finds it in an app that already exists — `build-app` step 1b is where it is
+decided for one that does not.
+
+**Read `docs/app.md` FIRST, and read it properly.** Its *Decisions worth
+remembering* section may already say "no pictures in the messages, deliberately,
+because …". If it does, that is not a finding — it is an answer, and reporting
+it anyway is how this gateway teaches people to stop writing decisions down.
+Say you found it, and move on.
+
+Then walk the app's **result surfaces**: the places where a customer is handed
+something. Not every page — a settings form is a settings form.
+
+*(This check audits against [`docs/visuals.md`](../../../docs/visuals.md) rather
+than `docs/ux.md`, which has nothing to say about pictures. And `Figure`,
+`generateImage()` and the catalogue all arrived with template 0.7.0 — on an
+older copy the rows that name them never fire, and the rest applies unchanged.)*
+
+| Severity | What | Why |
+|---|---|---|
+| ⚠️ MEDIUM | A result surface whose whole output is prose, and nothing in `docs/app.md` says that was chosen | The fix is a catalogue entry, named — see below |
+| ❌ HIGH | An image with no alternative text and no `decorative` | A screen reader reads the filename instead |
+| ⚠️ MEDIUM | An image that carries its own light background, seen in dark mode | Switch the theme and look; nobody does this while building |
+| ⚠️ MEDIUM | An image not going through `next/image` | A phone downloading four megabytes to show two hundred pixels, on somebody else's data plan. Note it here and leave the number to `performance-gateway`, which measures what it costs — one fix, one finding |
+| 🚨 CRITICAL | An `<iframe>` at a video host with no consent gate in front of it | It contacts Google or Vimeo before the visitor agreed to anything — § 25 TDDDG. `compliance-check` reports the same thing from the legal side |
+| ❌ HIGH | A generated image with an empty `alt` | It should be impossible — `generateImage()` requires one, so somebody has written a row by hand |
+
+**The fix names the entry, not the problem.** "Add an image" is not a finding
+anybody can act on. [`docs/visuals.md`](../../../docs/visuals.md) has a row per
+app shape — *a chart above the table*, *a result card instead of a number*, *the
+message with a picture* — and the fix quotes the one that applies:
+
+```
+⚠️ MEDIUM — the monthly report is a table and nothing else
+Where:    /dashboard/reports
+Why:      a customer opening it monthly cannot see at a glance whether the
+          month was good. The numbers answer "what exactly"; nothing answers
+          "how is it going".
+Fix:      docs/visuals.md → "a report as a table" → a bar chart above it. The
+          table stays.
+Evidence: page renders 1 heading, 1 table, 0 images or charts.
+```
+
+Some of it is countable — `grep -rn "<img" app components` for pictures outside
+`Figure`, `grep -rn "youtube.com\|player.vimeo.com" app components` for the
+embed — and the rest is opening the pages and looking, in both themes.
+
+**Where this check does NOT go:** decoration. A stock photograph on a settings
+page is not a finding fixed — `docs/visuals.md` says why, under the catalogue.
+
+## 9 · `fix` — fixing what was found
 
 1. **CRITICAL and HIGH first**, in the order they are in the report.
 2. **Fix it where the rule lives**, not where it showed up. A missing
@@ -322,7 +388,7 @@ already has one). Create the folder if it is not there.
 ```markdown
 # UX report — 2026-07-27
 
-Checks: first-run, flows, feedback, kit, words, access
+Checks: first-run, flows, feedback, kit, words, access, visuals
 Seen:   opened in a browser, signed in as a member        (or: judged from code)
 App:    local, commit a1b2c3d
 
@@ -379,6 +445,12 @@ Do not decide these on your own:
 - **A redesign.** This gateway fixes findings; it does not restyle an app
   somebody chose the look of. If the answer is "this needs to look different",
   say so and let the user decide.
+- **Building the visual features check 8 proposes.** Reporting that a page hands
+  out nothing but text is this gateway's job; deciding to build a chart, a
+  result card or an image feature is the user's, and it is a feature rather than
+  a fix. Report it, name the catalogue entry, and hand over to **`visuals`** if
+  they want it. A gateway that quietly grows the product is one nobody can let
+  run unattended.
 
 ## Next step
 

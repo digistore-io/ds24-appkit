@@ -22,6 +22,7 @@ import {
   LAST_RESORT_PROVIDER,
   TASKS as TASK_IDS,
   bindingProblems,
+  kindOfTask,
   resolveBinding,
 } from "./task-rules.mjs";
 import { configuredProviders } from "./providers/registry";
@@ -35,7 +36,7 @@ import { PROVIDER_IDS, isProviderId, type ProviderId } from "./providers/types";
  * and the union is the whole compile-time guarantee. `tasks.test.ts` asserts
  * the two lists agree, so they cannot drift.
  */
-export const TASKS = ["chat"] as const;
+export const TASKS = ["chat", "image"] as const;
 
 export type TaskId = (typeof TASKS)[number];
 
@@ -116,5 +117,8 @@ export function taskConfigProblems(): string[] {
   // would forget.
   return bindingProblems(raw, [...PROVIDER_IDS]);
 }
+
+/** What a task needs a provider to be able to do — `"text"` or `"image"`. */
+export const taskKind: (task: TaskId) => "text" | "image" = kindOfTask;
 
 export { AUTO, FALLBACK_BINDING, LAST_RESORT_PROVIDER, TASK_IDS };

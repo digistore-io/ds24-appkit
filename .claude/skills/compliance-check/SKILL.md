@@ -308,8 +308,40 @@ advertising SDK.
 grep -ril "gtag\|googletagmanager\|plausible\|posthog\|matomo\|mixpanel\|segment\|fbq\|hotjar\|clarity" app components lib package.json
 ```
 
-**If that comes back empty, the finding is: no consent banner is needed, and
-adding one would be a defect.** Say it in those words. Under § 25 TDDDG a banner
+**Then the one that is not an analytics tag and catches people out — an embedded
+video:**
+
+```bash
+grep -rn "youtube.com\|youtube-nocookie.com\|youtu.be\|player.vimeo.com" app components
+```
+
+**A hit is not automatically a finding — look at what is around it.** An embed
+built to the recipe renders exactly this URL, and reporting a correctly gated
+video as a defect is how a check loses its authority. What makes it a finding is
+an `<iframe>` that is rendered unconditionally: no click, no state, no
+`hasConsent()` in front of it.
+
+An unconditional `<iframe>` pointing at a video host contacts that host the moment the page
+loads — before anybody has agreed to anything — and it sets identifiers on the
+visitor's device. That is § 25 TDDDG with no exception for "it is only an
+embed", and it is trivial to verify from the outside, which is why it gets
+found. `youtube-nocookie.com` reduces what is set and does **not** remove the
+contact, so it is not the fix.
+
+The fix is a gate: a still image of your own and a button, and the iframe comes
+into existence only after the click. The recipe is in
+[`docs/visuals.md`](../../../docs/visuals.md) → *A video from YouTube or Vimeo*,
+and the skill that builds it is **`visuals`**. **Self-hosting the video removes
+the question entirely** — a file in the app's own bucket contacts nobody and
+needs no consent at all, which is worth naming before somebody writes a banner
+for it.
+
+Severity: ❌ **HIGH** on a page a signed-out visitor can reach; ⚠️ MEDIUM behind
+the sign-in, where a contract-performance argument exists for some of it but not
+for the identifiers.
+
+**If both greps come back empty, the finding is: no consent banner is needed,
+and adding one would be a defect.** Say it in those words. Under § 25 TDDDG a banner
 where nothing touches the device asks for permission the app neither needs nor
 uses, and it trains people to click past the one that will later matter. This is
 the single most common thing a generator gets wrong, and the user has probably

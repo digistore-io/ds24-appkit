@@ -113,6 +113,10 @@ sign in to):
 | `APP_ENV` | `production` (or `staging`) |
 | **mail — one of the two** | `POSTMARK_SERVER_TOKEN` + `POSTMARK_SENDER`, **or** `SMTP_HOST` + `SMTP_USER` + `SMTP_PASSWORD` |
 | `EMAIL_FROM` | the sender address |
+| `MEDIA_DRIVER` | `s3` — see below. Anything else and the app refuses to start |
+| `MEDIA_S3_ENDPOINT` | your bucket provider's endpoint |
+| `MEDIA_S3_BUCKET` | the bucket's name |
+| `MEDIA_S3_ACCESS_KEY_ID`, `MEDIA_S3_SECRET_ACCESS_KEY` | its credentials |
 
 > **Mail is not optional in production, and this is the mistake that costs the
 > first deploy.** In DEV you can sign in without it (the development login); in
@@ -121,6 +125,24 @@ sign in to):
 > `✗ Startup aborted`. Set it up *before* the first deploy —
 > `node run.mjs mail-setup` walks through it locally, `docs/auth-setup.md` has
 > the detail.
+
+> **Files go in a bucket, and this is the mistake that costs the first
+> redeploy.** In DEV uploads land on your own disk and everything works. On a
+> host that is not storage: the next deploy replaces the machine and every file
+> with it, and a second instance has its own disk — so an upload lands on one,
+> the next request is answered by the other, and a customer's picture is there
+> about half the time. Because none of that shows up while you are testing on
+> one machine, the app **refuses to start** rather than warning.
+>
+> Any S3-compatible bucket does — Amazon S3, DigitalOcean Spaces, Cloudflare R2,
+> Backblaze B2, Hetzner Object Storage. The per-host instructions below say
+> which one is closest to hand. `node run.mjs media-check` writes, reads and
+> deletes a test object to prove it. Full reference: `docs/visuals.md`.
+>
+> `MEDIA_S3_REGION` is optional (`auto` where the provider does not care), and
+> `MEDIA_S3_PUBLIC_BASE_URL` is optional too — set it to a CDN or a custom
+> domain on the bucket and public images reach visitors without touching your
+> app at all.
 
 **Required as soon as the app sells anything** — written into the local `.env`
 by `node run.mjs ds24-connect` and `node run.mjs ds24-sync`, and copied from
@@ -138,6 +160,7 @@ there to the host:
 | `APP_TIME_ZONE` | the zone dates are rendered in (default `Europe/Berlin`) |
 | `DB_POOL_MAX` | lower than 10 on a small database — see the note under Railway |
 | `NEXT_PUBLIC_APP_NAME` | the app's name in the interface |
+| `MEDIA_S3_REGION`, `MEDIA_S3_PUBLIC_BASE_URL` | the bucket's region, and where a browser reads public files (`docs/visuals.md`) |
 
 > **`NEXT_PUBLIC_…` is baked in at build time, not read at run time.** Setting it
 > after the build changes nothing and looks like the host ignoring your variable.

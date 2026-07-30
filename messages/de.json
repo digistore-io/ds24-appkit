@@ -795,5 +795,20 @@
     "widerruf": {
       "title": "Widerrufsbelehrung"
     }
+  },
+  "media": {
+    "altRequired": "Bitte beschreibe kurz, was auf dem Bild zu sehen ist — Menschen, die es nicht sehen können, hören diesen Text.",
+    "noAccess": "Dafür fehlt dir der Zugang.",
+    "noFile": "Es war keine Datei dabei.",
+    "notAllowedForRole": "Diesen Dateityp darfst du hier nicht hochladen.",
+    "notFound": "Nicht gefunden.",
+    "notSignedIn": "Bitte melde dich an, um eine Datei hochzuladen.",
+    "rateLimited": "Zu viele Uploads in kurzer Zeit. Versuche es in einer Stunde noch einmal.",
+    "storeUnavailable": "Der Dateispeicher ist gerade nicht erreichbar. Das liegt an der App, nicht an dir.",
+    "tooLarge": "Die Datei ist zu groß.",
+    "typeMismatch": "Die Datei ist nicht das, was ihr Name behauptet.",
+    "typeNotAllowed": "Dieser Dateityp wird hier nicht angenommen.",
+    "uploadLabel": "Datei auswählen",
+    "uploading": "wird hochgeladen …"
   }
 }

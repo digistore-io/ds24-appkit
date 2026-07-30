@@ -19,11 +19,25 @@ export async function register() {
   );
 
   const environment = appEnv(process.env.APP_ENV);
+
+  // Whether the bucket is configured, read WITHOUT importing the media store —
+  // same rule as the mail transport above. `lib/media/store.ts` pulls in the
+  // config, which pulls in the product registry; this hook is built for the
+  // edge runtime too, and an import chain that long is how it stops resolving.
+  const s3Configured = Boolean(
+    process.env.MEDIA_S3_ENDPOINT?.trim() &&
+      process.env.MEDIA_S3_BUCKET?.trim() &&
+      process.env.MEDIA_S3_ACCESS_KEY_ID?.trim() &&
+      process.env.MEDIA_S3_SECRET_ACCESS_KEY?.trim(),
+  );
+
   const problems = checkEnvironment({
     APP_ENV: process.env.APP_ENV,
     NODE_ENV: process.env.NODE_ENV,
     AUTH_SECRET: process.env.AUTH_SECRET,
     emailConfigured: hasEmailConfig(process.env),
+    MEDIA_DRIVER: process.env.MEDIA_DRIVER,
+    mediaBucketConfigured: s3Configured,
   });
 
   if (problems.length > 0) {

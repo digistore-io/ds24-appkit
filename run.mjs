@@ -141,6 +141,12 @@ const TASKS = {
     needs: ["env", "node_modules"],
     run: (args) => script("scripts/ai/check.mjs", args),
   },
+  "media-check": {
+    group: "Tests & quality",
+    help: "Where uploaded files go, whether that place answers, and what may go in",
+    needs: ["env", "node_modules"],
+    run: (args) => script("scripts/media/check.mjs", args),
+  },
   "mcp-check": {
     group: "Tests & quality",
     help: "Check the MCP server (settings) — and with --live really call it once",

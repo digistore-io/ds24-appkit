@@ -432,7 +432,45 @@ for its own sake.
 
 It appears in a subject access request as `consents[]` — in both exports.
 
-## 14. What this app does not do
+## 14. Uploaded and generated files
+
+Only relevant once the app takes files — `config/media.json` decides who may
+upload what. See `docs/visuals.md`.
+
+| Where | What |
+|---|---|
+| `media` | one row per stored picture, video, recording or downloadable file: what kind it is, its media type, its size, **the filename the person chose**, the alternative text, and when it arrived. For a generated image also the prompt and which model made it |
+| the bucket | the file itself. Object storage, outside this database — see §5 for the recipient |
+
+**The filename is personal data.** Somebody typed it, and people name files
+after themselves, their company or their customer. It is in both exports.
+
+**Location and camera data are removed from uploaded images.** A photograph
+taken on a phone carries where it was taken to within a few metres, and nobody
+looking at the picture can tell it is there. JPEG, PNG and WebP are stripped on
+the way in (`lib/media/exif.ts`).
+
+⚠️ **Video is not stripped, and a privacy policy written from this file must not
+claim otherwise.** An MP4 can carry its recording location in a metadata atom.
+Removing it means walking the atom tree and rewriting the offsets that depend on
+it, and a half-done job is worse than none because the file then reads as
+protected. If your app takes video from customers, either say so or do not take
+it.
+
+**Retention.** A file goes with the account that uploaded it (`visibility:
+"owner"`). Deleting an account removes **the objects from the bucket as well as
+the rows** — a foreign key cascade only reaches the database, and files left
+behind would be a deletion request that was not honoured
+(`lib/media/manage.ts` → `deleteOwnedMedia()`).
+
+Files that belong to the PRODUCT rather than to a person — a lesson cover, a
+workbook you sell — stay when the operator account that uploaded them is
+deleted. That is why the foreign key is `set null` and not `cascade`.
+
+It appears in a subject access request as `media[]` — in both exports. The files
+themselves are not in the JSON; the member downloads them from the app.
+
+## 15. What this app does not do
 
 Worth stating, because a privacy policy that claims less is easier to keep true:
 
