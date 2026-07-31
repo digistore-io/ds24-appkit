@@ -155,6 +155,24 @@ export interface CreateMediaInput {
  * the ordering note at the top of the file.
  */
 export async function createMedia(input: CreateMediaInput): Promise<MediaRow> {
+  // ── Validated HERE, not only in the callers above ────────────────────────
+  // A code review found that `acceptUpload()` and `generateImage()` checked the
+  // key and this function did not — while `docs/visuals.md` → *Selling a file*
+  // tells a vendor to call THIS function directly with `visibility: "entitled"`.
+  // So the one documented way to sell a file had no check at all, and
+  // `hasPlan()` throws on an unknown key: a typo took the page down instead of
+  // denying access, which is exactly what AD-41 exists to prevent.
+  if (input.visibility === "entitled") {
+    if (!input.requiresPlan) {
+      throw new MediaError(
+        "noAccess",
+        'visibility "entitled" needs a Product Key — otherwise nobody could ever fetch it',
+      );
+    }
+    const problem = planProblem(input.requiresPlan);
+    if (problem) throw new MediaError("noAccess", `requiresPlan: ${problem}`);
+  }
+
   const id = crypto.randomUUID();
   const createdAt = new Date();
   const key = storageKey({ id, kind: input.kind, mime: input.mime, createdAt });
@@ -235,6 +253,22 @@ export async function mayAccess(row: MediaRow, viewer: Viewer): Promise<boolean>
   // entitled
   if (viewer.role === "owner") return true;
   if (!row.requiresPlan) return false;
+
+  // Write-time validation cannot cover a LATER edit. Retiring a product from
+  // `config/digistore-products.json` is an ordinary thing to do and nothing
+  // warns about the media rows pointing at it — and `hasPlan()` throws on a key
+  // it does not know, so without this the delivery route and every server
+  // component rendering the item answer 500 rather than refusing access.
+  // Refusing is the right answer: a plan that no longer exists is a plan nobody
+  // holds.
+  if (planProblem(row.requiresPlan)) {
+    console.error(
+      `[media] ${row.id}: requiresPlan "${row.requiresPlan}" is no longer a product — ` +
+        `access refused. Fix the row or restore the product.`,
+    );
+    return false;
+  }
+
   return hasPlan(viewer.memberId, row.requiresPlan);
 }
 

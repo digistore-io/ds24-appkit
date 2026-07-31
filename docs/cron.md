@@ -164,7 +164,18 @@ Two more, less about correctness and more about not being surprised:
 
 ## What ships
 
-Two jobs, both housekeeping, both daily.
+Five jobs. Four are housekeeping — they delete or close rows that have aged
+out. The fifth deletes nothing and fixes nothing; it exists to make one state
+visible that is invisible everywhere else, and it is the one worth reading if
+you are about to write a job of your own.
+
+| | | |
+|---|---|---|
+| `prune-ai-usage` | daily | deletes model-call rows past the retention window |
+| `prune-ipn-log` | daily | deletes raw webhook payloads past 60 days |
+| `close-impersonations` | 5 min | closes support sessions whose 30 minutes ran out and that nobody ended |
+| `prune-impersonations` | daily | deletes impersonation records past the retention window |
+| `check-stuck-reloads` | hourly | **reports only** — auto top-ups that billed a card and never got a credit back |
 
 ### `prune-ai-usage` — 12 months
 
@@ -191,6 +202,49 @@ The IPN log keeps the full raw payload of every incoming webhook, which is buyer
 PII. Sixty days is long enough to diagnose a failed webhook and short enough to
 defend as data minimisation. This one used to be a hand-wired endpoint; it is
 now an entry in the registry like everything else.
+
+### `close-impersonations` — every 5 minutes
+
+Closes the record of a support session whose thirty minutes ran out and that
+nobody ended. Stepping out, signing out and noticing the expiry on a live
+request all have a moment to write the end — **closing the tab does not**, and
+nothing ever comes back to that session. Without this job those rows stay open
+for ever and the record becomes unreadable within a week: a finished session and
+a running one look identical. Idempotent by construction — the `UPDATE` excludes
+rows that already carry an end.
+
+### `prune-impersonations` — 12 months
+
+⚠️ **This deletes the answer to "did somebody go into my account last spring".**
+The window matches what this template already keeps `ai_usage` for; a shorter
+one weakens a member's own subject access request, and that is the trade being
+made rather than a default nobody thought about.
+
+### `check-stuck-reloads` — hourly, and it changes nothing
+
+The odd one out, and the reason it is here rather than on the request path.
+
+Auto top-up bills a card and waits for the IPN to book the credit. When that IPN
+never arrives, the balance is never raised, the threshold is still undershot,
+and six hours later the stale-lock timeout hands the slot back — so the card is
+billed again. `reloadIsPaused()` stops that at the second unconfirmed charge
+(see [`digistore-billing-modes.md`](digistore-billing-modes.md) → *Auto-reload*),
+which closes the loop but says nothing to anybody.
+
+**Nothing about that state looks like a fault.** Every charge succeeded, no
+exception was thrown, and the Member's own switch still reads "on".
+
+And it cannot be left to the spend path to notice, which is the part worth
+copying into your own job: a Member stuck at a zero balance **stops using the
+app**, so `spendTokens()` — the only thing that ever calls
+`autoReloadIfNeeded()` — is never called again. The account that most needs
+reporting is the one nobody touches. A state that only a request can discover is
+a state nobody discovers.
+
+It reports a bare count, per rule 3 above: who it happened to belongs on
+`/dashboard/admin/users/<id>`, which is behind `requireOwner()`, and in
+`node run.mjs logs`. `cron_runs` has no privacy question attached and stays that
+way.
 
 ---
 
@@ -231,10 +285,19 @@ node run.mjs cron --list
 prune-ai-usage  —  daily
   Delete AI-usage rows older than the retention window (default 12 months).
   last run: 3 h ago (ok) — 412 row(s) older than 12 month(s) deleted
+
+check-stuck-reloads  —  hourly
+  Count accounts whose auto top-up stopped charging because no credit came back.
+  last run: 12 min ago (ok) — 1 account(s) stopped charging — top-up billed, no credit booked
 ```
 
 `last run: never` on a week-old installation, or a `⚠ n of m run(s) failed`,
-is the signal. In production the same thing is `GET /api/cron?list` with the
+is the signal.
+
+⚠️ **`(ok)` is about the job, not about what it found.** The second line above
+is a healthy run reporting an unhealthy app: somebody's card was billed and no
+credit ever arrived. A reporting job is green whenever it managed to count, so
+read the count, not the status. In production the same thing is `GET /api/cron?list` with the
 bearer token, and every run also writes a `[cron]` line to
 `node run.mjs logs`.
 

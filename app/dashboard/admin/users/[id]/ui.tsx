@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardTitle } from "@/components/ui/card";
+import { Callout } from "@/components/ui/callout";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
   AlertDialog,
@@ -501,6 +502,7 @@ export function MemberBilling({
   memberLabel,
   balance,
   hasAccount,
+  pausedReloadCharges,
   showTokens,
   canAdjust,
   ledger,
@@ -515,6 +517,18 @@ export function MemberBilling({
   /** false = the Member never bought tokens, so there is no account row at
    *  all. Different from a balance of 0, and the Operator should see which. */
   hasAccount: boolean;
+  /**
+   * How many charges went out unanswered — **`null` unless auto top-up has
+   * actually stopped charging.** The threshold lives in `reloadIsPaused()` on
+   * the server (see page.tsx); one unconfirmed charge is the normal in-flight
+   * state and must not raise anything here.
+   *
+   * When it is a number, this page is the only screen that says WHOSE account
+   * it happened to: `check-stuck-reloads` reports a bare count and
+   * `node run.mjs logs` a member id, neither of which an Operator reads with a
+   * customer on the phone.
+   */
+  pausedReloadCharges: number | null;
   /** Show the balance and the ledger at all — false only in an app that sells
    *  no tokens AND for a Member who holds none. Resolved on the server from
    *  `billingMode`; see page.tsx. */
@@ -551,6 +565,16 @@ export function MemberBilling({
               </p>
             )}
           </div>
+          {/* Auto top-up billed the card and no credit ever came back.
+              Deliberately loud and deliberately HERE: this is the page an
+              Operator opens when a customer writes in about their balance, and
+              the customer's own screen still says auto top-up is on — because
+              it is. What stopped is the charging, not their setting. */}
+          {pausedReloadCharges !== null && (
+            <Callout variant="warning" title={t("reloadPausedTitle")}>
+              {t("reloadPausedBody", { count: pausedReloadCharges })}
+            </Callout>
+          )}
           {/* Rendered even without an account row: the first correction
               creates the account, which is exactly what an Operator crediting
               a Member who never bought tokens needs. Gone entirely in an app

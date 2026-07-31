@@ -106,7 +106,38 @@ export function allBindings(): Record<TaskId, Binding> {
  * where that one is reported.
  */
 export function taskProblems(): string[] {
-  return bindingProblems(raw, configuredProviders());
+  // The empty sink is deliberate and load-bearing. `bindingProblems()` treats a
+  // caller that passes NO notes array as one with nowhere to put a note, and
+  // reports the condition as a problem rather than dropping it on the floor —
+  // silence being the one answer it must never give. Passing an array that is
+  // then discarded says something different: this caller has a channel and
+  // chooses not to render it.
+  //
+  // The difference is visible on `/dashboard/admin/ai-costs`, which reads this
+  // list as "is the AI configured at all". Without the sink, an Anthropic-only
+  // machine — a working assistant, and an `image` task nobody has asked for —
+  // would report itself as unconfigured on the strength of a feature the app
+  // may never use. The note belongs in `ai-check`; it is not a fault on a page
+  // about spending.
+  return bindingProblems(raw, configuredProviders(), { notes: [] });
+}
+
+/**
+ * Things worth saying that are not wrong — the counterpart to
+ * {@link taskProblems}, reading the same pass for its other output.
+ *
+ * A task the Operator has never bound, running on a key that cannot do its kind
+ * of work, is not a misconfiguration: it is a feature nobody has asked for yet.
+ * Whoever shows these must not fail on them.
+ *
+ * `scripts/ai/check.mjs` does not call this — it cannot import TypeScript
+ * (CLAUDE.md → *Three systems*) and collects the same array from
+ * `bindingProblems()` directly. This is the accessor for everything that can.
+ */
+export function taskNotes(): string[] {
+  const notes: string[] = [];
+  bindingProblems(raw, configuredProviders(), { notes });
+  return notes;
 }
 
 /** Problems that are about the CONFIG rather than about this machine. */

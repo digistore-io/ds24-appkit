@@ -34,7 +34,7 @@ import { isMediaEnabled, mediaConfig } from "@/lib/media/config";
 import { acceptUpload } from "@/lib/media/manage";
 import { MediaError, formatBytes, kindForMime, type MediaErrorCode } from "@/lib/media/rules";
 import { mediaStoreProblems } from "@/lib/media/store";
-import { isLimited, record } from "@/lib/rate-limit";
+import { forgetOne, isLimited, record } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -72,20 +72,41 @@ export async function POST(request: Request): Promise<Response> {
   const limit = { max: config.maxUploadsPerHour, windowMs: 60 * 60 * 1000 };
   if (isLimited(BUCKET, memberId, limit)) return refuse("rateLimited", 429);
 
+  // Counted HERE, before the body is read — not after the checks below.
+  // It used to sit past the size refusal, so the requests that cost the most
+  // were the only ones the brake never saw: a member could loop 49 MB parts and
+  // every one was fully buffered, refused, and not counted. A refused request
+  // still consumed the thing this limit protects.
+  record(BUCKET, memberId, limit);
+
   // 4. Get the file out of the request.
+  //
+  //    A request that turns out to carry no file gets its slot BACK. Counting
+  //    before the read is right for the reason above, and it also metered the
+  //    one case that costs nothing — an empty POST. A form bug or a client retry
+  //    loop could then lock a member out for an hour without a byte having been
+  //    uploaded, and there is no way for them to clear it. `forgetOne()` gives
+  //    back exactly the hit recorded above; it is not `clearKey()`, which would
+  //    turn an empty request into a quota reset.
   let form: FormData;
   try {
     form = await request.formData();
   } catch {
+    forgetOne(BUCKET, memberId);
     return refuse("noFile", 400);
   }
   const file = form.get("file");
-  if (!(file instanceof File) || file.size === 0) return refuse("noFile", 400);
+  if (!(file instanceof File) || file.size === 0) {
+    forgetOne(BUCKET, memberId);
+    return refuse("noFile", 400);
+  }
 
-  // 5. A cheap size refusal before the bytes are pulled into memory. `file.size`
-  //    is the multipart part's declared length, so it is not a check on its own
-  //    — `acceptUpload` measures what actually arrived. It is here so that an
-  //    obviously oversized upload is refused without buffering it first.
+  // 5. A size refusal from the part's declared length. NOT a check on its own —
+  //    `acceptUpload` measures what actually arrived — and NOT free either:
+  //    `request.formData()` above has already read the body, which is the
+  //    ceiling this endpoint has and the reason the direct-to-bucket path
+  //    exists (docs/visuals.md). It is here to give an oversized upload a
+  //    message that names the limit rather than a generic refusal.
   const declaredKind = kindForMime(config, file.type || "");
   const ceiling = declaredKind
     ? config.kinds[declaredKind].maxBytes
@@ -93,8 +114,6 @@ export async function POST(request: Request): Promise<Response> {
   if (file.size > ceiling) {
     return refuse("tooLarge", 413, `max ${formatBytes(ceiling)}`);
   }
-
-  record(BUCKET, memberId, limit);
 
   // 6. And now the real checks: what the bytes ARE, whether this role may put
   //    that in, and the metadata strip. All of it in `lib/media/manage.ts`.

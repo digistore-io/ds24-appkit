@@ -19,6 +19,10 @@
       "enabled": true,
       "everyMinutes": 1440,
       "retentionMonths": 12
+    },
+    "check-stuck-reloads": {
+      "enabled": true,
+      "everyMinutes": 60
     }
   }
 }

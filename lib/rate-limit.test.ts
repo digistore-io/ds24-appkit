@@ -5,6 +5,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import {
   type Limit,
   clearKey,
+  forgetOne,
   isLimited,
   isOverLimit,
   record,
@@ -111,5 +112,31 @@ describe("the origin-keyed sign-in limit", () => {
     // An office behind one NAT shares an origin. The limit has to leave room
     // for several people fumbling a password without locking the building out.
     expect(SIGN_IN_ORIGIN_LIMIT.max).toBeGreaterThan(SIGN_IN_LIMIT.max);
+  });
+});
+
+describe("forgetOne", () => {
+  const limit = { max: 3, windowMs: 60_000 };
+
+  it("gives back exactly one hit, not the whole history", () => {
+    // The upload endpoint records before it reads the body — reading a 49 MB
+    // part is the expense the limit protects — and then has to refund the one
+    // case that costs nothing, a POST with no file in it. `clearKey()` would
+    // have made an empty request a way to reset the quota, which is a wider
+    // hole than the one being closed.
+    record("b", "alice", limit);
+    record("b", "alice", limit);
+    record("b", "alice", limit);
+    expect(isLimited("b", "alice", limit)).toBe(true);
+
+    forgetOne("b", "alice");
+    expect(isLimited("b", "alice", limit)).toBe(false);
+
+    record("b", "alice", limit);
+    expect(isLimited("b", "alice", limit)).toBe(true);
+  });
+
+  it("is harmless for a key with no history", () => {
+    expect(() => forgetOne("b", "nobody")).not.toThrow();
   });
 });

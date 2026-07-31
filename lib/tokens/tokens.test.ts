@@ -12,6 +12,8 @@ import {
   hasSufficientBalance,
   shouldAutoReload,
   isReloadLockStale,
+  reloadIsPaused,
+  RELOAD_ATTEMPT_LIMIT,
 } from "./account";
 
 describe("packages", () => {
@@ -108,5 +110,65 @@ describe("isReloadLockStale", () => {
   it("a lock older than the timeout is stale", () => {
     const old = new Date(now.getTime() - 7 * 3_600_000); // 7h alt (Timeout 6h)
     expect(isReloadLockStale(old, now)).toBe(true);
+  });
+});
+
+describe("reloadIsPaused", () => {
+  // The loop this exists to close: the card is billed, the IPN never arrives,
+  // the balance is never credited, so `shouldAutoReload` stays true — and the
+  // 6h stale-lock timeout, written to recover a crashed process, becomes the
+  // interval at which the same charge repeats. Four times a day, under
+  // Digistore24's 10/day cap, so nothing outside this app ever stops it.
+
+  it("does not pause an account that has never charged", () => {
+    expect(reloadIsPaused({ reloadAttempts: 0 })).toBe(false);
+  });
+
+  it("does NOT pause after a single unconfirmed charge", () => {
+    // The important negative. One charge with no credit yet is the normal
+    // state of every healthy top-up while the IPN is in flight, and Digistore24
+    // is allowed to be slower than the stale timeout. Pausing here would stop
+    // working installations.
+    expect(reloadIsPaused({ reloadAttempts: 1 })).toBe(false);
+  });
+
+  it("pauses at the limit", () => {
+    expect(reloadIsPaused({ reloadAttempts: RELOAD_ATTEMPT_LIMIT })).toBe(true);
+  });
+
+  it("stays paused above the limit", () => {
+    // `>=`, not `===`. An account that somehow got past the ceiling — a row
+    // written before this column existed, a concurrent claim — must stay
+    // stopped rather than falling through the check and charging again.
+    expect(reloadIsPaused({ reloadAttempts: RELOAD_ATTEMPT_LIMIT + 5 })).toBe(
+      true,
+    );
+  });
+
+  it("takes the limit as a parameter, so the ceiling is not baked into callers", () => {
+    expect(reloadIsPaused({ reloadAttempts: 1 }, 1)).toBe(true);
+    expect(reloadIsPaused({ reloadAttempts: 4 }, 9)).toBe(false);
+  });
+
+  it("is independent of the Member's own switch", () => {
+    // `shouldAutoReload` answers "does this account WANT a top-up";
+    // `reloadIsPaused` answers "may we still charge for it". Keeping them
+    // apart is what lets the caller report a paused account as something other
+    // than a disabled one — and what keeps the pause invisible to the Member's
+    // setting, which is deliberately left switched on.
+    const wants = {
+      balance: 0,
+      autoReloadEnabled: true,
+      autoReloadThreshold: 10,
+    };
+    expect(shouldAutoReload(wants)).toBe(true);
+    expect(reloadIsPaused({ reloadAttempts: RELOAD_ATTEMPT_LIMIT })).toBe(true);
+  });
+
+  it("the shipped limit is 2 — one lost IPN tolerated, the second stops it", () => {
+    // Pinned deliberately. Raising it means somebody's card is billed a third
+    // time for nothing; lowering it to 1 stops healthy accounts whose IPN was
+    // merely slow. Changing this number is a decision, not a tweak.
+    expect(RELOAD_ATTEMPT_LIMIT).toBe(2);
   });
 });

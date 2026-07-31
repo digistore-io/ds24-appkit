@@ -450,6 +450,22 @@ taken on a phone carries where it was taken to within a few metres, and nobody
 looking at the picture can tell it is there. JPEG, PNG and WebP are stripped on
 the way in (`lib/media/exif.ts`).
 
+**And an image format that cannot be stripped is not accepted**, which is what
+keeps the sentence above true rather than approximately true. GIF is the case
+that exists today: its metadata sits in Comment and Application Extension
+blocks that `exif.ts` does not walk. Adding `image/gif` — or any other
+unstrippable type — to `config/media.json` does not quietly widen what this
+page promises: the type is dropped from the accepted list, an upload of one is
+refused, and `node run.mjs media-check` names it. **Files already stored are
+left alone**, so a config mistake never makes existing pictures unreachable.
+
+**A file that arrives damaged is refused rather than stored half-stripped.** If
+the walk cannot parse a JPEG, PNG or WebP it cannot promise anything about what
+is left in it, so the upload is rejected with "that file looks damaged" instead
+of being stored with its metadata possibly intact. That refusal is the reason
+the promise on this page holds for every stored image and not merely for the
+well-formed ones.
+
 ⚠️ **Video is not stripped, and a privacy policy written from this file must not
 claim otherwise.** An MP4 can carry its recording location in a metadata atom.
 Removing it means walking the atom tree and rewriting the offsets that depend on

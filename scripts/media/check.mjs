@@ -31,6 +31,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
 
 import { s3SettingsFromEnv, sendS3 } from "../../lib/media/s3-request.mjs";
+import { refusedTypes } from "../../lib/media/strip-rules.mjs";
 import "../lib/env.mjs";
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
@@ -105,6 +106,24 @@ async function checkS3() {
     return null;
   }
 
+  // An endpoint carrying a path segment produces `/bucket/bucket/key` while the
+  // signature covers `/bucket/key` — a 403 on everything, with nothing anywhere
+  // saying why. Caught here because it is a one-line mistake in a `.env`.
+  try {
+    const url = new URL(settings.endpoint);
+    if (url.pathname !== "/" && url.pathname !== "") {
+      bad(
+        `MEDIA_S3_ENDPOINT is "${settings.endpoint}" — it must be an ORIGIN with no ` +
+          `path. The bucket name goes in MEDIA_S3_BUCKET, and a path here is signed ` +
+          `differently from the one the request uses, so everything answers 403.`,
+      );
+      return settings;
+    }
+  } catch {
+    bad(`MEDIA_S3_ENDPOINT is not a URL: "${settings.endpoint}"`);
+    return null;
+  }
+
   ok(`bucket "${settings.bucket}" at ${settings.endpoint} (region ${settings.region})`);
 
   const key = `.media-check/${randomUUID()}.txt`;
@@ -153,11 +172,23 @@ async function main() {
   const config = await readConfig();
   const driver = (process.env.MEDIA_DRIVER ?? "").trim().toLowerCase() || "local";
   const realEnvironment = isRealEnvironment(process.env.APP_ENV);
+  const mediaOff = config?.enabled === false;
 
   console.log("\nWhere files go\n");
 
+  if (mediaOff) {
+    // The app is allowed to start without a bucket in this state
+    // (`lib/env-guard.ts`), which is why this command has to be the one that
+    // says it — otherwise switching media on later is a change nothing checks.
+    warn(
+      'config/media.json has "enabled": false, so this app accepts and serves ' +
+        "no files. That is why it may deploy without a bucket. The moment you " +
+        "set it to true, the storage below has to be real.",
+    );
+  }
+
   if (driver === "local") {
-    if (realEnvironment) {
+    if (realEnvironment && !mediaOff) {
       // The single most consequential thing this command can say.
       bad(
         `APP_ENV=${process.env.APP_ENV} with MEDIA_DRIVER unset or "local". ` +
@@ -169,9 +200,9 @@ async function main() {
       );
     } else {
       ok("driver: local disk — fine for development, and only for development");
-      warn(
-        "before going online this has to become a bucket, or the app will not start",
-      );
+      if (!mediaOff) {
+        warn("before going online this has to become a bucket, or the app will not start");
+      }
     }
     await checkLocal();
   } else if (driver === "s3") {
@@ -207,16 +238,42 @@ async function main() {
   console.log("\nWhat may go in\n");
 
   const kinds = config.kinds ?? {};
+  // The types that SURVIVE `refusedTypes()`, not the ones written in the file.
+  // This command used to print the raw list, so an operator who had added
+  // `image/gif` was told it was accepted while every upload of one was refused
+  // — the app and the command disagreeing about the same config, which is what
+  // `lib/media/strip-rules.mjs` now exists to prevent.
+  const refused = [];
+  const accepted = {};
   for (const [kind, rule] of Object.entries(kinds)) {
     if (kind.startsWith("_")) continue;
-    const types = (rule.mimeTypes ?? []).join(", ");
+    const declared = rule.mimeTypes ?? [];
+    const dropped = refusedTypes(kind, declared);
+    for (const entry of dropped) refused.push({ kind, ...entry });
+    accepted[kind] = declared.filter((mime) => !dropped.some((d) => d.mime === mime));
     console.log(
       `  ${kind.padEnd(6)} up to ${mb(rule.maxBytes).padStart(8)}   ` +
-        `address valid ${duration(rule.signedUrlSeconds).padStart(6)}   ${types}`,
+        `address valid ${duration(rule.signedUrlSeconds).padStart(6)}   ` +
+        `${accepted[kind].join(", ")}`,
+    );
+  }
+
+  // Said here rather than left to be discovered by a refused upload. It is NOT
+  // fatal and must not become so: the app keeps running and keeps delivering
+  // what is already stored — only uploads of this type are refused.
+  for (const { kind, mime, why } of refused) {
+    warn(
+      `config/media.json lists "${mime}" under kinds.${kind}, and it is NOT accepted: ` +
+        `${why}. Uploads of it are refused; files already stored are unaffected.`,
     );
   }
 
   console.log("");
+  // The DECLARED types, not the accepted ones — the same choice
+  // `mediaConfigProblems()` makes and for the same reason. Checking against the
+  // accepted list would report `image/gif` a second time, as "belongs to no
+  // kind", and send the operator to add it back to a kind — the opposite of
+  // the fix, and marked fatal where the real answer is the warning above.
   const known = new Set(
     Object.entries(kinds)
       .filter(([k]) => !k.startsWith("_"))

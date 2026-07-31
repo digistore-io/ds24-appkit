@@ -181,6 +181,27 @@ describe("the empty payload hash", () => {
   });
 });
 
+// ── What is NOT measured against a vendor vector, and why ──────────────────
+//
+// Stated here because a code review asked for it and the answer is not
+// reassuring: **neither function the app actually calls is compared byte for
+// byte.** The 16 cases above prove `canonicalRequest`, `stringToSign` and the
+// key derivation, which is where the arithmetic lives — but:
+//
+//   `signRequest`  composes one more signed header than the suite's fixtures
+//                  carry (`x-amz-content-sha256`), so its Authorization line
+//                  cannot equal theirs. Its numbers come from the three pieces
+//                  above, each of which IS measured.
+//   `presignUrl`   has no published vector at all. AWS's suite covers header
+//                  signing only, so what follows is self-consistency and
+//                  parameter presence — real, and not the same thing.
+//
+// What closes the gap is a round trip against a real bucket, which
+// `node run.mjs media-check` performs for the header path. The presigned path
+// was verified by hand against MinIO during implementation and nothing in this
+// repository repeats that: it needs credentials, and a test that silently skips
+// without them is worse than one that does not exist.
+
 describe("presignUrl", () => {
   const input = {
     method: "GET",

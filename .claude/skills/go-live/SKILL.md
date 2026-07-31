@@ -24,13 +24,26 @@ does it really sell once it is up.
   app aborts at startup (`lib/env-guard.ts`), because the development login does
   not exist there and nobody could sign in. `node run.mjs mail-setup` if it is
   missing. This is the single most common reason a first deploy fails.
-- **Somewhere for files to live.** The second thing that stops the app booting,
-  for the same reason and in the same file as mail: on a host, a local disk is
-  not storage. The next deploy takes every uploaded file with it, and with two
-  instances a customer's picture is present about half the time — a fault that
-  only appears after the app is successful and cannot be reproduced on one
-  machine. `node run.mjs media-check` says where files go and, with a bucket
-  configured, proves it by writing, reading and deleting a throwaway object.
+- **Somewhere for files to live — *if the app takes files*.** On a host a local
+  disk is not storage: the next deploy takes every uploaded file with it, and
+  with two instances a customer's picture is present about half the time — a
+  fault that only appears after the app is successful and cannot be reproduced
+  on one machine. So `MEDIA_DRIVER=local` outside DEV stops the app booting, the
+  same way missing mail does and in the same file.
+
+  **With one exception, and it is the one to check here.** An app whose
+  `config/media.json` says `"enabled": false` is exempt — it accepts no files,
+  so requiring it to book storage before it could deploy at all would be a bill
+  for nothing. That exemption is why this is a pre-flight item rather than
+  something the boot guard settles: **switching media ON later without a bucket
+  is a state nothing refuses at startup.** So ask both halves, in this order:
+
+  1. Does this app take files at all? (`config/media.json` → `enabled`, and
+     whether anything calls `acceptUpload()` or `createMedia()`.)
+  2. If yes — `node run.mjs media-check`. It says where files go and, with a
+     bucket configured, proves it by writing, reading and deleting a throwaway
+     object.
+
   Booking one is part of **`setup-hosting`** (step 6b); this is the check that
   it really happened.
 - **Migrations ready:** `drizzle/` up to date (`npm run db:generate` after schema changes).

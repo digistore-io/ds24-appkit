@@ -181,7 +181,8 @@ if (unpriced.length > 0) {
 
 // ── Verdict ─────────────────────────────────────────────────────────────────
 
-const problems = bindingProblems(models, configured);
+const notes = [];
+const problems = bindingProblems(models, configured, { notes });
 
 console.log("");
 if (problems.length > 0) {
@@ -191,7 +192,16 @@ if (problems.length > 0) {
   process.exit(1);
 }
 
-console.log("✓ Every task is bound to a provider you have a key for.");
+// Not failures. A task nobody has bound, on a key that cannot do its kind of
+// work, is a feature that has not been asked for yet — and a gate that goes red
+// for one is a gate people learn to ignore.
+if (notes.length > 0) {
+  console.log("Worth knowing:\n");
+  for (const note of notes) console.log(`  · ${note}`);
+  console.log("");
+}
+
+console.log("✓ Every task you have bound is bound to a provider you have a key for.");
 console.log("\n  There is no spend ceiling in this template, deliberately — a ceiling");
 console.log("  protects against a runaway by taking your app's AI offline for real");
 console.log("  customers. If you want a hard stop, set a usage limit on your provider");

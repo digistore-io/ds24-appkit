@@ -42,6 +42,35 @@ interface Signature {
 const ascii = (text: string): number[] => [...text].map((c) => c.charCodeAt(0));
 
 /**
+ * The `ftyp` brands that mean "an MP4 an app would play".
+ *
+ * Every entry here is a brand a browser's `<video>` will attempt; the ones left
+ * out — `heic`, `heix`, `mif1`, `M4A `, `jp2 ` — are pictures and sound files
+ * wearing the same container, and calling them video is how an iPhone
+ * photograph ends up stored as a film.
+ *
+ * **It has to cover the ISO base-media family, not just `isom`.** The first
+ * version of this list held eight brands and refused `iso4`, `iso5`, `iso6`,
+ * `mp4v`, `mmp4`, `avc3` and `MSNV` — which is every fragmented MP4, i.e. what
+ * a phone records and what ffmpeg writes by default. Trading "an iPhone photo
+ * is stored as a film" for "an ordinary video cannot be uploaded at all" is not
+ * a fix. A brand that is not here still falls through to the rest of the table
+ * and is refused as an unknown type: unknown beats confidently wrong, in both
+ * directions.
+ *
+ * `qt  ` is deliberately NOT here. It is QuickTime, not MP4 — a different
+ * format in the same container family — and answering `video/mp4` for it stores
+ * a `.mov` under a media type no player will accept, which `nosniff` then makes
+ * final. It falls through and is refused, which is the honest answer until
+ * `video/quicktime` is a type this app carries on purpose.
+ */
+const VIDEO_BRANDS = [
+  "isom", "iso2", "iso4", "iso5", "iso6",
+  "mp41", "mp42", "mp4v", "mmp4", "MSNV",
+  "avc1", "avc3", "M4V ", "dash",
+];
+
+/**
  * The signatures, most specific first.
  *
  * Order matters for the RIFF family: `RIFF....WEBP` and `RIFF....WAVE` share
@@ -66,11 +95,26 @@ const SIGNATURES: readonly Signature[] = [
   { mime: "image/gif", offset: 0, magic: ascii("GIF89a") },
 
   // ── video ────────────────────────────────────────────────────────────────
-  // MP4 and its relatives declare themselves four bytes in, after a length.
-  // The brand that follows (`isom`, `mp42`, `M4V `…) is deliberately not
-  // checked: there are dozens, they are added over time, and `ftyp` at offset
-  // four is the part that identifies the container.
-  { mime: "video/mp4", offset: 4, magic: ascii("ftyp") },
+  // MP4 and its relatives declare themselves four bytes in, after a length —
+  // and then say WHICH relative in the four bytes after that.
+  //
+  // The brand used to go unchecked, on the reasoning that `ftyp` identifies the
+  // container. It does not identify the FORMAT: HEIC (every modern iPhone
+  // photograph), M4A and JPEG-2000 all carry `ftyp` too. The measured
+  // consequence was that the most likely upload this app will ever see was
+  // stored as `video/mp4` — the wrong kind, never stripped of its GPS because
+  // video is deliberately not stripped, and unplayable in any player.
+  //
+  // So the brand is checked, and the list is the video ones only. A brand that
+  // is not here is not refused by this entry — it simply falls through to the
+  // rest of the table and, finding nothing, is refused as an unknown type.
+  // That is the right direction: unknown beats confidently wrong.
+  ...VIDEO_BRANDS.map((brand) => ({
+    mime: "video/mp4",
+    offset: 4,
+    magic: ascii("ftyp"),
+    also: { offset: 8, magic: ascii(brand) },
+  })),
   // Matroska and WebM share the EBML header. WebM is the one browsers play, and
   // telling them apart means parsing the DocType element — an installation that
   // needs Matroska adds it to `config/media.json` and gets `video/webm` here,
@@ -146,6 +190,55 @@ export function sniffMime(bytes: Uint8Array): string | null {
  * cases mean different things: no claim is a plain client, a wrong claim is
  * somebody testing what this endpoint believes.
  */
+/**
+ * Media types a browser sends that mean the same thing as ours.
+ *
+ * Every entry is a type a real browser really sends. `image/jpg` is the classic;
+ * the ZIP ones are what Windows Chrome and Edge send for a `.zip`, because that
+ * is what the Windows registry says.
+ */
+// A null prototype, and it is load-bearing rather than tidy. A plain object
+// literal inherits from `Object.prototype`, so `ALIASES["constructor"]` answers
+// with a FUNCTION — not `undefined` — and `??` never fires. Measured: a
+// multipart part sent as `Content-Type: constructor` threw
+// `TypeError: (ALIASES[stated] ?? []).includes is not a function` out of
+// `acceptUpload()`, which the endpoint reported to the uploader as "storage is
+// not reachable" while burning one of their thirty hourly slots. `__proto__`,
+// `toString` and `valueOf` are the same trick.
+const ALIASES: Record<string, string[]> = Object.assign(Object.create(null), {
+  "image/jpg": ["image/jpeg"],
+  "image/pjpeg": ["image/jpeg"],
+  "image/x-png": ["image/png"],
+  "application/x-zip-compressed": ["application/zip"],
+  "application/x-zip": ["application/zip"],
+  "multipart/x-zip": ["application/zip"],
+  "audio/mp3": ["audio/mpeg"],
+  "audio/x-wav": ["audio/wav"],
+  "audio/wave": ["audio/wav"],
+  // `video/quicktime` is deliberately NOT aliased to `video/mp4`. A `.mov` is a
+  // different format, and recording it as an MP4 stores something no player
+  // will open — with `X-Content-Type-Options: nosniff` making the wrong answer
+  // final. See `VIDEO_BRANDS` above.
+});
+
+/**
+ * What a browser says when it does not know.
+ *
+ * These are not claims, they are shrugs — and treating a shrug as a lie is how
+ * an ordinary upload from an ordinary machine gets refused. The bytes still
+ * decide; this only stops the disagreement check from firing on a non-answer.
+ */
+const UNKNOWING_TYPES = new Set([
+  "application/octet-stream",
+  "binary/octet-stream",
+  "application/unknown",
+]);
+// `text/plain` is NOT one of them, though it looks like it belongs. It is what
+// the registry answers for `.txt`, `.csv` and `.md` — a positive claim about a
+// readable file, not a shrug — and none of those sniff as anything, so they are
+// refused by the table either way. Listing it here bought nothing and cost the
+// mismatch signal: ZIP bytes offered as `text/plain` were accepted as a ZIP.
+
 export function agreedMime(bytes: Uint8Array, claimed: string | null): string | null {
   const actual = sniffMime(bytes);
   if (!actual) return null;
@@ -153,8 +246,14 @@ export function agreedMime(bytes: Uint8Array, claimed: string | null): string | 
 
   const stated = claimed.split(";")[0].trim().toLowerCase();
   if (stated === actual) return actual;
-  // A browser sends `image/jpg` for a JPEG often enough that refusing it would
-  // be refusing correct files. It is the one alias worth knowing.
-  if (stated === "image/jpg" && actual === "image/jpeg") return actual;
+  if ((ALIASES[stated] ?? []).includes(actual)) return actual;
+
+  // A browser that does not KNOW what it is sending is not lying about it.
+  // Windows has no registry entry for half the extensions people upload, and
+  // the answer is a generic type — which used to be refused as "the file is not
+  // what its name claims it is", accusing an operator of tampering while they
+  // uploaded the product they are selling.
+  if (UNKNOWING_TYPES.has(stated)) return actual;
+
   return null;
 }

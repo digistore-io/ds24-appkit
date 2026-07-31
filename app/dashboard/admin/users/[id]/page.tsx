@@ -12,6 +12,7 @@ import { grantableProducts } from "@/lib/entitlements/grant-rules";
 import {
   getTokenAccount,
   listLedgerFor,
+  reloadIsPaused,
   LEDGER_PAGE_SIZE,
 } from "@/lib/tokens/account";
 import { sellsTokens } from "@/lib/billing-mode";
@@ -105,6 +106,17 @@ export default async function AdminUserDetailPage({
         memberLabel={user.email ?? user.id}
         balance={account?.balance ?? 0}
         hasAccount={Boolean(account)}
+        // Straight off the row this page already read — no extra query.
+        //
+        // `null` unless charging has actually STOPPED. One unconfirmed charge
+        // is the normal state of every healthy top-up for as long as the IPN
+        // is in flight, so surfacing the raw count would put a warning on this
+        // page during ordinary operation — and a warning that cries wolf on
+        // the happy path is one nobody reads on the bad one. `reloadIsPaused`
+        // owns the threshold; the component is not given a rule to duplicate.
+        pausedReloadCharges={
+          account && reloadIsPaused(account) ? account.reloadAttempts : null
+        }
         showTokens={showTokens}
         canAdjust={tokensSold}
         ledger={ledger.slice(0, LEDGER_PAGE_SIZE)}

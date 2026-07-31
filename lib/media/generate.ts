@@ -35,7 +35,7 @@
 // belongs where the price is known and a person is present — the Server Action
 // — in the order `check → work → charge` that `template/CLAUDE.md` sets out.
 // Doing it here would put a debit inside a library that a cron job might call.
-import { runImageTask } from "@/lib/ai/run";
+import { MAX_IMAGES_PER_CALL, runImageTask } from "@/lib/ai/run";
 import type { MediaVisibility } from "./rules";
 import { planProblem } from "./config";
 import { createMedia } from "./manage";
@@ -62,7 +62,7 @@ export interface GenerateImageInput {
   visibility?: MediaVisibility;
   /** Required when `visibility` is `entitled`. */
   requiresPlan?: string | null;
-  /** How many. Each one is billed. */
+  /** How many. Each one is billed; the ceiling is {@link MAX_IMAGES_PER_CALL}. */
   n?: number;
   /** Provider-shaped, e.g. `"1024x1024"`. */
   size?: string;
@@ -77,9 +77,16 @@ export interface GenerateImageInput {
  * usage row is written either way, by `runImageTask`, because a failed call is
  * exactly what an Operator needs to see when a provider is having a bad day.
  *
- * Nothing is stored unless the call succeeded, and each picture is stored
- * before the next is requested — so a failure half-way through leaves the ones
- * already paid for rather than discarding them.
+ * **Nothing is stored unless the whole call succeeded**, and that is worth
+ * stating rather than dressing up: `runImageTask()` returns when every picture
+ * has arrived, so a provider that fails on the third of four discards the two
+ * that were already drawn and billed. The docstring here used to claim the
+ * opposite. Keeping the survivors would mean the AI layer handing back partial
+ * results, which is a different contract than the text tasks have — and `n` is
+ * capped at {@link MAX_IMAGES_PER_CALL}, so the exposure is bounded.
+ *
+ * The failed call IS recorded (`run.ts` writes the row either way), which is
+ * what an Operator needs when a provider is having a bad day.
  */
 export async function generateImage(input: GenerateImageInput): Promise<MediaRow[]> {
   const alt = input.alt?.trim();

@@ -76,14 +76,20 @@ export function buildBody(req: ImageRequest): Record<string, unknown> {
       // examples use; the model may add a sentence beside the picture and
       // `imagesFrom` simply ignores the text parts.
       responseModalities: ["TEXT", "IMAGE"],
-      // An Operator's own generationConfig wins, because it is the escape hatch
-      // (AD-13) — but the modality above is restored underneath it in the
-      // spread order only if they did not name one themselves.
+      // An Operator's own generationConfig wins outright: it is spread after
+      // the modality, so naming `responseModalities` themselves replaces ours.
+      // That is the escape hatch working as documented (AD-13) — and it is the
+      // one way to get a text-and-image answer if somebody wants one.
       ...configured,
     },
-    // Anything else they set travels untouched.
+    // Anything else they set travels untouched — except the two keys that ARE
+    // the request. A `providerOptions.contents` would silently replace the
+    // prompt with whatever was in the binding, which is not an escape hatch,
+    // it is a way to send a call nobody wrote.
     ...Object.fromEntries(
-      Object.entries(options).filter(([key]) => key !== "generationConfig"),
+      Object.entries(options).filter(
+        ([key]) => key !== "generationConfig" && key !== "contents",
+      ),
     ),
   };
 }
@@ -101,8 +107,16 @@ export function imagesFrom(json: GeminiImageResponse): GeneratedImage[] {
       const data = inline?.data;
       if (typeof data !== "string" || data === "") continue;
 
+      // `Buffer.from(…, "base64")` never throws: it skips what it cannot read
+      // and returns however many bytes it managed, which for a malformed part
+      // is none at all. A zero-byte picture would be written to the bucket and
+      // given a `media` row claiming it is an image, so it is dropped here —
+      // the same guard `image-openai.ts` carries, and the same reasoning.
+      const bytes = new Uint8Array(Buffer.from(data, "base64"));
+      if (bytes.length === 0) continue;
+
       images.push({
-        bytes: new Uint8Array(Buffer.from(data, "base64")),
+        bytes,
         // From the answer, never guessed from the model name.
         mime:
           (inline as { mimeType?: string })?.mimeType ??
@@ -117,6 +131,27 @@ export function imagesFrom(json: GeminiImageResponse): GeneratedImage[] {
   }
 
   return images;
+}
+
+/**
+ * How many pictures the PROVIDER said it produced — including any this app
+ * could not decode.
+ *
+ * The distinction is the invoice. `imagesFrom()` drops parts that decode to
+ * nothing, and billing from its length would quietly under-count exactly the
+ * responses where something went wrong: four inline parts, one of them
+ * corrupt, is still four pictures Google charged for. The comment beside
+ * `billed` used to claim this while the code counted the filtered list.
+ */
+export function returnedImageCount(json: GeminiImageResponse): number {
+  let count = 0;
+  for (const candidate of json.candidates ?? []) {
+    for (const part of candidate.content?.parts ?? []) {
+      const data = (part.inlineData ?? part.inline_data)?.data;
+      if (typeof data === "string" && data !== "") count += 1;
+    }
+  }
+  return count;
 }
 
 /**
@@ -148,7 +183,14 @@ export const geminiImageAdapter: ImageAdapter = {
     // honest on the usage row and the bill.
     const wanted = Math.max(1, req.n);
     const images: GeneratedImage[] = [];
+    let billed = 0;
     let usage: Usage = emptyUsage();
+
+    // Every throw below this line carries what the earlier rounds already
+    // consumed. A request for four that fails on the third has two pictures on
+    // Google's invoice; `run.ts` writes them to `ai_usage` so they appear on
+    // the cost page instead of nowhere. See `ProviderError.usage`.
+    const spentSoFar = (): Usage => ({ ...usage, images: billed });
 
     for (let i = 0; i < wanted; i += 1) {
       let response: Response;
@@ -167,6 +209,7 @@ export const geminiImageAdapter: ImageAdapter = {
           "providerUnreachable",
           `gemini: ${(error as Error)?.message ?? "no response"}`,
           "gemini",
+          spentSoFar(),
         );
       }
 
@@ -176,11 +219,13 @@ export const geminiImageAdapter: ImageAdapter = {
           codeForStatus(response.status),
           `gemini answered ${response.status}: ${detail.slice(0, 500)}`,
           "gemini",
+          spentSoFar(),
         );
       }
 
       const json = (await response.json().catch(() => ({}))) as GeminiImageResponse;
       const batch = imagesFrom(json);
+      const returned = returnedImageCount(json);
 
       if (batch.length === 0) {
         throw new ProviderError(
@@ -188,10 +233,17 @@ export const geminiImageAdapter: ImageAdapter = {
           "gemini returned no image data — check that the bound model can draw " +
             "and that responseModalities was not overridden in providerOptions",
           "gemini",
+          spentSoFar(),
         );
       }
 
       images.push(...batch);
+      // Counted from what the PROVIDER returned, not from what decoded — see
+      // `returnedImageCount()`. `batch.length` cannot be zero here (the throw
+      // above), so the floor of 1 only ever applies where the count and the
+      // decode disagree, which is the case worth over-stating rather than
+      // under-stating.
+      billed += Math.max(returned, batch.length);
 
       // Token counts add up across the calls; the picture count is set once at
       // the end from what actually arrived.
@@ -207,7 +259,7 @@ export const geminiImageAdapter: ImageAdapter = {
       };
     }
 
-    usage.images = images.length;
+    usage.images = billed;
     return { images, usage };
   },
 };

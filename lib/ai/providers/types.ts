@@ -226,6 +226,21 @@ export class ProviderError extends Error {
     /** For the log only. Never shown to a Member. */
     message?: string,
     public readonly provider?: ProviderId,
+    /**
+     * What the provider had already consumed when this call failed.
+     *
+     * Only ever set where work was genuinely done and paid for before the
+     * failure — the Gemini image adapter draws one picture per HTTP call, so a
+     * request for four that fails on the third has two pictures on the invoice
+     * and nothing to show for them. Without this the row written by `run.ts`
+     * carried `usage: null` and those two appeared nowhere: not in `ai_usage`,
+     * not on `/dashboard/admin/ai-costs`, not in the "could not account for"
+     * column either. Money spent and invisible is the one state the cost page
+     * exists to make impossible.
+     *
+     * Left undefined by every adapter that consumed nothing.
+     */
+    public readonly usage?: Usage | null,
   ) {
     super(message ?? code);
     this.name = "ProviderError";

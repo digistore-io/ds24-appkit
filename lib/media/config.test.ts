@@ -4,10 +4,10 @@
 // The shipped `config/media.json`, held to the same deal `lib/mcp/config.test.ts`
 // makes: a second source of truth is only safe while something checks it
 // against the first.
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { MEDIA_KINDS } from "./rules";
-import { DEFAULT_MEDIA_CONFIG, mediaConfig, mediaConfigProblems } from "./config";
+import { DEFAULT_MEDIA_CONFIG, mediaConfig, mediaConfigProblems, planProblem } from "./config";
 import { driverFromEnv, mediaStoreProblems } from "./store";
 
 describe("the shipped media config", () => {
@@ -106,5 +106,100 @@ describe("mediaStoreProblems", () => {
         MEDIA_S3_SECRET_ACCESS_KEY: "s",
       } as unknown as NodeJS.ProcessEnv),
     ).toEqual([]);
+  });
+});
+
+// ── The lint that switched the whole feature off ───────────────────────────
+//
+// Added after a code review measured it. `mediaConfigProblems()` grew a check
+// for image formats `exif.ts` cannot strip, and `isMediaEnabled()` was
+// `enabled && problems.length === 0` — so `image/gif`, which every app
+// generated before that change still carries (because `node run.mjs update`
+// deliberately never touches `config/`), turned the media feature OFF: uploads
+// 503 and every already-stored item 404, photographs and GIFs alike.
+//
+// The rule these tests hold in place: a configuration mistake refuses what it
+// is about, and never stops delivery of what is already in the bucket.
+
+describe("a config problem does not disable delivery", () => {
+  it("reports an unstrippable image type without switching media off", async () => {
+    vi.resetModules();
+    vi.doMock("@/config/media.json", () => ({
+      default: {
+        enabled: true,
+        kinds: { image: { mimeTypes: ["image/jpeg", "image/gif"], maxBytes: 1000 } },
+        mayUpload: { owner: ["image/jpeg", "image/gif"] },
+      },
+    }));
+    const mod = await import("./config");
+
+    expect(mod.mediaConfigProblems().join("\n")).toMatch(/image\/gif/);
+    // The whole point: still on.
+    expect(mod.isMediaEnabled()).toBe(true);
+    // And the refusal is exactly as wide as the fault — a GIF upload is
+    // refused because no kind accepts it, while JPEG is untouched.
+    expect(mod.mediaConfig().kinds.image.mimeTypes).toContain("image/jpeg");
+    expect(mod.mediaConfig().kinds.image.mimeTypes).not.toContain("image/gif");
+    vi.doUnmock("@/config/media.json");
+    vi.resetModules();
+  });
+
+  it("drops an SVG from the accepted list rather than refusing to serve anything", async () => {
+    vi.resetModules();
+    vi.doMock("@/config/media.json", () => ({
+      default: {
+        enabled: true,
+        kinds: { image: { mimeTypes: ["image/png", "image/svg+xml"], maxBytes: 1000 } },
+        mayUpload: { owner: ["image/png"] },
+      },
+    }));
+    const mod = await import("./config");
+
+    expect(mod.mediaConfigProblems().join("\n")).toMatch(/SVG/);
+    expect(mod.isMediaEnabled()).toBe(true);
+    expect(mod.mediaConfig().kinds.image.mimeTypes).not.toContain("image/svg+xml");
+    vi.doUnmock("@/config/media.json");
+    vi.resetModules();
+  });
+
+  it("is off only when the switch says so", async () => {
+    vi.resetModules();
+    vi.doMock("@/config/media.json", () => ({ default: { enabled: false } }));
+    const mod = await import("./config");
+    expect(mod.isMediaEnabled()).toBe(false);
+    vi.doUnmock("@/config/media.json");
+    vi.resetModules();
+  });
+});
+
+// ── `planProblem()`, which decides whether a sold file can ever be fetched ──
+//
+// Named as untested by the first review pass and not addressed by it. It is the
+// guard standing between `requiresPlan` and `hasPlan()`, and `hasPlan()`
+// **throws** on a Product Key it does not know — so a wrong value here does not
+// mean "no access", it means the page rendering the item is a 500.
+
+describe("planProblem", () => {
+  it("accepts a Product Key that grants access", () => {
+    // A subscription is a right, which is what `entitled` visibility needs.
+    expect(planProblem("basis_monatlich")).toBeNull();
+  });
+
+  it("refuses a key that is in no registry at all", () => {
+    // The case that takes a page down: `hasPlan()` throws on it.
+    expect(planProblem("no_such_plan")).toMatch(/no product/);
+  });
+
+  it("refuses a token package, naming why it could never work", () => {
+    // A balance is a quantity, not a right. `hasPlan()` answers false for it
+    // for ever, so a file behind one is a file nobody can ever fetch — and the
+    // failure is silent, which is worse than the 500 above.
+    const problem = planProblem("starter");
+    expect(problem).toMatch(/token package/);
+    expect(problem).toMatch(/hasPlan/);
+  });
+
+  it("refuses an empty key rather than treating it as 'no plan needed'", () => {
+    expect(planProblem("")).not.toBeNull();
   });
 });

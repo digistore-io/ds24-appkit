@@ -361,13 +361,33 @@ rather than counting them. For the ones that do ship:
 - After any update: `node run.mjs test`. An update that breaks the build is not
   a fix.
 - A transitive dependency with no fixed version goes in `overrides` in
-  `package.json` — the template already uses that mechanism.
+  `package.json` — the template already uses that mechanism. **Two packages are
+  excluded from it**, see below.
 - Framework versions current and patched: Next.js and `next-auth` above all.
   A Next.js version behind a security release is **HIGH** on its own.
 
 Severity comes from npm, but judge it against this app: a ReDoS in a package
 that only ever parses your own config is not the same as one in the request
 path. Say which it is.
+
+**One set of findings is already known, and it is not yours to fix.** A plain
+`npm audit` on this template reports nine high findings in the eslint chain
+(`brace-expansion`, GHSA-mh99-v99m-4gvg). Report them as **known, dev-only,
+accepted** — with `npm audit --omit=dev` clean as the evidence — and move on.
+Do not spend the check re-deriving them, and above all do not fix them:
+
+- **`overrides: { "minimatch": "^10" }` takes the count to zero and breaks the
+  linter.** minimatch 10's CommonJS build is not callable, and three
+  `eslint-config-next` plugins call it. This app's own `npm run lint` stays
+  green, so the damage is invisible here and lands on whoever enables one of
+  those rules later. `scripts/deps.test.ts` fails on it.
+- **`eslint@10`** (what `npm audit fix --force` proposes) reaches 6 of the 9 and
+  adds three `ERESOLVE` conflicts.
+
+The full reasoning, with the measurements, is in `scripts/deps.test.ts` and in
+`CLAUDE.md` → **What the first install prints**. A finding you decide to accept
+goes in the report with that decision written next to it — an accepted finding
+with no reason recorded is one the next run raises again.
 
 ## 6 · `api` — the endpoints that answer without a session
 

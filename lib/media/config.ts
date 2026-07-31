@@ -24,6 +24,7 @@
 import raw from "@/config/media.json";
 import { allProducts } from "@/lib/digistore/products";
 
+import { refusedMimes, refusedTypes } from "./strip-rules.mjs";
 import {
   MEDIA_KINDS,
   type KindRule,
@@ -50,7 +51,7 @@ export const DEFAULT_MEDIA_CONFIG: MediaConfig = {
   kinds: {
     image: {
       maxBytes: 10 * 1024 * 1024,
-      mimeTypes: ["image/jpeg", "image/png", "image/webp", "image/gif"],
+      mimeTypes: ["image/jpeg", "image/png", "image/webp"],
       signedUrlSeconds: 300,
     },
     video: {
@@ -75,7 +76,6 @@ export const DEFAULT_MEDIA_CONFIG: MediaConfig = {
       "image/jpeg",
       "image/png",
       "image/webp",
-      "image/gif",
       "video/mp4",
       "video/webm",
       "audio/mpeg",
@@ -100,13 +100,19 @@ function count(value: unknown, fallback: number, max: number): number {
   return Math.min(Math.floor(value), max);
 }
 
-/** A list of media types, lowercased. Anything that is not a clean list of strings falls back. */
+/**
+ * A list of media types, lowercased.
+ *
+ * **An explicit empty list means NOTHING, not "the default".** It used to fall
+ * back, which made `"member": []` — the obvious way to stop members uploading —
+ * silently leave them with jpeg, png, webp and pdf. A value that is not a list
+ * at all still falls back, because that is a broken file rather than a decision.
+ */
 function mimeList(value: unknown, fallback: readonly string[]): readonly string[] {
   if (!Array.isArray(value)) return fallback;
-  const cleaned = value
+  return value
     .filter((item): item is string => typeof item === "string" && item.trim() !== "")
     .map((item) => item.trim().toLowerCase());
-  return cleaned.length > 0 ? cleaned : fallback;
 }
 
 const MAX_BYTES_CEILING = 200 * 1024 * 1024;
@@ -120,9 +126,11 @@ export function mediaConfig(): MediaConfig {
     MEDIA_KINDS.map((kind) => {
       const fallback = DEFAULT_MEDIA_CONFIG.kinds[kind];
       const entry = (kindsRaw[kind] ?? {}) as Record<string, unknown>;
+      const declared = mimeList(entry.mimeTypes, fallback.mimeTypes);
+      const refused = new Set(refusedMimes(kind, declared));
       const rule: KindRule = {
         maxBytes: count(entry.maxBytes, fallback.maxBytes, MAX_BYTES_CEILING),
-        mimeTypes: mimeList(entry.mimeTypes, fallback.mimeTypes),
+        mimeTypes: declared.filter((mime) => !refused.has(mime)),
         // A day is the ceiling. Beyond that an address is not "short-lived" in
         // any sense a vendor would recognise, and the honest answer for content
         // that must not be passed on is a shorter one, not a longer one.
@@ -166,7 +174,18 @@ export function mediaConfigProblems(): string[] {
   const config = mediaConfig();
   const problems: string[] = [];
 
-  const known = new Set(MEDIA_KINDS.flatMap((kind) => config.kinds[kind].mimeTypes));
+  // The types the operator WROTE, not the ones that survived `refusedTypes()`.
+  // Checking against the filtered list would report `image/gif` twice — once as
+  // unstrippable and once as "belongs to no kind" — and the second message
+  // would send them to add it back to a kind, which is the opposite of the fix.
+  const kindsRaw = ((raw as Record<string, unknown>).kinds ?? {}) as Record<string, unknown>;
+  const declaredFor = (kind: MediaKind): readonly string[] =>
+    mimeList(
+      ((kindsRaw[kind] ?? {}) as Record<string, unknown>).mimeTypes,
+      DEFAULT_MEDIA_CONFIG.kinds[kind].mimeTypes,
+    );
+
+  const known = new Set(MEDIA_KINDS.flatMap((kind) => declaredFor(kind)));
 
   for (const [role, allowed] of Object.entries(config.mayUpload)) {
     for (const mime of allowed) {
@@ -179,15 +198,16 @@ export function mediaConfigProblems(): string[] {
     }
   }
 
-  // An SVG is a document that can carry script. Serving one a customer uploaded
-  // is handing every later visitor code somebody else wrote. The refusal is
-  // here rather than in the sniffer because it is a decision about the product,
-  // and somebody who genuinely wants it should have to read this sentence.
+  // The two the code refuses outright. They are reported here and REMOVED by
+  // `mediaConfig()`, so the sentence below describes something already in
+  // force — an upload of one answers `typeNotAllowed` whether or not anybody
+  // reads this. See `refusedTypes()` for why it is not a reason to switch the
+  // feature off.
   for (const kind of MEDIA_KINDS) {
-    if (config.kinds[kind].mimeTypes.includes("image/svg+xml")) {
+    for (const { mime, why } of refusedTypes(kind, declaredFor(kind))) {
       problems.push(
-        `"kinds.${kind}": SVG is not accepted. An SVG can carry script, and a ` +
-          `file one customer uploaded would then run in another customer's browser`,
+        `"kinds.${kind}": "${mime}" has been dropped — ${why}. ` +
+          `Uploads of it are refused; files already stored are unaffected.`,
       );
     }
   }
@@ -218,7 +238,18 @@ export function planProblem(productKey: string): string | null {
   return null;
 }
 
-/** Is media available on this installation at all? */
+/**
+ * Is media available on this installation at all?
+ *
+ * **One question, one answer: the switch in `config/media.json`.** It used to
+ * be `enabled && mediaConfigProblems().length === 0`, and that conflated a
+ * product decision with a config lint — a single unrecognised media type then
+ * 404'd every picture in the app, including the ones stored long before the
+ * lint existed. Configuration mistakes are reported (`mediaConfigProblems()`,
+ * `node run.mjs media-check`) and refused where they apply (`refusedTypes()`,
+ * at upload time). None of them is a reason to stop delivering what is already
+ * in the bucket.
+ */
 export function isMediaEnabled(): boolean {
-  return mediaConfig().enabled && mediaConfigProblems().length === 0;
+  return mediaConfig().enabled;
 }

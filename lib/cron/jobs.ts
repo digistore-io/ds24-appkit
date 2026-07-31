@@ -202,6 +202,35 @@ export const CRON_JOBS: readonly CronJob[] = Object.freeze([
     },
   },
   {
+    id: "check-stuck-reloads",
+    describe:
+      "Count accounts whose auto top-up stopped charging because no credit came back.",
+    // ── The only job here that fixes nothing ────────────────────────────────
+    // It writes nothing and repairs nothing. It exists because the state it
+    // reports is invisible from every other angle: the charges SUCCEEDED, no
+    // exception was thrown, and the Member's own switch still reads "on".
+    // There is no error anywhere to find.
+    //
+    // And it cannot be left to the spend path to notice. A Member whose
+    // balance is stuck at zero stops using the app, so `spendTokens()` — the
+    // only thing that ever calls `autoReloadIfNeeded()` — is never called
+    // again. The account that most needs reporting is the one nobody touches.
+    //
+    // Every hour, because this is money already taken from somebody's card and
+    // a day of silence is a day too many. It is one indexed count.
+    async run() {
+      const { countPausedReloads } = await import("@/lib/tokens/account");
+      const paused = await countPausedReloads();
+      // Numbers only (rule 2) — naming the Member here would put a customer's
+      // billing trouble into `cron_runs`, which is a table with no privacy
+      // question attached and must stay one. Who it is belongs on the
+      // Operator's member page, which is already behind requireOwner().
+      return paused === 0
+        ? "no account is waiting on an unconfirmed top-up"
+        : `${paused} account(s) stopped charging — top-up billed, no credit booked`;
+    },
+  },
+  {
     id: "prune-impersonations",
     describe: "Delete impersonation records older than the retention window (default 12 months).",
     async run({ settings }) {

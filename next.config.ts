@@ -4,8 +4,6 @@
 import type { NextConfig } from "next";
 import createNextIntlPlugin from "next-intl/plugin";
 
-import { imageHostsFromEnv } from "./lib/media/hosts";
-
 // Security headers, applied to every response.
 //
 // The one that does real work here is **Referrer-Policy**. This app puts
@@ -53,21 +51,37 @@ const nextConfig: NextConfig = {
     "/dashboard/chat": ["./content/knowledge/**/*"],
   },
 
-  // Media is served from the bucket, not from this app (docs/visuals.md), and
-  // `next/image` refuses to optimise an image from a host it was not told
-  // about. The refusal is a 400 at request time rather than a build error, so
-  // the symptom is a page of broken images in production and a perfect one in
-  // development, where the local driver serves everything from this origin.
+  // ── No `images.remotePatterns`, deliberately ─────────────────────────────
+  // Media is served from the bucket rather than from this app, so the obvious
+  // move is to allow the bucket's host here and let `next/image` resize. Two
+  // things make that wrong, and a code review found both:
   //
-  // Derived from the environment rather than written out, so there is one place
-  // that knows the bucket's address. An installation with no bucket configured
-  // gets an empty list, which is correct: there is no remote host to allow.
-  images: {
-    remotePatterns: imageHostsFromEnv().map((hostname) => ({
-      protocol: "https" as const,
-      hostname,
-    })),
-  },
+  //  1. **This file is evaluated at BUILD time.** `MEDIA_S3_*` are secrets set
+  //     in the hosting dashboard — at RUN time. On every host in
+  //     `docs/DEPLOY.md` the pattern would bake as an empty list, and every
+  //     bucket image would answer 400 in production while working perfectly in
+  //     development, where the local driver serves from this origin.
+  //  2. **A bucket endpoint is a SHARED host.** A pattern for
+  //     `fra1.digitaloceanspaces.com` with no `pathname` matches `/**`, which
+  //     turns `/_next/image` into an open resizing proxy for every bucket in
+  //     that region — on the operator's CPU and egress.
+  //
+  // So bucket media goes to the browser unoptimised (`components/ui/figure.tsx`
+  // decides that from the URL) and the limit lives in code rather than in an
+  // environment variable somebody has to get right.
+  //
+  // **The cost, stated plainly and with no safety net behind it:** a large
+  // picture reaches a phone at full size. Nothing in this repository catches
+  // that. An earlier version of this comment said it was "exactly the finding
+  // `ux-gateway` check 8 reports", and that was wrong in a way worth naming —
+  // check 8 looks for an image NOT going through `next/image`, and `Figure`
+  // does go through it, merely with `unoptimized`. The check cannot fire here.
+  // Asserting a guard that does not exist is worse than admitting there is
+  // none, because the next reader stops looking.
+  //
+  // The fix is to store a sensible size, not to resize on every request — the
+  // upload ceilings in `config/media.json` are the closest thing to a brake,
+  // and they bound the file rather than what a phone downloads.
 
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];

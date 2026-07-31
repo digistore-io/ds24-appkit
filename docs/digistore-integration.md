@@ -247,7 +247,7 @@ Four things follow, and none of them is optional reading:
   plan get the same access.
 - **Your product copy is NOT translated.** `name`, `description`, `tagline` and
   `features` stay one text and are sent to every language product. That is the
-  same deliberate decision the plans page makes (template/CLAUDE.md →
+  same deliberate decision the plans page makes (CLAUDE.md →
   Languages): it is your copy, and Digistore24 carries exactly what you wrote.
   The *form* around it is what follows the buyer's language.
 

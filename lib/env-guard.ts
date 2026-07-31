@@ -61,6 +61,14 @@ export interface EnvCheckInput {
    */
   MEDIA_DRIVER?: string;
   mediaBucketConfigured?: boolean;
+  /**
+   * Whether the app accepts media at all (`config/media.json` → `enabled`).
+   *
+   * Passed in rather than read here: `instrumentation.ts` is built for the edge
+   * runtime too, and importing the config module drags the product registry in
+   * with it. The flag itself is plain JSON, so the hook reads that.
+   */
+  mediaEnabled?: boolean;
 }
 
 /**
@@ -141,9 +149,17 @@ export function checkEnvironment(env: EnvCheckInput): string[] {
  */
 export function mediaProblem(
   environment: AppEnv,
-  env: { MEDIA_DRIVER?: string; mediaBucketConfigured?: boolean },
+  env: { MEDIA_DRIVER?: string; mediaBucketConfigured?: boolean; mediaEnabled?: boolean },
 ): string | null {
   if (environment === "development") return null;
+
+  // An app that accepts no media needs nowhere to put it. Requiring a bucket
+  // anyway made every app generated from 0.7.0 book storage before it could
+  // deploy at all — including the ones that will never take a file. The cost of
+  // this exemption is that switching media ON later without a bucket is a state
+  // nothing refuses at startup, so `media-check` and `go-live` say so loudly
+  // instead.
+  if (env.mediaEnabled === false) return null;
 
   const driver = (env.MEDIA_DRIVER ?? "").trim().toLowerCase();
 

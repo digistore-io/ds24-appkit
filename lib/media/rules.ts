@@ -86,6 +86,16 @@ export const MEDIA_ERROR_CODES = [
   "tooLarge",
   /** The bytes are not a media type this installation accepts at all. */
   "typeNotAllowed",
+  /**
+   * The right kind of file, but a broken copy of one.
+   *
+   * Distinct from `typeNotAllowed` because the two send a person in opposite
+   * directions. A JPEG truncated by a flaky mobile connection used to be
+   * refused with "this kind of file is not accepted here", which is untrue —
+   * JPEGs are accepted — and sends them off to convert a format that was never
+   * the problem, when the fix is to send it again.
+   */
+  "fileDamaged",
   /** The bytes disagree with what the request claimed they were. */
   "typeMismatch",
   /** A real media type, but not one this role may upload. */
@@ -254,12 +264,30 @@ export function safeFilename(name: string, fallbackExt: string): string {
     .replace(/[\r\n"\\]/g, "")
     .replace(/[^A-Za-z0-9._ ()-]/g, "_")
     .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 120);
-  return cleaned === "" || cleaned === "." || cleaned === ".."
-    ? `download.${fallbackExt}`
-    : cleaned;
+    .trim();
+
+  if (cleaned === "" || cleaned === "." || cleaned === "..") {
+    return `download.${fallbackExt}`;
+  }
+  if (cleaned.length <= MAX_FILENAME) return cleaned;
+
+  // **Shorten the stem, keep the extension.** A blunt slice cut the extension
+  // off the end, and a download called `aaaa…` with no `.pdf` does not open —
+  // which is a worse outcome than a long name.
+  // `dot < cleaned.length - 1` is what makes a TRAILING dot not count as an
+  // extension. Without it a name ending in one satisfied `hasExt`, `ext` became
+  // `"."`, and the result was 120 characters ending in a bare dot with the
+  // fallback never applied — the exact outcome this branch exists to prevent,
+  // reached by the branch itself. It is not a contrived input: the sanitiser
+  // above strips quotes, so an ordinary `…report."` arrives here as `…report.`.
+  const dot = cleaned.lastIndexOf(".");
+  const hasExt = dot > 0 && dot < cleaned.length - 1 && cleaned.length - dot <= 12;
+  const ext = hasExt ? cleaned.slice(dot) : `.${fallbackExt}`;
+  return cleaned.slice(0, Math.max(1, MAX_FILENAME - ext.length)) + ext;
 }
+
+/** Long enough for any real filename, short enough for any filesystem. */
+const MAX_FILENAME = 120;
 
 /** "2,4 MB" — for the ceiling in a refusal and for the download presentation. */
 export function formatBytes(bytes: number, locale = "en"): string {

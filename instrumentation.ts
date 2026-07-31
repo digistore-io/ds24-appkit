@@ -31,6 +31,21 @@ export async function register() {
       process.env.MEDIA_S3_SECRET_ACCESS_KEY?.trim(),
   );
 
+  // Imported, not read off the disk. It was `readFileSync("config/media.json")`
+  // — a path resolved against `process.cwd()`, which is the app root on a
+  // developer's machine and something else entirely under `output: "standalone"`
+  // or any host that starts the server from another directory. There the read
+  // threw, the `catch` treated media as ON, and an app that had switched it OFF
+  // and booked no bucket refused to start: a feature that works where it is
+  // tested and not where it ships.
+  //
+  // A plain JSON import is bundled at build time, so there is no path, no cwd
+  // and no failure mode. It is still NOT `lib/media/config.ts` — that module
+  // pulls in the product registry, and this hook is built for the edge runtime
+  // too, where an import chain that long stops resolving.
+  const mediaSettings = (await import("@/config/media.json")).default as { enabled?: unknown };
+  const mediaEnabled = mediaSettings.enabled !== false;
+
   const problems = checkEnvironment({
     APP_ENV: process.env.APP_ENV,
     NODE_ENV: process.env.NODE_ENV,
@@ -38,6 +53,7 @@ export async function register() {
     emailConfigured: hasEmailConfig(process.env),
     MEDIA_DRIVER: process.env.MEDIA_DRIVER,
     mediaBucketConfigured: s3Configured,
+    mediaEnabled,
   });
 
   if (problems.length > 0) {

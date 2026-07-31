@@ -402,12 +402,33 @@ describe("a task whose provider cannot do the work", () => {
   it("tells apart a machine with the WRONG key from one with NO key", () => {
     // The distinction is the whole value of the message. Somebody holding a
     // perfectly good Anthropic key should not be told to go and find a key.
-    const wrongKey = bindingProblems({}, ["anthropic"]);
-    expect(wrongKey.some((p) => /the key on this machine is for anthropic/.test(p))).toBe(true);
-    expect(wrongKey.some((p) => /no provider key at all/.test(p))).toBe(false);
+    //
+    // On an UNBOUND task it is a note rather than a problem — a code review
+    // found that the shipped config gave the commonest single-key installation
+    // a permanently red `ai-check` for a feature it may never use, and a gate
+    // that is always red is a gate nobody reads.
+    const notes: string[] = [];
+    const wrongKey = bindingProblems({}, ["anthropic"], { notes });
+    expect(wrongKey).toEqual([]);
+    expect(notes.some((n) => /is for anthropic, which cannot/.test(n))).toBe(true);
+    expect(notes.some((n) => /Nothing is wrong until your app asks/.test(n))).toBe(true);
 
     const noKey = bindingProblems({}, []);
     expect(noKey.some((p) => /no provider key at all/.test(p))).toBe(true);
+  });
+
+  it("makes it a real problem once somebody names the company", () => {
+    // Writing a provider name is asking for it. Then the same situation is a
+    // misconfiguration rather than a feature nobody wanted.
+    const notes: string[] = [];
+    const problems = bindingProblems(
+      { default: { provider: "auto", model: "auto" }, tasks: { image: { provider: "anthropic", model: "x" } } },
+      ["anthropic"],
+      { notes },
+    );
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain("cannot produce image");
+    expect(notes).toEqual([]);
   });
 
   it("names only the keys that would actually help", () => {
@@ -422,8 +443,11 @@ describe("a task whose provider cannot do the work", () => {
   });
 
   it("is silent when the key on the machine can draw", () => {
-    expect(bindingProblems({}, ["gemini"])).toEqual([]);
-    expect(bindingProblems({}, ["openrouter"])).toEqual([]);
+    const notes: string[] = [];
+    expect(bindingProblems({}, ["gemini"], { notes })).toEqual([]);
+    expect(bindingProblems({}, ["openrouter"], { notes })).toEqual([]);
+    // And says nothing at all — there is nothing to know.
+    expect(notes).toEqual([]);
   });
 
   it("resolves an image task to an image model, never a text one", () => {

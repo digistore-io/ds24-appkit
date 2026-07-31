@@ -1783,6 +1783,59 @@ non-developers — and it is the one that works on all three systems (see **Thre
 systems**). There is still a `Makefile`, but it only forwards here; never point
 the user at `make`, it is missing on Windows.
 
+### What the first install prints — and which of it is real
+
+`node run.mjs start` installs the dependencies on its first run, and npm says
+three things while it does. Somebody who has just deployed cannot tell them
+apart, and neither can you without this section. **Read it before you "fix"
+anything npm complains about here** — one of the two obvious fixes ships a crash
+to the customers of this app.
+
+| What npm prints | What it is |
+|---|---|
+| `npm WARN deprecated @esbuild-kit/esm-loader` (and `core-utils`) | transitive dependencies of `drizzle-kit`, which is on its latest stable release. **Nothing to do.** Not ours, no newer stable to move to |
+| `9 high severity vulnerabilities` | **real findings, none of them shipped.** All of them are in `devDependencies`, through the eslint chain. See below |
+| an `ERESOLVE` block | **a regression.** There is none as of this version, and `scripts/deps.test.ts` fails if one comes back |
+
+**The nine findings are dev-only, and that is the whole answer.**
+`npm audit --omit=dev --audit-level=high` — which is what the skill
+`security-gateway` §5 runs — is `found 0 vulnerabilities`. They are all one
+advisory (`brace-expansion`, GHSA-mh99-v99m-4gvg) reached through
+`eslint-config-next`, and they persist because the advisory range is written
+`<=5.0.7` across every major, so the 1.x version that *does* carry the fix sits
+inside it. This project's lockfile pins that fixed version. Nothing in the
+bundle a customer loads is affected.
+
+**Two fixes look obvious and are both refused**, with the numbers behind the
+refusal in `scripts/deps.test.ts`:
+
+- **`eslint@10`** — what `npm audit fix --force` proposes. It takes the count
+  from 9 to 6, not to 0 (the findings come through eslint's *plugins*, not
+  through eslint), and it introduces three fresh `ERESOLVE` conflicts. Worse on
+  both counts.
+- **`"overrides": { "minimatch": "^10" }`** — this one does make `npm audit`
+  read clean, which is why it is the dangerous one. minimatch 10's CommonJS
+  build exports an object rather than a function, and three
+  `eslint-config-next` plugins call it as one, so any lint rule that matches a
+  pattern dies with `TypeError: minimatch is not a function`. **`npm run lint`
+  in this project stays green** — none of those rules are switched on here — so
+  it looks like a clean fix and lands as a landmine in the first app that
+  enables one.
+
+So: report the nine as known and dev-only, say `npm audit --omit=dev` is clean,
+and leave them. A clean audit number is not worth a crash in somebody's app. The
+way out is upstream — `eslint-config-next` moving its plugins off `minimatch@3`
+— and until then `node run.mjs update` will bring this section with it.
+
+`package.json` is JSON and holds no comments, so the reasoning for every
+`overrides` entry lives in **`scripts/deps.test.ts`** instead, the same way the
+per-system install commands live in `scripts/dev/fixes.json`. That test also
+pins the two things that must not drift back: the `esbuild` override is a
+**floor** (`>=`), never a caret — written as a caret it excluded the versions
+`vite` and `tsx` ask for and printed a wall of `ERESOLVE` at everybody who
+deployed — and `brace-expansion` must resolve to a version that caps its
+expansion.
+
 ## This app is a copy — keep its guidance current
 
 The template this app came out of keeps being worked on. The code here is the

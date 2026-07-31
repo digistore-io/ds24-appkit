@@ -91,3 +91,40 @@ describe("relative links in the guidance", () => {
     });
   }
 });
+
+// ── No factory paths in the customer's copy ────────────────────────────────
+//
+// This app is a COPY of `template/` in the source repo, so a path written
+// `template/CLAUDE.md` or `template/docs/…` names a folder the customer does
+// not have and cannot create. It reads as a typo they should fix, and there is
+// nothing to fix — the file is at `CLAUDE.md`, one level up from where the
+// sentence sends them.
+//
+// This is the narrow mistake that survives every other check: not a leaked
+// internal note, but a perfectly correct reference written from the wrong point
+// of view. One shipped, in `docs/digistore-integration.md`, and a reviewer
+// found it rather than a test.
+describe("guidance does not point at the factory's tree", () => {
+  const files = [...TREES.flatMap((tree) => [...markdownFiles(tree)]), "CLAUDE.md", "AGENTS.md"];
+
+  for (const file of files) {
+    it(`${file} names no template/ path`, () => {
+      let text: string;
+      try {
+        text = readFileSync(join(ROOT, file), "utf8");
+      } catch {
+        return; // AGENTS.md is generated; absent is not this test's problem.
+      }
+
+      const offenders = [
+        ...text.matchAll(/(?:^|[\s(`])(template\/[A-Za-z0-9._/-]+)/g),
+      ].map((match) => match[1]);
+
+      expect(
+        offenders,
+        `${file} points at ${offenders.join(", ")} — that path exists in the ` +
+          `source repo, not in the app the customer cloned. Drop the "template/".`,
+      ).toEqual([]);
+    });
+  }
+});

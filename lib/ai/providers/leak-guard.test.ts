@@ -25,6 +25,9 @@ const ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 /** Where provider-specific knowledge is allowed to live. */
 const PROVIDER_DIR = join("lib", "ai", "providers");
 
+/** Where storage credentials are allowed to live. Same rule, different secret. */
+const MEDIA_DIR = join("lib", "media");
+
 /** Trees worth scanning. Everything a customer's app is built from. */
 const SCANNED = ["app", "lib", "components", "hooks", "db", "scripts", "i18n"];
 
@@ -143,5 +146,50 @@ describe("the scan itself", () => {
     const pattern = /from ["']@anthropic-ai\/sdk["']/;
     expect(pattern.test('import Anthropic from "@anthropic-ai/sdk";')).toBe(true);
     expect(pattern.test('import { runTask } from "@/lib/ai/run";')).toBe(false);
+  });
+});
+
+// ── The same rule for the storage credentials ──────────────────────────────
+//
+// Added after a code review pointed out that `lib/media/` makes exactly the
+// claim `lib/ai/providers/` makes — "no call site reads a storage credential" —
+// and nothing enforced it. It was true when it was written, which is precisely
+// when a guard is cheap and precisely when nobody writes one.
+
+describe("storage credentials stay in lib/media/", () => {
+  const MEDIA_ENV_VARS = [
+    "MEDIA_S3_ACCESS_KEY_ID",
+    "MEDIA_S3_SECRET_ACCESS_KEY",
+    "MEDIA_S3_ENDPOINT",
+    "MEDIA_S3_BUCKET",
+  ];
+
+  it("are read nowhere else", () => {
+    const offenders: string[] = [];
+
+    for (const dir of SCANNED) {
+      for (const file of sourceFiles(dir)) {
+        // `lib/media/` is where they belong. `instrumentation.ts` checks whether
+        // they are PRESENT so the app can refuse to start without them, which is
+        // a different thing from using one — and it is named here rather than
+        // silently allowed by a prefix match.
+        if (file.startsWith(MEDIA_DIR)) continue;
+        if (file === "instrumentation.ts") continue;
+
+        const text = readFileSync(join(ROOT, file), "utf8");
+        for (const name of MEDIA_ENV_VARS) {
+          // A mention in a comment or a message is fine — reading the value is
+          // not. `process.env.NAME` and `env.NAME` are the two ways.
+          const reads = new RegExp(`(process\\.)?env\\.${name}\\b|env\\[["\'\`]${name}`, "");
+          if (reads.test(text)) offenders.push(`${file} reads ${name}`);
+        }
+      }
+    }
+
+    expect(
+      offenders,
+      `storage credentials belong in ${MEDIA_DIR}/ — everything above it takes a ` +
+        `MediaStore and does not know which one it has:\n  ${offenders.join("\n  ")}`,
+    ).toEqual([]);
   });
 });

@@ -101,10 +101,42 @@ export function resetMediaStore(): void {
 /** Is the store configured well enough to be used? For the check command and the guards. */
 export function mediaStoreProblems(env: NodeJS.ProcessEnv = process.env): string[] {
   try {
-    if (driverFromEnv(env) === "s3" && !s3SettingsFromEnv(env)) {
+    if (driverFromEnv(env) !== "s3") return [];
+
+    const settings = s3SettingsFromEnv(env);
+    if (!settings) {
       return [
         "MEDIA_DRIVER=s3, but MEDIA_S3_ENDPOINT / MEDIA_S3_BUCKET / " +
           "MEDIA_S3_ACCESS_KEY_ID / MEDIA_S3_SECRET_ACCESS_KEY are not all set",
+      ];
+    }
+
+    // ── The endpoint is an ORIGIN, not a URL to the bucket ──────────────────
+    // `objectPath()` puts the bucket in front of the key, so an endpoint that
+    // already carries a path segment signs `/bucket/bucket/key` — every write a
+    // 502 and every read a 403, with S3's own error text going to the log and
+    // nothing anywhere saying what is wrong. It is an easy mistake to make:
+    // every provider's dashboard shows the bucket URL, and pasting it is the
+    // obvious thing to do.
+    //
+    // This used to be checked only inside `node run.mjs media-check`, which is
+    // a command on a developer's laptop — so an operator who set the variable in
+    // a hosting dashboard and deployed got a clean start and a dead feature.
+    // Checked here, both routes already refuse with 503 and log the reason.
+    try {
+      const url = new URL(settings.endpoint);
+      if (url.pathname !== "/" && url.pathname !== "") {
+        return [
+          `MEDIA_S3_ENDPOINT is "${settings.endpoint}", which carries a path. It must be ` +
+            `the bare origin — "${url.protocol}//${url.host}" — because the bucket name is ` +
+            `added to the path when a request is signed. As written, every object would be ` +
+            `addressed as "${url.pathname}/${settings.bucket}/…".`,
+        ];
+      }
+    } catch {
+      return [
+        `MEDIA_S3_ENDPOINT is "${settings.endpoint}", which is not a URL. It should look ` +
+          `like "https://fra1.digitaloceanspaces.com".`,
       ];
     }
   } catch (error) {

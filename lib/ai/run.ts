@@ -188,10 +188,20 @@ export async function* streamTask(
 
 // ── Pictures ────────────────────────────────────────────────────────────────
 
+/**
+ * The most pictures one call may ask for.
+ *
+ * A ceiling and not a preference: Gemini draws one per HTTP call, so `n` there
+ * is a loop, and `generateImage({ n: 500 })` was five hundred sequential paid
+ * calls under a single Server Action with nothing between it and an invoice but
+ * a doc comment. Ten is more than any interface in this template offers.
+ */
+export const MAX_IMAGES_PER_CALL = 10;
+
 export interface ImageTaskInput {
   /** What to draw. Reaches the provider verbatim. */
   prompt: string;
-  /** How many. One unless there is a reason — each one is billed. */
+  /** How many. One unless there is a reason — each one is billed, and the ceiling is {@link MAX_IMAGES_PER_CALL}. */
   n?: number;
   /** Provider-shaped, e.g. `"1024x1024"`. Ignored where a provider has none. */
   size?: string;
@@ -230,6 +240,34 @@ export async function runImageTask(
   const binding = bindingFor(task);
   const started = Date.now();
 
+  // ── `n` is refused, not clamped ──────────────────────────────────────────
+  // Clamping looked kind and bills the customer for pictures nobody drew: the
+  // Server Action computes its price from what it ASKED for — `check → work →
+  // charge`, which is the order this whole app is written in — so a request for
+  // twenty that quietly returns ten is ten pictures of pure margin taken from
+  // somebody who did not agree to it. A refusal names the ceiling and is
+  // actionable; a clamp is invisible on both sides.
+  //
+  // `NaN` is refused by the same line, and that is the case that actually
+  // occurred: `Number(formData.get("n"))` on an empty field is `NaN`, which
+  // passed straight through `Math.min(Math.max(1, Math.floor(NaN)), 10)` — all
+  // three are `NaN` — and reached the adapter, whose loop then ran zero times.
+  // The call was recorded `outcome: "ok"` with no images and no error at all.
+  // A `RangeError` and not a `ProviderError`: no provider was involved, nothing
+  // was billed, and there is no row to write — the throw is above the `try` for
+  // exactly that reason. It is a fault in the calling code, so it wants a stack
+  // trace rather than a translated sentence for a customer.
+  const wanted = input.n ?? 1;
+  if (!Number.isInteger(wanted) || wanted < 1 || wanted > MAX_IMAGES_PER_CALL) {
+    throw new RangeError(
+      // `String()` and not `JSON.stringify()`: the latter renders NaN as
+      // "null", which names the wrong value in the message for the one input
+      // this guard was written for.
+      `runImageTask: n must be a whole number between 1 and ${MAX_IMAGES_PER_CALL}, ` +
+        `not ${String(input.n)}`,
+    );
+  }
+
   const base = {
     task,
     provider: binding.provider,
@@ -243,7 +281,7 @@ export async function runImageTask(
       {
         model: binding.model,
         prompt: input.prompt,
-        n: input.n ?? 1,
+        n: wanted,
         size: input.size,
         timeoutMs: binding.timeoutMs || DEFAULT_TIMEOUT_MS,
         providerOptions: binding.providerOptions,
@@ -267,7 +305,15 @@ export async function runImageTask(
   } catch (error) {
     finish({
       ...base,
-      usage: null,
+      // Not `null`. Gemini draws one picture per HTTP call, so a request for
+      // four that fails on the third has already produced and been billed for
+      // two — which `generateImage()` then discards, deliberately, because a
+      // partial result is a different contract than the text tasks have. What
+      // must not ALSO happen is those two vanishing from the accounts: with
+      // `usage: null` they were in no row, in no total, and not in the "could
+      // not account for" column either. An adapter that consumed nothing before
+      // failing sets nothing here, and the row is `null` exactly as before.
+      usage: error instanceof ProviderError ? (error.usage ?? null) : null,
       outcome: outcomeOf(error),
       latencyMs: Date.now() - started,
     });

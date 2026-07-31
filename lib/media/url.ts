@@ -31,8 +31,6 @@ import type { MediaRow } from "@/db/schema-media";
 import { safeFilename, extensionFor, type MediaKind } from "./rules";
 import { mediaStore } from "./store";
 
-export { imageHostsFromEnv } from "./hosts";
-
 export interface MediaUrlOptions {
   /** Serve as a download, with the name the file was uploaded under. */
   download?: boolean;

@@ -29,7 +29,7 @@ import { currentActiveUser } from "@/lib/authz";
 import { isMediaEnabled } from "@/lib/media/config";
 import { findMedia, mayAccess } from "@/lib/media/manage";
 import { safeFilename, extensionFor } from "@/lib/media/rules";
-import { mediaStore } from "@/lib/media/store";
+import { mediaStore, mediaStoreProblems } from "@/lib/media/store";
 import { signedUrlSeconds } from "@/lib/media/url";
 
 export const runtime = "nodejs";
@@ -40,6 +40,24 @@ export async function GET(
   context: { params: Promise<{ id: string }> },
 ): Promise<Response> {
   if (!isMediaEnabled()) return new Response("Not found", { status: 404 });
+
+  // The upload route checks this and this one did not, so an unknown
+  // MEDIA_DRIVER or a half-configured bucket threw out of the handler — a 500
+  // with a stack trace on every media fetch.
+  //
+  // **503, the same answer the upload route gives the same condition.** It was
+  // 404 for one release, on the reasoning that this route says nothing to
+  // anybody — and that made "the operator mistyped the bucket key" identical to
+  // "the row was deleted" and to "you may not have this". Every picture in the
+  // app then returned exactly what a correctly-refused stranger returns, which
+  // is the one thing nobody can debug. Withholding EXISTENCE is what this route
+  // is careful about; the store being down is not a fact about any item, it is
+  // a fact about the app, and the app may admit its own faults.
+  const problems = mediaStoreProblems();
+  if (problems.length > 0) {
+    console.error("[media] the store is not usable:", problems);
+    return new Response("Storage unavailable", { status: 503 });
+  }
 
   const { id } = await context.params;
   const row = await findMedia(id);

@@ -147,9 +147,43 @@ describe("stripMetadata — JPEG", () => {
     expect([...out.slice(-8)]).toEqual([0xff, 0xe1, 0xff, 0xed, 0x12, 0x34, 0xff, 0xd9]);
   });
 
-  it("hands back a malformed file untouched rather than guessing", () => {
-    const notAJpeg = new Uint8Array([1, 2, 3, 4]);
-    expect(stripMetadata("image/jpeg", notAJpeg)).toEqual(notAJpeg);
+  it("refuses a file that is not a JPEG rather than handing it back", () => {
+    // It used to be handed back untouched. That is the wrong answer: this
+    // function's whole promise is that what comes out carries no location, and
+    // it cannot promise that about bytes it did not parse.
+    expect(() => stripMetadata("image/jpeg", new Uint8Array([1, 2, 3, 4]))).toThrow(
+      /not a JPEG/,
+    );
+  });
+
+  it("keeps stripping past a standalone marker", () => {
+    // The finding: `FF01` (TEM) carries no length. Reading the next two bytes
+    // as one walked the parser off into the file, it stopped, and it copied the
+    // rest — Exif included — verbatim. Measured: the GPS survived.
+    const withTem = new Uint8Array([
+      0xff, 0xd8, 0xff, 0x01,
+      ...segment(0xe1, ascii("Exif\0\0GPS 52.5200 13.4050")),
+      0xff, 0xda, 0x00, 0x0c, ...ascii("scan-data"), 0xff, 0xd9,
+    ]);
+    const out = stripMetadata("image/jpeg", withTem);
+    expect(text(out)).not.toContain("GPS 52.5200");
+    expect(text(out)).toContain("scan-data");
+  });
+
+  it("keeps stripping past a run of padding bytes", () => {
+    // A run of 0xFF before a marker is legal. Refusing it would reject valid
+    // files; the fix has to skip padding and still find the APP1 behind it.
+    const padded = new Uint8Array([
+      0xff, 0xd8, 0xff, 0xff, 0xff,
+      ...segment(0xe1, ascii("Exif\0\0GPS 52.5200")),
+      0xff, 0xda, 0x00, 0x0c, ...ascii("scan-data"), 0xff, 0xd9,
+    ]);
+    expect(text(stripMetadata("image/jpeg", padded))).not.toContain("GPS 52.5200");
+  });
+
+  it("refuses a segment that claims to run past the end of the file", () => {
+    const liar = new Uint8Array([0xff, 0xd8, 0xff, 0xe1, 0xff, 0xf0, 1, 2, 3]);
+    expect(() => stripMetadata("image/jpeg", liar)).toThrow(/past end of file/);
   });
 });
 
@@ -182,6 +216,19 @@ describe("stripMetadata — PNG", () => {
   it("keeps the signature", () => {
     expect([...stripped.slice(0, 8)]).toEqual([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
   });
+
+  it("refuses a chunk that claims to run past the end of the file", () => {
+    // The finding: the walk stopped on the liar and copied the tail verbatim,
+    // so every metadata chunk after it survived. Measured: the GPS came back.
+    const liar = png([
+      chunk("IHDR", [0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0]).map((b, i) =>
+        i < 4 ? [0, 0xff, 0xff, 0xff][i] : b,
+      ),
+      chunk("eXIf", ascii("GPS 52.5200 13.4050")),
+      chunk("IEND", []),
+    ]);
+    expect(() => stripMetadata("image/png", liar)).toThrow(/past end of file/);
+  });
 });
 
 describe("stripMetadata — WebP", () => {
@@ -213,6 +260,14 @@ describe("stripMetadata — WebP", () => {
     const clean = webp([riffChunk("VP8 ", ascii("pixel-data"))]);
     expect(stripMetadata("image/webp", clean)).toEqual(clean);
   });
+
+  it("refuses a truncated file rather than silently dropping the pixels", () => {
+    // The finding: the walk stopped, the remaining chunks were discarded, and
+    // the RIFF size was rewritten to match — so a 42-byte image became a
+    // 12-byte header that looked entirely consistent.
+    const truncated = withExif.slice(0, withExif.length - 6);
+    expect(() => stripMetadata("image/webp", truncated)).toThrow(/past end of file/);
+  });
 });
 
 describe("stripMetadata — everything else", () => {
@@ -228,5 +283,84 @@ describe("stripMetadata — everything else", () => {
   it("hands a PDF back untouched", () => {
     const pdf = new Uint8Array(ascii("%PDF-1.7 ..."));
     expect(stripMetadata("application/pdf", pdf)).toEqual(pdf);
+  });
+});
+
+// ── The residues the first strip-hardening left behind ─────────────────────
+//
+// A second review pass measured all three. The hardening was right in
+// direction and wrong at the boundary: it walked to the end of the BUFFER
+// instead of to the end the RIFF header declares, so a valid file with padding
+// after it was refused, a short tail was still silently dropped, and the VP8X
+// flag clear wrote through a `subarray` into the caller's own bytes.
+
+describe("stripWebp boundaries", () => {
+  const pixels = riffChunk("VP8 ", ascii("pixel-data"));
+
+  it("accepts a file with bytes after the declared RIFF end", () => {
+    // Eight or more trailing bytes used to throw "chunk length past end of
+    // file" on a picture that reads perfectly everywhere else. The RIFF size
+    // says where the image stops; anything after it is not the image.
+    const base = webp([pixels, riffChunk("EXIF", ascii("GPS 52.5200"))]);
+    const padded = new Uint8Array([...base, ...new Array(16).fill(0x00)]);
+
+    const out = stripMetadata("image/webp", padded);
+    expect(new TextDecoder().decode(out)).not.toContain("GPS");
+    expect(new TextDecoder().decode(out)).toContain("pixel-data");
+  });
+
+  it("refuses a short tail rather than dropping it silently", () => {
+    // The bug the hardening was written for, still live in the WebP path: one
+    // to seven bytes past the last chunk were discarded AND the RIFF size was
+    // rewritten to match, so the file that came out looked internally
+    // consistent and was not the file that went in.
+    const body = [...ascii("WEBP"), ...pixels, 0x01, 0x02, 0x03];
+    const lying = new Uint8Array([
+      ...ascii("RIFF"),
+      body.length & 0xff,
+      (body.length >>> 8) & 0xff,
+      (body.length >>> 16) & 0xff,
+      (body.length >>> 24) & 0xff,
+      ...body,
+    ]);
+    expect(() => stripMetadata("image/webp", lying)).toThrow(/trailing bytes/);
+  });
+
+  it("refuses a RIFF size that runs past the file", () => {
+    const truncated = webp([pixels]).slice(0, -4);
+    expect(() => stripMetadata("image/webp", truncated)).toThrow(/past end of file/);
+  });
+
+  it("does not write into the caller's buffer", () => {
+    // `body` held `subarray()` VIEWS, so clearing the VP8X flag bits changed
+    // the argument that was passed in — in a function documented as returning
+    // a new image and leaving its input alone.
+    const vp8x = riffChunk("VP8X", [0b0000_1100, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    const input = webp([vp8x, pixels, riffChunk("EXIF", ascii("GPS"))]);
+    const before = Uint8Array.from(input);
+
+    stripMetadata("image/webp", input);
+
+    expect(Array.from(input)).toEqual(Array.from(before));
+  });
+
+  it("still clears the flags on the copy it returns", () => {
+    const vp8x = riffChunk("VP8X", [0b0000_1100, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    const out = stripMetadata("image/webp", webp([vp8x, pixels, riffChunk("EXIF", ascii("GPS"))]));
+    // 12 bytes of RIFF+WEBP header, then the VP8X FourCC and its size: the
+    // flags byte is the first of the payload.
+    expect(out[20]).toBe(0);
+  });
+});
+
+describe("a damaged file is not an unaccepted file", () => {
+  it("says the file is damaged, not that JPEGs are refused", () => {
+    // `typeNotAllowed` renders as "This kind of file is not accepted here",
+    // which is untrue of a JPEG truncated by a flaky mobile connection and
+    // sends the person off to convert a format that was never the problem.
+    const truncated = new Uint8Array([0xff, 0xd8, 0xff, 0xe1, 0xff, 0xff]);
+    expect(() => stripMetadata("image/jpeg", truncated)).toThrow(
+      expect.objectContaining({ code: "fileDamaged" }),
+    );
   });
 });

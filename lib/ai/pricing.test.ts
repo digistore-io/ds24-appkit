@@ -262,3 +262,125 @@ describe("images", () => {
     expect(costMicros({ inputTokens: 1000, images: 0 }, price)).toBe(3000);
   });
 });
+
+// ── The shipped image entries, against their own stated price ──────────────
+//
+// Added after a code review measured one picture at $0.101 against a price file
+// that says $0.053. The entry carried an `image` rate AND an `output` rate, and
+// for an image model the picture IS the output — so both were charged. The
+// arithmetic was right; the table was wrong, and nothing compared the two.
+
+describe("the shipped image prices", () => {
+  const shipped = prices as unknown as {
+    models: Record<string, { image?: number; output?: number; _note?: string }>;
+  };
+  // DERIVED, not listed. A hard-coded pair covers the two entries that exist
+  // today and silently ships the third one somebody adds next year — which is
+  // exactly the shape of the bug these tests were written for. Every entry
+  // carrying an `image` rate is an image entry, by definition.
+  const IMAGE_MODELS = Object.keys(shipped.models).filter(
+    (key) => shipped.models[key]?.image !== undefined,
+  );
+
+  it("finds the image entries at all", () => {
+    // Without this, deleting both entries would make every test below vacuous
+    // and the suite would report the deletion as a pass.
+    expect(IMAGE_MODELS.length).toBeGreaterThanOrEqual(2);
+  });
+
+  for (const key of IMAGE_MODELS) {
+    const [provider, ...rest] = key.split("/");
+    const model = rest.join("/");
+
+    it(`${key} names no output rate`, () => {
+      // The line that caused the double count. An image model's output IS the
+      // picture; a rate here is charged on top of the per-image price.
+      expect(shipped.models[key]?.output, `${key} must not price output tokens`).toBeUndefined();
+    });
+
+    it(`${key} prices one picture at its stated figure`, () => {
+      const price = priceFor(shipped, provider, model);
+      if (!price) throw new Error(`no price for ${key}`);
+      // Exactly the per-image rate, in micros, for a call that produced one
+      // picture and read no prompt.
+      expect(costMicros({ images: 1 }, price)).toBe(Math.round(price.image * 1_000_000));
+    });
+
+    it(`${key} adds the prompt tokens on top, and nothing else`, () => {
+      const price = priceFor(shipped, provider, model);
+      if (!price) throw new Error(`no price for ${key}`);
+      // 1000 prompt tokens, and an output-token count the provider reported for
+      // the picture itself. Only the prompt may add to the per-image price.
+      const withOutput = costMicros({ inputTokens: 1000, outputTokens: 1600, images: 1 }, price);
+      const withoutOutput = costMicros({ inputTokens: 1000, images: 1 }, price);
+      expect(withOutput).toBe(withoutOutput);
+      expect(withOutput).toBe(Math.round(price.image * 1_000_000) + Math.round(1000 * price.input));
+    });
+  }
+});
+
+describe("priceFor coerces per field", () => {
+  it("keeps a token rate that is present when the other is absent", () => {
+    // An image model may bill for the prompt it reads and not for text it does
+    // not write. Treating the pair as all-or-nothing zeroed the rate that WAS
+    // there — an undercharge with no symptom.
+    const price = priceFor({ models: { "openai/x": { input: 5, image: 0.04 } } }, "openai", "x");
+    if (!price) throw new Error("expected a price");
+    expect(price.input).toBe(5);
+    expect(price.output).toBe(0);
+    expect(price.image).toBe(0.04);
+  });
+
+  it("still refuses an entry with no rate at all", () => {
+    expect(priceFor({ models: { "openai/x": { currency: "EUR" } } }, "openai", "x")).toBeNull();
+  });
+});
+
+// ── The relaxation that became an undercharge ──────────────────────────────
+//
+// The image fix above needed `priceFor` to accept an entry with no `output`
+// rate, because for an image model the picture IS the output. Applied to every
+// entry rather than to image entries, that turned an ordinary hand-edit — a
+// chat model whose `output` line was forgotten — into a price of zero for
+// every token the model writes. Measured: 10k in and 50k out reported 2,500
+// micros against a true 102,500, with `ai-check` green and nothing on the cost
+// page saying so. Refusing the entry puts it back in the "could not account
+// for" column, which is what this function's docstring promises.
+
+describe("priceFor refuses what it cannot price honestly", () => {
+  const table = (models: Record<string, unknown>) => ({ currency: "USD", models }) as never;
+
+  it("refuses a token entry that names only one of the two rates", () => {
+    expect(priceFor(table({ "openai/gpt-5-mini": { input: 0.25 } }), "openai", "gpt-5-mini")).toBeNull();
+    expect(priceFor(table({ "openai/gpt-5-mini": { output: 2 } }), "openai", "gpt-5-mini")).toBeNull();
+  });
+
+  it("still accepts an image entry that names no output rate", () => {
+    // The case the relaxation exists for, and the one it must keep.
+    const price = priceFor(table({ "openai/x": { input: 5, image: 0.04 } }), "openai", "x");
+    expect(price?.image).toBe(0.04);
+    expect(price?.output).toBe(0);
+  });
+
+  it("refuses a rate that is present and not a number", () => {
+    // `Number(" ")` and `Number([])` are both 0 and both finite, so a
+    // non-numeric rate used to be priced at zero rather than refused.
+    for (const bad of [" ", [], true, {}, "0.25"]) {
+      expect(priceFor(table({ "a/b": { input: bad, output: 1 } }), "a", "b"), String(bad)).toBeNull();
+    }
+  });
+
+  it("refuses a negative rate", () => {
+    // Not a discount — a typo that subtracts from the month's total and hides
+    // other spend while doing it.
+    expect(priceFor(table({ "a/b": { input: -5, output: 1 } }), "a", "b")).toBeNull();
+    expect(priceFor(table({ "a/b": { input: 1, output: -5 } }), "a", "b")).toBeNull();
+  });
+
+  it("refuses an entry whose every rate is zero", () => {
+    // Reporting real calls as accounted-for at 0.00 is worse than reporting
+    // them as unpriced: one is a wrong number, the other is a known gap.
+    expect(priceFor(table({ "a/b": { input: 0, output: 0 } }), "a", "b")).toBeNull();
+    expect(priceFor(table({ "a/b": { image: 0 } }), "a", "b")).toBeNull();
+  });
+});

@@ -228,6 +228,43 @@ account (`linkPurchaseId`) — the basis for the later auto-reload.
 `createBillingOnDemand`. Credit + lock release happen in the IPN. If the charge
 fails, the lock is released immediately.
 
+**And it stops after two charges that nothing answered.** This is the part to
+read before changing anything above it.
+
+The lock has a six-hour stale timeout, so a crashed process cannot hold a slot
+for ever. That is right — and it is also, when an IPN never arrives at all, the
+interval at which the same charge repeats: the card is billed, the balance is
+never credited, so the threshold is still undershot, and six hours later the
+slot is taken over and the card is billed again. **Four times a day, for ever,
+and under Digistore24's 10-per-day cap so nothing outside this app stops it.**
+
+Nothing in that sequence looks like a fault. Every charge *succeeds*, no
+exception is thrown, and the Member's own switch still reads "on". The only
+anomaly is a credit that does not arrive.
+
+So `token_accounts.reloadAttempts` counts the charges since the last one that
+came back as a booked credit — incremented inside `claimReloadSlot`'s own atomic
+`UPDATE`, so it cannot drift from the lock — and `reloadIsPaused()` refuses at
+`RELOAD_ATTEMPT_LIMIT` (2). Two, because one unconfirmed charge is the normal
+state of every healthy top-up while the IPN is in flight, and Digistore24 is
+allowed to be slower than the stale timeout.
+
+**Paused, not disarmed.** `autoReloadEnabled` stays `true` and the mandate is
+untouched, because nothing about the Member's intent changed — only our
+confidence that the charge reaches them. It resumes **by itself** the moment a
+credit books, and the Member's own off/on switch clears the counter too.
+
+Who finds out, and how:
+
+| | |
+|---|---|
+| **The Operator, per Member** | a warning on `/dashboard/admin/users/<id>` — the page they open when a customer writes in |
+| **The Operator, in total** | the scheduled job `check-stuck-reloads`, hourly, a bare count. It has to be a job: a Member stuck at a zero balance stops using the app, so `spendTokens` is never called again and nothing on the request path would ever notice |
+| **The log** | one `console.error` naming the member id, in `node run.mjs logs` |
+
+The Member is deliberately told nothing new: their setting is still on and still
+what they asked for. What stopped is ours to fix.
+
 **Do not add a second trigger.** Calling `autoReloadIfNeeded` yourself after
 `spendTokens` charges twice as often for no benefit. A **cron** sweep across
 accounts with a low balance is the one legitimate addition, and it replaces

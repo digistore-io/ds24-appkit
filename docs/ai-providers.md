@@ -196,7 +196,7 @@ Two worked examples of what a task can be, neither of which ships:
 
 - **Content generation** — a `content.draft` task on a cheap fast model, with
   your house style as the cacheable block. Charge the Member for it with
-  `spendTokens` (see `template/CLAUDE.md` → *Charging tokens*), and the margin
+  `spendTokens` (see `CLAUDE.md` → *Charging tokens*), and the margin
   between what you pay the provider and what you charge is visible as two
   numbers: the AI-costs page and the token ledger.
 - **Moderation** — a `moderation.text` task on the smallest model there is,
@@ -297,7 +297,7 @@ await spendTokens({ amount: COST, note: "image generation" });
 charging first bills for a picture that may never arrive, and working with no
 check in front gives it away. `generateImage()` deliberately does not charge:
 that belongs in the Server Action, where a person is present and the price is
-yours. `template/CLAUDE.md` → *Charging tokens* has the rest.
+yours. `CLAUDE.md` → *Charging tokens* has the rest.
 
 ---
 

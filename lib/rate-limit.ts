@@ -101,6 +101,26 @@ export function clearKey(bucket: string, key: string): void {
   buckets.get(bucket)?.delete(key);
 }
 
+/**
+ * Gives back ONE hit — for a request that was counted before anyone could tell
+ * it would cost nothing.
+ *
+ * The upload endpoint is the case it exists for. It has to `record()` *before*
+ * reading the body, because reading a 49 MB part is the expense the limit
+ * protects and a brake that fires afterwards has already paid for what it
+ * refuses. But that also metered a POST carrying no file at all, so a broken
+ * client or a retry loop could lock a member out for an hour having uploaded
+ * nothing.
+ *
+ * **Deliberately not `clearKey()`.** Wiping the history would make an empty
+ * request a way to reset the quota, which is a worse hole than the one being
+ * closed. This removes the single most recent timestamp and nothing else.
+ */
+export function forgetOne(bucket: string, key: string): void {
+  const timestamps = buckets.get(bucket)?.get(key);
+  if (timestamps?.length) timestamps.pop();
+}
+
 /** Test seam — drops every recorded hit in every bucket. */
 export function resetRateLimits(): void {
   buckets.clear();

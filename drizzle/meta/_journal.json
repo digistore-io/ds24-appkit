@@ -225,6 +225,13 @@
       "when": 1785401944486,
       "tag": "0031_jazzy_spirit",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1785437698652,
+      "tag": "0032_reload_attempts",
+      "breakpoints": true
     }
   ]
 }

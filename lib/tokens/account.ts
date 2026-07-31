@@ -40,7 +40,32 @@ export class InsufficientTokensError extends Error {
 
 // Stale-lock timeout: a reload lock that got stuck is released again after
 // this many hours (in case an IPN never arrived).
+//
+// ⚠️ Read this together with RELOAD_ATTEMPT_LIMIT below. This timeout recovers
+// a CRASHED process that still holds the lock — that is what it was written
+// for and it does it correctly. It does not recover a permanently missing IPN:
+// there it is the interval at which the same charge repeats.
 const RELOAD_LOCK_TIMEOUT_HOURS = 6;
+
+/**
+ * How many on-demand charges may go out without a single one coming back as a
+ * booked credit, before auto top-up stops charging.
+ *
+ * Two, not one, and not unlimited:
+ *
+ * - **Not unlimited** — that is the loop this constant exists to close. A lost
+ *   IPN billed the card every `RELOAD_LOCK_TIMEOUT_HOURS` for as long as the
+ *   Member's balance stayed low, which is for ever, because the credit that
+ *   would raise it is the thing that never arrived.
+ * - **Not one** — Digistore24 can be slow, and a credit arriving after the
+ *   stale timeout is a working installation, not a broken one. Refusing after
+ *   a single unconfirmed charge would stop healthy accounts.
+ *
+ * Two lets one charge go unconfirmed and stops at the second. By then the
+ * Member has been billed twice with nothing delivered, which is already more
+ * than anybody should have to notice for themselves.
+ */
+export const RELOAD_ATTEMPT_LIMIT = 2;
 
 // --- Pure decision logic -----------------------------------------------------
 
@@ -56,6 +81,54 @@ export function shouldAutoReload(account: {
   autoReloadThreshold: number;
 }): boolean {
   return account.autoReloadEnabled && account.balance <= account.autoReloadThreshold;
+}
+
+/**
+ * Has auto top-up charged this card too often without a credit coming back?
+ *
+ * PURE, and separate from `shouldAutoReload` on purpose. That function answers
+ * *"does this account want a top-up"* — a question about the Member's settings
+ * and balance. This one answers *"may we still charge for it"* — a question
+ * about whether the last charges worked. Keeping them apart is what lets the
+ * caller tell a paused account from a disabled one, and say so.
+ *
+ * PAUSED, NOT DISABLED. `autoReloadEnabled` stays true and the stored mandate
+ * (`ds24PurchaseId`) is untouched, because nothing about the Member's intent
+ * changed — only our confidence that the charge reaches them. The moment a
+ * credit books, `reloadAttempts` returns to 0 and top-ups resume by themselves,
+ * with nobody having to press anything.
+ */
+export function reloadIsPaused(
+  account: { reloadAttempts: number },
+  limit: number = RELOAD_ATTEMPT_LIMIT,
+): boolean {
+  return account.reloadAttempts >= limit;
+}
+
+/**
+ * How many accounts have stopped charging because nothing came back.
+ *
+ * Reads, never writes. This is the number `check-stuck-reloads` reports, and
+ * the reason it is a scheduled job rather than something the spend path
+ * notices: a paused account is one nobody is spending on any more. If the
+ * Member's balance is stuck at zero they stop using the app, `spendTokens()`
+ * is never called again, and the code path that would log the pause never
+ * runs. Nothing would ever ask the question unless something asks it on a
+ * timer.
+ */
+export async function countPausedReloads(
+  limit: number = RELOAD_ATTEMPT_LIMIT,
+): Promise<number> {
+  const [row] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(tokenAccounts)
+    .where(
+      and(
+        eq(tokenAccounts.autoReloadEnabled, true),
+        sql`${tokenAccounts.reloadAttempts} >= ${limit}`,
+      ),
+    );
+  return row?.n ?? 0;
 }
 
 /** Is a set reload lock stale (timeout exceeded)? */
@@ -287,7 +360,7 @@ export async function creditTokens(args: {
               ? { ds24PurchaseId: args.linkPurchaseId }
               : {}),
             ...(args.releaseReloadLock && ownsLock(acct, args)
-              ? { reloadLockedAt: null, lastReloadAt: now }
+              ? { reloadLockedAt: null, lastReloadAt: now, reloadAttempts: 0 }
               : {}),
             updatedAt: now,
           })
@@ -304,7 +377,13 @@ export async function creditTokens(args: {
           ? { ds24PurchaseId: args.linkPurchaseId }
           : {}),
         ...(args.releaseReloadLock && ownsLock(acct, args)
-          ? { reloadLockedAt: null, lastReloadAt: now }
+          // `reloadAttempts: 0` rides with the lock release, under the same
+          // `ownsLock` guard and for the same reason. A credit that may clear
+          // this charge's lock is a credit that proves the chain — checkout,
+          // charge, IPN, booking — works end to end. That is the only evidence
+          // worth resetting the counter on, and it is why the counter is not
+          // reset when a charge merely returns 200 from Digistore24.
+          ? { reloadLockedAt: null, lastReloadAt: now, reloadAttempts: 0 }
           : {}),
         updatedAt: now,
       })
@@ -443,11 +522,20 @@ export async function claimReloadSlot(
   memberId: string,
   now: Date = new Date(),
   timeoutHours: number = RELOAD_LOCK_TIMEOUT_HOURS,
+  attemptLimit: number = RELOAD_ATTEMPT_LIMIT,
 ): Promise<boolean> {
   const staleBefore = new Date(now.getTime() - timeoutHours * 3_600_000);
   const claimed = await db
     .update(tokenAccounts)
-    .set({ reloadLockedAt: now, updatedAt: now })
+    .set({
+      reloadLockedAt: now,
+      // Counted HERE rather than after the charge returns, and that ordering is
+      // the point: taking the slot is the commitment to bill. A counter written
+      // after `createBillingOnDemand` would miss exactly the case this exists
+      // for — a charge that goes out and whose answer never comes back.
+      reloadAttempts: sql`${tokenAccounts.reloadAttempts} + 1`,
+      updatedAt: now,
+    })
     .where(
       and(
         eq(tokenAccounts.memberId, memberId),
@@ -456,6 +544,13 @@ export async function claimReloadSlot(
           isNull(tokenAccounts.reloadLockedAt),
           lt(tokenAccounts.reloadLockedAt, staleBefore),
         ),
+        // The limit again, in the same statement that takes the slot. The
+        // caller already refused above; this is the second line of defence, in
+        // the shape `pruneImpersonations` uses for its retention window. Two
+        // spends landing at the same moment both read an account at
+        // `attemptLimit - 1` and both pass a check made outside this UPDATE —
+        // only one of them can win it.
+        lt(tokenAccounts.reloadAttempts, attemptLimit),
       ),
     )
     .returning({ id: tokenAccounts.id });
@@ -534,6 +629,10 @@ export async function setAutoReload(args: {
       autoReloadThreshold: safeReloadThreshold(args.threshold, args.packageKey),
       autoReloadPackageKey: args.packageKey,
       ds24PurchaseId: args.ds24PurchaseId,
+      // A fresh mandate starts with a clean count. This runs when a purchase
+      // arms auto top-up (story 5.3), and the charges counted before it belong
+      // to a mandate that is being replaced.
+      reloadAttempts: 0,
       updatedAt: now,
     })
     .where(eq(tokenAccounts.memberId, args.memberId));
@@ -618,6 +717,12 @@ export async function setAutoReloadEnabled(args: {
       // enabled account, so a lock left here could never be released by
       // anything, and would silently swallow the first 6h of a later re-arm.
       ...(args.enabled ? {} : { reloadLockedAt: null }),
+      // Touching the switch at all resets the unconfirmed-charge counter, in
+      // either direction. This is the Member's own control, and off-then-on is
+      // the gesture anybody makes when something looks stuck — it should
+      // actually unstick it. Resetting on BOTH directions rather than only on
+      // `enabled` keeps that true no matter which half they do first.
+      reloadAttempts: 0,
       updatedAt: now,
     })
     .where(
@@ -639,6 +744,15 @@ export interface AutoReloadResult {
     | "no-account"
     | "disabled-or-above-threshold"
     | "not-configured"
+    /**
+     * Charged `RELOAD_ATTEMPT_LIMIT` times with no credit coming back, so
+     * charging has stopped. Distinct from `"locked"` — that one means another
+     * charge is in flight right now and this spend should simply skip. This
+     * one means the last charges went out and nothing answered, and it does
+     * not clear itself with time. It clears when a credit books, or when the
+     * Member touches their own switch.
+     */
+    | "paused-unconfirmed"
     | "locked";
 }
 
@@ -666,6 +780,22 @@ export async function autoReloadIfNeeded(args: {
   }
   if (!acct.autoReloadPackageKey || !acct.ds24PurchaseId) {
     return { triggered: false, reason: "not-configured" };
+  }
+  if (reloadIsPaused(acct)) {
+    // The one place in this file that logs. Everything else here is a quiet
+    // "no" that happens thousands of times a day; this is the state where a
+    // card has been billed more than once and nothing came back, and it is
+    // invisible from every other angle — no exception was thrown, no charge
+    // failed, the Member's switch still reads "on". `check-stuck-reloads`
+    // reports the same accounts as a count, and the Operator's member page
+    // shows it per Member; this line is what puts it in `node run.mjs logs`.
+    console.error(
+      `[tokens] auto top-up paused for member ${args.memberId}: ` +
+        `${acct.reloadAttempts} charge(s) with no credit booked. ` +
+        `The card was billed and the IPN never arrived — check the Digistore24 ` +
+        `IPN configuration before re-arming.`,
+    );
+    return { triggered: false, reason: "paused-unconfirmed" };
   }
   const claimed = await claimReloadSlot(args.memberId, now);
   if (!claimed) return { triggered: false, reason: "locked" };

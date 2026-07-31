@@ -211,6 +211,15 @@ export async function deleteUser(actor: Actor, targetId: string): Promise<void> 
   const target = await requireUser(targetId);
   const denial = canDeleteUser(actor, target, await countOwners());
   if (denial) throw new UserError(denial);
+  // The objects, before the row. A foreign key cascade reaches the database and
+  // not the bucket, and `media.ownerId` is `set null` — so without this the row
+  // survives orphaned and NOTHING left in the database can ever find the file
+  // again. This is the button an operator presses when a customer writes in
+  // asking to be deleted; `deleteOwnAccount()` below has done it since it was
+  // written, and this path was missed.
+  const { deleteOwnedMedia } = await import("@/lib/media/manage");
+  await deleteOwnedMedia(targetId);
+
   await db.delete(users).where(eq(users.id, targetId));
 }
 

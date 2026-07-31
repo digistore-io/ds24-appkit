@@ -8,7 +8,7 @@
 // have drawn. A 200, a plausible body, and no image anywhere in it.
 import { describe, expect, it } from "vitest";
 
-import { buildBody, imageEndpointFor, imagesFrom, usageFrom } from "./image-gemini";
+import { buildBody, imageEndpointFor, imagesFrom, returnedImageCount, usageFrom } from "./image-gemini";
 import type { ImageRequest } from "./types";
 
 const REQUEST: ImageRequest = {
@@ -133,5 +133,48 @@ describe("usageFrom", () => {
     expect(usage.inputTokens).toBe(12);
     expect(usage.outputTokens).toBe(1120);
     expect(usage.reportedTotalTokens).toBe(1132);
+  });
+});
+
+// ── The two fixes that were made on the OpenAI side and not on this one ────
+//
+// A review pass found both patches ticked as done while the identical defect
+// was live here — and the comment beside `billed` asserted the behaviour its
+// code did not have.
+
+describe("a part that decodes to nothing", () => {
+  const undecodable = { candidates: [{ content: { parts: [{ inlineData: { data: "####" } }] } }] };
+
+  it("is not returned as a picture", () => {
+    // `Buffer.from(…, "base64")` never throws: it skips what it cannot read and
+    // returns what it managed, which for a malformed part is nothing. A
+    // zero-byte object would be written to the bucket with a `media` row
+    // claiming it is an image.
+    expect(imagesFrom(undecodable)).toEqual([]);
+  });
+
+  it("is still counted for the invoice", () => {
+    // The distinction that matters: Google charged for it. Billing from the
+    // filtered list would under-count exactly the responses where something
+    // went wrong.
+    expect(returnedImageCount(undecodable)).toBe(1);
+  });
+
+  it("counts every inline part, decodable or not", () => {
+    const mixed = {
+      candidates: [
+        {
+          content: {
+            parts: [
+              { inlineData: { data: Buffer.from("real").toString("base64") } },
+              { inlineData: { data: "####" } },
+              { text: "some words" },
+            ],
+          },
+        },
+      ],
+    };
+    expect(imagesFrom(mixed)).toHaveLength(1);
+    expect(returnedImageCount(mixed)).toBe(2);
   });
 });

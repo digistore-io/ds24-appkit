@@ -37,10 +37,17 @@ type FigureBase = {
   /**
    * Render at natural size without Next's optimiser.
    *
-   * For an image that is already exactly the size it is shown at, or one served
-   * from a host `next.config.ts` was not told about. Costs the resizing.
+   * For an image that is already exactly the size it is shown at. Costs the
+   * resizing.
+   *
+   * **`true` only, deliberately.** Anything not on this app's own origin is
+   * already `unoptimized` by default (see below) because `next.config.ts`
+   * declares no `remotePatterns` — so passing `false` for a bucket URL would
+   * hand `/_next/image` a host it will refuse with a 400, in production only.
+   * There is no host it can be told about, so there is nothing a `false` here
+   * could correctly mean.
    */
-  unoptimized?: boolean;
+  unoptimized?: true;
   priority?: boolean;
   sizes?: string;
 };
@@ -58,8 +65,46 @@ export type FigureProps = FigureBase &
   );
 
 export function Figure(props: FigureProps) {
-  const { src, width, height, className, caption, unoptimized, priority, sizes } = props;
-  const alt = props.decorative ? "" : props.alt;
+  const { src, width, height, className, caption, priority, sizes } = props;
+  // `?? ""` because `alt` is typed `string` and arrives `null` anyway: a
+  // `media` row's `alt` column is nullable, and `createMedia()` — the path
+  // `docs/visuals.md` documents for selling a file — accepts a row without one.
+  const alt = props.decorative ? "" : (props.alt ?? "").trim();
+
+  // `alt=""` without `decorative` is the half-state this component exists to
+  // prevent: the screen reader is told to skip it, but `aria-hidden` is not set
+  // and the image is not declared decoration. The type cannot catch it — an
+  // empty string satisfies `alt: string` — so the check is here.
+  //
+  // ── Why it does NOT throw in production ──────────────────────────────────
+  // It used to, unguarded, while the comment beside it claimed "in development".
+  // A `throw` inside a component is not a lint: React unwinds to the nearest
+  // error boundary, so one image whose row happens to carry no alternative text
+  // takes down the whole page — an Internal Server Error where the fault is a
+  // missing sentence. That trades an accessibility defect for an availability
+  // defect, and the second is worse for the same person: a screen-reader user
+  // gets no page at all rather than one image they cannot perceive.
+  //
+  // So it is loud where somebody is building (`throw`, immediately, with the
+  // fix in the message) and reported where somebody is using it: the page
+  // renders, `node run.mjs errors` picks the line up out of the log, and
+  // `ux-gateway` check 8 reports it against the running app.
+  if (!props.decorative && alt === "") {
+    const message =
+      "Figure: `alt` is empty. Say what the picture shows, or mark it `decorative` " +
+      `if it shows nothing a reader would miss. (src: ${src})`;
+    if (process.env.NODE_ENV !== "production") throw new Error(message);
+    console.error(`[figure] ${message}`);
+  }
+
+  // ── Why the optimiser is off for bucket media ────────────────────────────
+  // `next.config.ts` declares no `remotePatterns`, for the two reasons written
+  // out there. So anything not served from this app's own origin has to bypass
+  // the optimiser, or Next answers 400. Derived from the URL rather than asked
+  // for as a prop, because a caller who forgets it gets a broken image and no
+  // explanation.
+  const isRemote = /^https?:\/\//.test(src);
+  const unoptimized = props.unoptimized ?? isRemote;
 
   const image = (
     <Image

@@ -26,6 +26,23 @@
 // the direction of "washed out". A colour profile says how to interpret the
 // pixels; it says nothing about where somebody was standing.
 //
+// ── What happens when the file does not parse ──────────────────────────────
+// **It is refused, not half-processed.** This is the correction a code review
+// forced, and it is worth stating plainly because the old behaviour looked
+// reasonable: on anything the walk did not understand it stopped and copied the
+// remainder verbatim. Measured consequences — a JPEG carrying a standalone
+// marker before its Exif kept its GPS; a PNG whose first chunk lied about its
+// length kept its `eXIf`; a truncated WebP had its pixels dropped while the
+// RIFF size was rewritten to look consistent. In every case the upload reported
+// success.
+//
+// A stripper that cannot parse a file cannot promise anything about it, and the
+// only honest answer is to refuse the file. `stripMetadata` therefore throws
+// `MediaError("fileDamaged")` — a code of its own, because "this kind of file is
+// not accepted" would be a false statement to somebody whose JPEG simply
+// arrived truncated. The endpoint turns it into a 400 they can act on: send it
+// again, rather than convert a format that was never the problem.
+
 // ── The honest limit ───────────────────────────────────────────────────────
 // **Video is not touched.** An MP4 can carry its recording location in a
 // `©xyz` atom, and taking it out means walking the atom tree and rewriting the
@@ -33,6 +50,8 @@
 // half-stripped file reads as protected. So this file handles the three image
 // formats and `docs/data-protection.md` says plainly that video metadata
 // survives — which lets a vendor decide, rather than assume.
+
+import { MediaError } from "./rules";
 
 const JPEG_SOI = 0xd8;
 const JPEG_SOS = 0xda;
@@ -67,24 +86,48 @@ const PNG_DROP = new Set(["eXIf", "tEXt", "iTXt", "zTXt", "tIME"]);
 const WEBP_DROP = new Set(["EXIF", "XMP "]);
 
 function stripJpeg(bytes: Uint8Array): Uint8Array {
-  // Not a JPEG after all — hand it back untouched rather than guessing.
-  if (bytes.length < 2 || bytes[0] !== 0xff || bytes[1] !== JPEG_SOI) return bytes;
+  if (bytes.length < 2 || bytes[0] !== 0xff || bytes[1] !== JPEG_SOI) {
+    throw new MediaError("fileDamaged", "not a JPEG: no SOI marker");
+  }
 
   const keep: Uint8Array[] = [bytes.subarray(0, 2)];
   let at = 2;
 
-  while (at + 3 < bytes.length) {
-    if (bytes[at] !== 0xff) break; // Not where a marker should be; stop cleanly.
+  while (at + 1 < bytes.length) {
+    if (bytes[at] !== 0xff) {
+      throw new MediaError("fileDamaged", `malformed JPEG: no marker at byte ${at}`);
+    }
 
     const marker = bytes[at + 1];
 
-    // Standalone markers carry no length. Once the scan starts, the rest of the
-    // file is entropy-coded data and must be copied verbatim — walking into it
-    // looking for markers finds them by accident.
+    // A run of 0xFF bytes is legal padding before a marker; skip one and look
+    // again. Without this a perfectly valid file is refused.
+    if (marker === 0xff) {
+      at += 1;
+      continue;
+    }
+
+    // Standalone markers carry NO length: TEM (0x01) and the eight restart
+    // markers. Treating one as a segment reads the next two bytes as a length
+    // and walks off into the file — which is how an Exif block after one used
+    // to survive the strip untouched.
+    if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
+      keep.push(bytes.subarray(at, at + 2));
+      at += 2;
+      continue;
+    }
+
+    // Once the scan starts, the rest is entropy-coded data and is copied
+    // verbatim — walking into it looking for markers finds them by accident.
     if (marker === JPEG_SOS || marker === JPEG_EOI) break;
 
+    if (at + 3 >= bytes.length) {
+      throw new MediaError("fileDamaged", "malformed JPEG: truncated segment header");
+    }
     const length = (bytes[at + 2] << 8) | bytes[at + 3];
-    if (length < 2 || at + 2 + length > bytes.length) break; // Malformed; stop.
+    if (length < 2 || at + 2 + length > bytes.length) {
+      throw new MediaError("fileDamaged", "malformed JPEG: segment length past end of file");
+    }
 
     if (!JPEG_DROP.has(marker)) {
       keep.push(bytes.subarray(at, at + 2 + length));
@@ -97,7 +140,9 @@ function stripJpeg(bytes: Uint8Array): Uint8Array {
 }
 
 function stripPng(bytes: Uint8Array): Uint8Array {
-  if (bytes.length < 8) return bytes;
+  if (bytes.length < 8) {
+    throw new MediaError("fileDamaged", "malformed PNG: shorter than its signature");
+  }
 
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const keep: Uint8Array[] = [bytes.subarray(0, 8)];
@@ -112,7 +157,11 @@ function stripPng(bytes: Uint8Array): Uint8Array {
       bytes[at + 7],
     );
     const total = 12 + length; // length + type + data + CRC
-    if (at + total > bytes.length) break; // Malformed; keep what is left as is.
+    if (at + total > bytes.length) {
+      // A chunk that declares more than the file holds. Stopping here and
+      // copying the tail kept every metadata chunk after the liar.
+      throw new MediaError("fileDamaged", "malformed PNG: chunk length past end of file");
+    }
 
     if (!PNG_DROP.has(type)) {
       keep.push(bytes.subarray(at, at + total));
@@ -126,14 +175,32 @@ function stripPng(bytes: Uint8Array): Uint8Array {
 }
 
 function stripWebp(bytes: Uint8Array): Uint8Array {
-  if (bytes.length < 12) return bytes;
+  if (bytes.length < 12) {
+    throw new MediaError("fileDamaged", "malformed WebP: shorter than its own header");
+  }
 
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const body: Uint8Array[] = [bytes.subarray(8, 12)]; // the "WEBP" FourCC
   let at = 12;
   let dropped = false;
 
-  while (at + 8 <= bytes.length) {
+  // ── Walk to the RIFF header's OWN idea of the end, not to the buffer's ────
+  // The two differ in both directions and each one was a bug. Reading to
+  // `bytes.length` threw "chunk length past end of file" on a perfectly
+  // readable file carrying eight or more bytes of padding after its last chunk
+  // — a refusal of something valid. And stopping at `at + 8 > bytes.length`
+  // silently discarded a one-to-seven byte tail while rewriting the RIFF size
+  // to match, which is the same "looks consistent, is not the file you gave me"
+  // outcome this function was rewritten to eliminate.
+  //
+  // So the declared end bounds the walk, and anything outside it is refused
+  // below rather than quietly dropped.
+  const declaredEnd = 8 + view.getUint32(4, true);
+  if (declaredEnd > bytes.length) {
+    throw new MediaError("fileDamaged", "malformed WebP: RIFF size past end of file");
+  }
+
+  while (at + 8 <= declaredEnd) {
     const type = String.fromCharCode(
       bytes[at],
       bytes[at + 1],
@@ -146,7 +213,11 @@ function stripWebp(bytes: Uint8Array): Uint8Array {
     // every FourCC after it reads as garbage.
     const padded = size + (size % 2);
     const total = 8 + padded;
-    if (at + total > bytes.length) break;
+    if (at + total > declaredEnd) {
+      // Truncated. Continuing dropped the pixel chunks AND rewrote the RIFF
+      // size to match, producing a twelve-byte file that looked consistent.
+      throw new MediaError("fileDamaged", "malformed WebP: chunk length past end of file");
+    }
 
     if (WEBP_DROP.has(type)) {
       dropped = true;
@@ -156,7 +227,38 @@ function stripWebp(bytes: Uint8Array): Uint8Array {
     at += total;
   }
 
+  // A remainder inside the declared RIFF size is a chunk header that does not
+  // fit — the file says there is more and there is not. Refused, not trimmed.
+  if (at !== declaredEnd) {
+    throw new MediaError("fileDamaged", "malformed WebP: trailing bytes inside the RIFF size");
+  }
+
   if (!dropped) return bytes;
+
+  // ── Clear the VP8X flags for what was removed ────────────────────────────
+  // A VP8X chunk carries a flags byte announcing what the file contains, and
+  // bits 3 and 2 are "has EXIF" and "has XMP". Dropping the chunks and leaving
+  // the flags set produces a file that advertises metadata it does not have —
+  // read by libwebp, warned on or rejected by stricter readers, and
+  // indistinguishable from a truncation.
+  //
+  // The copy is not defensive style, it is required: `body` holds `subarray()`
+  // VIEWS onto the caller's buffer, so writing through one changes the argument
+  // that was passed in — in a function documented as returning a new image and
+  // leaving its input alone. Measured before the copy: the caller's byte 20
+  // went from 12 to 0 behind their back.
+  for (let i = 0; i < body.length; i += 1) {
+    const part = body[i];
+    const isVp8x =
+      part.length >= 9 &&
+      String.fromCharCode(part[0], part[1], part[2], part[3]) === "VP8X";
+    if (isVp8x) {
+      const copy = Uint8Array.from(part);
+      // eslint-disable-next-line no-bitwise -- clearing two documented flag bits
+      copy[8] &= ~0b0000_1100;
+      body[i] = copy;
+    }
+  }
 
   const payload = concat(body);
   // The RIFF header's size field counts everything after it, so removing a
@@ -202,5 +304,12 @@ export function stripMetadata(mime: string, bytes: Uint8Array): Uint8Array {
   }
 }
 
-/** Which media types this file actually does something to. For the docs and the check command. */
-export const STRIPPED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
+/**
+ * Which media types this file actually does something to.
+ *
+ * Re-exported rather than declared, because `scripts/media/check.mjs` needs the
+ * same list and cannot import TypeScript. The one copy lives in
+ * `strip-rules.mjs` beside the rule that consumes it — see the note at the top
+ * of that file for what went wrong when there were two readers.
+ */
+export { STRIPPED_MIME_TYPES } from "./strip-rules.mjs";

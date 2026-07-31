@@ -70,6 +70,11 @@ MEDIA_S3_SECRET_ACCESS_KEY=...
 The skill **`setup-hosting`** books one alongside your database, so on the
 ordinary path you never type these by hand.
 
+`MEDIA_S3_ENDPOINT` must be an **origin** — no path. The bucket name belongs in
+`MEDIA_S3_BUCKET`; a path in the endpoint is signed differently from the one the
+request uses, so everything answers 403 and nothing says why.
+`node run.mjs media-check` refuses it.
+
 You do not have to say which addressing style your provider wants: if the
 endpoint's host already begins with the bucket name the key is the whole path,
 otherwise the bucket is the first path segment. Both work, and a wrong guess
@@ -107,7 +112,12 @@ import { Figure } from "@/components/ui/figure";
 const item = await findMedia(id);
 if (!item || !(await mayAccess(item, { memberId, role }))) notFound();
 
-<Figure src={mediaUrlFor(item)} alt={item.alt ?? ""} width={800} height={450} />
+// `media.alt` is nullable — an item seeded through `createMedia()` may carry
+// none — so decide what a missing one MEANS rather than passing `""`, which is
+// the one value `Figure` refuses. Here it is a decoration.
+{item.alt
+  ? <Figure src={mediaUrlFor(item)} alt={item.alt} width={800} height={450} />
+  : <Figure src={mediaUrlFor(item)} decorative width={800} height={450} />}
 ```
 
 `mediaUrlFor()` **grants nothing and checks nothing** — it is the step after
@@ -132,11 +142,16 @@ await createMedia({
 });
 ```
 
-The Product Key is checked when it is written, not when the page renders.
-`hasPlan()` **throws** on an unknown key, so a typo would not mean "no access" —
-it would take down the page. A token package is refused too: a balance is not an
-entitlement, so `hasPlan()` answers false for one for ever and nobody would ever
-get the file.
+The Product Key is checked by `createMedia()` itself, so this call refuses a
+typo rather than storing it. That matters because `hasPlan()` **throws** on a
+key it does not know: an unchecked one would not mean "no access", it would take
+down the page that renders the item. A token package is refused for a different
+reason — a balance is not an entitlement, so `hasPlan()` answers false for one
+for ever and nobody would ever get the file.
+
+A key that is retired from `config/digistore-products.json` *later* cannot be
+caught at write time, so `mayAccess()` treats it as "nobody holds this plan" and
+logs it. Access is refused; the page still renders.
 
 ### How long an address stays valid
 

@@ -150,8 +150,12 @@ export function imageFrom(
   outputFormat: string | undefined,
 ): GeneratedImage | null {
   if (typeof entry.b64_json !== "string" || entry.b64_json === "") return null;
+  const bytes = new Uint8Array(Buffer.from(entry.b64_json, "base64"));
+  // A non-empty string that decodes to nothing. Storing it would put a
+  // zero-byte object in the bucket and a row claiming it is a picture.
+  if (bytes.length === 0) return null;
   return {
-    bytes: new Uint8Array(Buffer.from(entry.b64_json, "base64")),
+    bytes,
     mime: mimeFor(entry, outputFormat),
     // Not reported by either vendor. `lib/media/` needs neither to store nor to
     // serve, and measuring them would mean decoding the picture.
@@ -230,7 +234,13 @@ export function imageAdapter(profile: ImageProfile): ImageAdapter {
         );
       }
 
-      return { images, usage: usageFrom(json.usage, images.length, profile) };
+      // The picture count is what the provider RETURNED, not what decoded — a
+      // response with one unusable entry among four was still four on the
+      // invoice, and under-counting there under-reports the cost.
+      return {
+        images,
+        usage: usageFrom(json.usage, (json.data ?? []).length || images.length, profile),
+      };
     },
   };
 }

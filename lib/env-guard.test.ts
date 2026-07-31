@@ -149,6 +149,44 @@ describe("media storage in a real environment", () => {
       ).toEqual([]);
     });
 
+    // ── The exemption, which had no test at all ───────────────────────────
+    // It is the one change in this area that LOOSENS a rule `CLAUDE.md` states
+    // as absolute ("In STAGING and PROD `MEDIA_DRIVER=local` stops the app from
+    // starting"), and an untested exemption to a hard rule is how the rule
+    // quietly stops existing. Both directions are asserted here so that
+    // widening it takes a deliberate edit to a test that says why.
+    it(`starts ${environment} with media switched OFF and no bucket`, () => {
+      // An app that accepts no media needs nowhere to put it. Without this,
+      // every app generated from 0.7.0 had to book object storage before it
+      // could deploy — including the ones that will never take a file.
+      expect(
+        checkEnvironment({
+          ...base,
+          APP_ENV: environment,
+          MEDIA_DRIVER: "local",
+          mediaBucketConfigured: false,
+          mediaEnabled: false,
+        }),
+      ).toEqual([]);
+    });
+
+    it(`still refuses ${environment} on the local disk when media is ON`, () => {
+      // The exemption reaches exactly as far as `"enabled": false`. An app that
+      // uses media gets the original refusal, and `mediaEnabled: undefined` —
+      // an older caller that does not pass the field — must behave as ON.
+      for (const mediaEnabled of [true, undefined]) {
+        const problems = checkEnvironment({
+          ...base,
+          APP_ENV: environment,
+          MEDIA_DRIVER: "local",
+          mediaBucketConfigured: false,
+          mediaEnabled,
+        });
+        expect(problems, `mediaEnabled: ${String(mediaEnabled)}`).toHaveLength(1);
+        expect(problems[0]).toContain("MEDIA_DRIVER");
+      }
+    });
+
     it(`refuses ${environment} on a driver that does not exist`, () => {
       const problems = checkEnvironment({
         ...base,

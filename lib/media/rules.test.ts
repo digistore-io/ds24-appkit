@@ -177,3 +177,20 @@ describe("formatBytes", () => {
     expect(formatBytes(1536, "de")).toBe("1,5 KB");
   });
 });
+
+describe("safeFilename keeps a usable extension", () => {
+  it("does not treat a trailing dot as one", () => {
+    // The guard was `dot > 0 && cleaned.length - dot <= 12`, which a name
+    // ending in a bare dot satisfies: `ext` became "." and the fallback was
+    // never applied, producing 120 characters with nothing to open. Not
+    // contrived — the sanitiser strips quotes, so `…report."` arrives here as
+    // `…report.`.
+    const out = safeFilename(`${"a".repeat(200)}.`, "pdf");
+    expect(out.length).toBeLessThanOrEqual(120);
+    expect(out.endsWith(".pdf")).toBe(true);
+  });
+
+  it("keeps a real extension when it shortens the stem", () => {
+    expect(safeFilename(`${"a".repeat(200)}.pdf`, "bin").endsWith(".pdf")).toBe(true);
+  });
+});

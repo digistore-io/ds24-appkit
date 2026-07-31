@@ -139,6 +139,25 @@ export const tokenAccounts = pgTable(
     // stale after the timeout).
     reloadLockedAt: timestamp("reload_locked_at"),
     lastReloadAt: timestamp("last_reload_at"),
+    // How many on-demand charges have been fired since the last one that came
+    // back as a booked credit.
+    //
+    // This column exists because the 6h stale-lock timeout above is BOTH the
+    // recovery from a crashed process AND, when an IPN never arrives at all,
+    // the metronome of a repeating charge: the card is billed, the balance is
+    // never credited, so `shouldAutoReload` stays true, and six hours later the
+    // slot is taken over and the card is billed again — four times a day, under
+    // Digistore24's 10/day cap, so nothing outside this app ever stops it.
+    //
+    // Nothing in that sequence looks like an error. Every charge SUCCEEDS.
+    // The only anomaly is a credit that does not arrive, and before this column
+    // nothing watched for it.
+    //
+    // Incremented inside `claimReloadSlot`'s own atomic UPDATE, so it can never
+    // drift from the lock it counts. Reset to 0 exactly where `lastReloadAt` is
+    // set — the one event that proves the whole chain works — and when a Member
+    // re-arms auto top-up themselves.
+    reloadAttempts: integer("reload_attempts").notNull().default(0),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
