@@ -125,15 +125,25 @@ Checkout:
 
 ```ts
 import { checkoutLinksFor } from "@/lib/digistore/checkout";
-import { productsByKind } from "@/lib/digistore/products";
+import { allProducts } from "@/lib/digistore/products";
 
-const plans = [...productsByKind("subscription"), ...productsByKind("token")];
-const links = await checkoutLinksFor(plans, { buyer: { email } });
+const links = await checkoutLinksFor(allProducts(), { buyer: { email } });
 
 const link = links.get("pro");
 // { url } → render the buy button
 // { url: null, blocker } → "notSynced" | "notConnected" | "error"
 ```
+
+**Take the whole registry, never a hand-picked list of kinds.** An earlier
+version of this very example built its list as
+`[...productsByKind("subscription"), ...productsByKind("token")]` — which reads
+like the complete registry and is not: it drops every `kind: "one_time"`
+product, and the sales page shipped with exactly that bug for a while (a vendor
+whose only product was a one-off course saw an empty page). If you need the
+registry *grouped* the way the plans page shows it, `planSections()` in
+`lib/digistore/plan-sections.ts` is the one place that decides which kinds
+exist and in what order — extend it rather than enumerating kinds at a call
+site.
 
 `checkoutLinksFor` sets two things per token package by itself: the
 `tokens:<key>` marker the IPN books the credit against, and

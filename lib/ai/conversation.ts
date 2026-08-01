@@ -14,7 +14,21 @@
 // If threads are ever wanted, this is where they start: a `conversationId` on
 // the table and a parameter here. Nothing above this file reads the rows
 // directly.
-import { and, desc, eq } from "drizzle-orm";
+//
+// ── That is what happened, and the paragraph above still stands ────────────
+// A COMPANION does earn threads, for the reason the assistant does not: day
+// three answering day seven's question is not an old topic falling out of
+// context, it is the product being wrong. So the column and the parameter now
+// exist — and `null` is the assistant's one conversation, unchanged in every
+// respect. Every existing caller passes nothing and gets exactly what it got
+// before.
+//
+// ⚠️ `eq(column, null)` is NOT `IS NULL`. Drizzle emits `= null`, which matches
+// no row — the support transcript would come back empty and the delete would
+// delete nothing, with a green typecheck and no error anywhere. Every
+// conversation-scoped clause in this file goes through `sameConversation()`
+// below, which is the one place that distinction is made.
+import { and, desc, eq, isNull, type SQL } from "drizzle-orm";
 
 import { db } from "@/db";
 import { chatMessages } from "@/db/schema";
@@ -34,9 +48,25 @@ export interface StoredTurn extends ChatTurn {
   createdAt: Date;
 }
 
+/**
+ * One member, one conversation — the whole `WHERE` clause, in one place.
+ *
+ * Exported so `conversation.test.ts` can assert the SQL it produces without a
+ * database. The `null` branch is the reason this is a function at all.
+ */
+export function conversationWhere(memberId: string, conversationId: string | null): SQL {
+  return and(
+    eq(chatMessages.memberId, memberId),
+    conversationId === null
+      ? isNull(chatMessages.conversationId)
+      : eq(chatMessages.conversationId, conversationId),
+  ) as SQL;
+}
+
 /** This member's conversation, oldest first — the order it is read in. */
 export async function listConversation(
   memberId: string,
+  conversationId: string | null = null,
   take: number = CONVERSATION_PAGE_SIZE,
 ): Promise<StoredTurn[]> {
   const rows = await db
@@ -47,7 +77,7 @@ export async function listConversation(
       createdAt: chatMessages.createdAt,
     })
     .from(chatMessages)
-    .where(eq(chatMessages.memberId, memberId))
+    .where(conversationWhere(memberId, conversationId))
     // Newest first in the query so the LIMIT keeps the RECENT ones, then
     // reversed for display. Ordering ascending and limiting would hand back the
     // oldest hundred messages and drop everything the person just said.
@@ -62,11 +92,14 @@ export async function appendTurn(args: {
   memberId: string;
   role: ChatRole;
   content: string;
+  /** Omitted or `null` = the assistant's one conversation. */
+  conversationId?: string | null;
 }): Promise<string> {
   const [row] = await db
     .insert(chatMessages)
     .values({
       memberId: args.memberId,
+      conversationId: args.conversationId ?? null,
       role: args.role,
       content: args.content,
     })
@@ -76,17 +109,27 @@ export async function appendTurn(args: {
 }
 
 /**
- * Deletes this member's conversation.
+ * Deletes ONE of this member's conversations.
  *
  * Scoped to the member id the caller resolved from the session — never one out
  * of a form. The same rule `spendTokens` follows, for the same reason: a route
  * handler is an HTTP endpoint of its own, and an id taken from a request body
  * would let anybody wipe anybody's transcript.
+ *
+ * ⚠️ **And scoped to ONE conversation, which is newer and just as load-bearing.**
+ * The default `null` means the assistant's conversation and nothing else. Left
+ * unscoped, the "Delete history" button on the chat page would also delete every
+ * companion turn the customer has — silent data loss in a feature they were not
+ * using, with nothing anywhere going red. `conversation.test.ts` asserts the
+ * `IS NULL` is in the generated SQL.
  */
-export async function clearConversation(memberId: string): Promise<number> {
+export async function clearConversation(
+  memberId: string,
+  conversationId: string | null = null,
+): Promise<number> {
   const deleted = await db
     .delete(chatMessages)
-    .where(and(eq(chatMessages.memberId, memberId)))
+    .where(conversationWhere(memberId, conversationId))
     .returning({ id: chatMessages.id });
 
   return deleted.length;

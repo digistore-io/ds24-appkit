@@ -48,6 +48,12 @@ import {
   priceKey,
   recommendedCurrency,
 } from "../../lib/ai/pricing.mjs";
+// The ONE reader of `config/ai-companion.json`. This script, `lib/ai/disclosure.mjs`
+// and the app all import it rather than each writing `raw.enabled === true`:
+// three copies of one predicate mean the first rename of that file makes them
+// disagree, and the loudest symptom is the quietest one — this hint starts
+// firing in every installed app again and nothing goes red.
+import { companionConfigFrom } from "../../lib/ai/companion-config.mjs";
 import "../lib/env.mjs";
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
@@ -63,6 +69,24 @@ function readJson(...parts) {
   } catch (error) {
     console.error(`✗ ${parts.join("/")} could not be read: ${error.message}`);
     process.exit(1);
+  }
+}
+
+/**
+ * The same read, for a file that may legitimately not be there yet.
+ *
+ * `readJson()` above refuses to continue without `ai-models.json`, and that is
+ * correct — every answer this script gives depends on it. A companion switch is
+ * different: an app that has never wanted one has no such file, and that is not
+ * an error to stop on. Missing, unreadable and malformed all come back `null`,
+ * which the one caller reads as OFF — the fail-closed direction `isChatEnabled()`
+ * already uses for the assistant.
+ */
+function readJsonIfPresent(...parts) {
+  try {
+    return JSON.parse(readFileSync(join(ROOT, ...parts), "utf8"));
+  } catch {
+    return null;
   }
 }
 
@@ -183,6 +207,36 @@ if (unpriced.length > 0) {
 
 const notes = [];
 const problems = bindingProblems(models, configured, { notes });
+
+// ── The AI you pay for, used only for support ───────────────────────────────
+// A note, never a problem, and the exit code stays 0. An app that genuinely
+// wants no companion is not broken, and a check that calls it broken is a check
+// people learn to skip.
+//
+// It keys on the SWITCH — `config/ai-companion.json`, read through the one
+// shared predicate in `lib/ai/companion-config.mjs` — and deliberately not on a
+// scan of the tree for call sites. A scan would answer
+// "found" in every generated app for ever, because the template itself ships a
+// companion server action; the hint would go silent with nothing ever going red.
+// The switch is also the better half to ask about: an empty registry is a state
+// of completion, a switch is a decision, and this note is about a decision
+// nobody has made. Reading `lib/ai/companions.ts` is not an option either —
+// this script cannot import TypeScript (CLAUDE.md → Three systems).
+//
+// The shipped template answers "off", so on any machine with a key this note
+// fires on the template itself. That is the observation, not a defect.
+if (
+  configured.length > 0 &&
+  !companionConfigFrom(readJsonIfPresent("config", "ai-companion.json")).enabled
+) {
+  notes.push(
+    "You are paying for a model, and this app uses it only to answer support questions.\n" +
+      "    An app can also work ALONGSIDE its customer — read what they submitted, walk them\n" +
+      "    through a course, check a plan before they commit to it. The call is\n" +
+      "    askCompanion() in lib/ai/companion.ts, from a server action; the shape and a\n" +
+      "    worked example are in docs/ai-providers.md → Working alongside your customer.",
+  );
+}
 
 console.log("");
 if (problems.length > 0) {

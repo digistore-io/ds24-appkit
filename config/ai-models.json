@@ -16,6 +16,12 @@
       "_comment": "Producing a picture. Two of the five companies cannot — Anthropic makes no images at all, and Mistral only through an agent detour this template does not take. So \"auto\" here means \"whichever of OpenAI, Gemini or OpenRouter you have a key for\", and if your only key is Anthropic's, node run.mjs ai-check says so by name instead of failing at your first picture. There is no maxTokens: images are billed per picture.",
       "provider": "auto",
       "model": "auto"
+    },
+    "companion": {
+      "_comment": "Working alongside your customer — reading what they submitted, walking them through a course or a challenge, checking a plan before they commit to it. The call shape is askCompanion() in lib/ai/companion.ts; what calls it is your app. It has its own entry rather than inheriting 'default' so that what your companion costs is separable from what support costs on the AI-costs page — spend is grouped by task id. Bind it to another company here and no code changes. maxTokens is higher than chat's because a companion is usually reading something a customer wrote rather than answering a typed question.",
+      "provider": "auto",
+      "model": "auto",
+      "maxTokens": 4000
     }
   }
 }

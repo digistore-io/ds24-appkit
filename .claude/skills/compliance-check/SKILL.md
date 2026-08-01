@@ -42,7 +42,7 @@ Eight checks. You do not have to know which one you want.
 | 5 | **`consent`** | § 25 TDDDG, marketing mail — and whether you need any at all | 10 min |
 | 6 | **`rights`** | access, deletion, portability, objection — end to end | 10 min |
 | 7 | **`evidence`** | the accountability pack (Art. 5(2)): records, TOMs, DPAs | 20–30 min |
-| 8 | **`map`** | BFSG, DSA, Data Act — do they reach you yet? | 5 min |
+| 8 | **`map`** | BFSG, DSA, Data Act — do they reach you yet? Judged elements sharpen the BFSG half | 5 min |
 
 **How to dispatch:**
 
@@ -123,7 +123,8 @@ Read from disk first, and say what you found rather than asking about it:
 
 | Question | Where the answer is |
 |---|---|
-| Is there an AI feature? | `config/ai-chat.json` (`enabled`), `config/ai-models.json`, `lib/ai/` |
+| Is there a support **assistant**? | `config/ai-chat.json` (`enabled`) — she answers from `content/knowledge/` and is sent nothing about the person |
+| Is there a **companion** — anything that reads, judges or advises on what a customer produced? | `config/ai-companion.json` (`enabled`) **and** the entries in `lib/ai/companions.ts`. `node run.mjs legal-check` reports the switch; each entry's `load()` is the list of customer data that call sends, and it is what §8a and the policy paragraph are drafted from |
 | Which AI company receives data? | `node run.mjs ai-check` |
 | Is there tracking? | grep `app/`, `components/` for analytics — the template ships none |
 | What personal data is held? | `docs/data-protection.md` |
@@ -159,6 +160,14 @@ trace on disk:
    assessing creditworthiness, gating an essential service. If yes, say plainly
    that this skill's map stops there and the obligations are a different order
    of magnitude (`docs/compliance.md` §3.5).
+7. **If there is a companion — what does it advise on?** Health, money or law
+   makes it a **different risk conversation**, and not the same one as question
+   6. Say so, mark it in the report and hand it to a person. Do **not** call it
+   high-risk under Annex III on your own: for health it is Art. 9 special
+   categories, for money it may be Annex III creditworthiness, and for law it is
+   professional-liability ground the AI Act does not govern at all. Three
+   different regimes wearing one word. **This skill's map stops here** — the
+   same honest answer question 6 already gives.
 
 Write the answers into the report. Every later check reads them from there
 rather than asking again.
@@ -226,8 +235,19 @@ this app actually does, and the misses are not obvious:
 - **The AI company is the operator's choice**, not a fixed name (§5, §8).
   `node run.mjs ai-check` says which one. Naming the wrong one is worse than
   naming none.
-- **Nothing about the person is sent to the AI** — no name, address, balance or
-  purchase (§8). Worth saying, because customers ask.
+- **Nothing about the person is sent to the assistant** — no name, address,
+  balance or purchase (§8). Worth saying, because customers ask. ⚠️ **Only
+  where there is no companion.** With one switched on that sentence is false,
+  and it is false in a legal document — write the bullet below instead of this
+  one, or write both, scoped: *"the assistant is sent nothing about you; the
+  coach is sent what you submit to it"*.
+- **A companion is sent what the customer wrote**, plus the fields its entry
+  names (§8a) — and possibly to a **different company** than the assistant's,
+  because the two are separate tasks in `config/ai-models.json`.
+  `node run.mjs ai-check` names both. **An app with no companion gets no such
+  paragraph at all** — the shipped state is `"enabled": false`, and a policy
+  describing a feature the app does not have is as wrong as one that omits a
+  feature it does.
 - **Operator access to an account is recorded** and the customer may be told
   (§12).
 
@@ -251,9 +271,9 @@ thereby lost (§ 356(5) BGB), and the order button must be unambiguously labelle
 
 ## 4 · `ai` — the EU AI Act
 
-Skip with one line if `config/ai-chat.json` says `"enabled": false` **and** the
-user has built no other AI feature. Ask the second half; a feature they wrote
-themselves is not in that file.
+Skip with one line if `config/ai-chat.json` **and** `config/ai-companion.json`
+both say `"enabled": false` **and** the user has built no other AI feature. Ask
+that last half; a feature they wrote themselves is in neither file.
 
 ### Art. 50(1) — the disclosure. Applicable since 2 August 2026
 
@@ -263,9 +283,28 @@ Check it, do not assume it:
 node run.mjs legal-check      # reports it directly
 ```
 
-The notice is `chat.disclaimer` in both message files, rendered above the
-transcript in both chat variants. `lib/ai/disclosure.test.ts` fails the build if
-either language stops naming the assistant as an AI.
+The notice is one line per surface — `chat.disclaimer` and
+`companion.disclaimer` in both message files — rendered by
+`components/ai-disclosure.tsx` above the transcript, in every variant.
+`lib/ai/disclosure.test.ts` fails the build if either language stops naming it
+as an AI, and `legal-check` fails when a surface is switched **on** and its
+notice is missing, unreadable or no longer rendered.
+
+**The two are not the same conversation, and the report says which is which:**
+
+| | the assistant | a companion |
+|---|---|---|
+| the disclosure | above the transcript | above it too, and it has to say a model **reads what you write** — the interaction IS the customer handing over their work |
+| the policy paragraph | §8 — what they typed, nothing about them | §8a — what they **produced**, plus the fields the entry names |
+| the recipient | the company bound to the `chat` task | the company bound to the **`companion`** task — possibly a second one. `node run.mjs ai-check` names both, and a DPA and a third-country basis are needed per company |
+| the role | provider, on the reasoning below | the same reasoning, and it carries further: the vendor's own instruction, purpose and subject |
+| Art. 50(2) | a support answer is not published synthetic content | **in question** the moment it drafts something the customer publishes — `docs/compliance.md` §3.3, and the date was still moving |
+
+One surface that is invisible to every check above: a companion somebody
+hand-wrote instead of mounting `<CompanionPanel>`. `legal-check` looks for
+`<AiDisclosure surface="companion" />` in `components/companion-panel.tsx`, so a
+bespoke surface can carry its notice under the send button with everything
+green. Ask.
 
 **The rule is not "the chat carries a notice".** It is: anything in this app
 that talks to a person as a machine says so, at the latest at the first
@@ -381,12 +420,22 @@ one that is genuinely open.
 | Right | Art. | Where | Verify by |
 |---|---|---|---|
 | Information | 15 | member's own download; `node run.mjs data-export --email …` | run the command |
+| — and it covers learning performance | 15 | `activity_results` in BOTH exports (`docs/data-protection.md` §8b) | where `lib/learning/` exists (0.9.0+): the export carries an `activityResults` section. Older clone: not applicable, not a finding |
 | Rectification | 16 | `/dashboard/account`, and the Operator's user page | open the page |
 | Erasure | 17 | account deletion, both self-service and Operator | read the dialog text |
 | Restriction | 18 | blocking the account | — |
 | Portability | 20 | the same JSON | run the command |
 | Objection | 21 | only bites once something runs on legitimate interest | — |
 | No automated decision | 22 | this app makes none | `docs/data-protection.md` §14 |
+
+**A companion's turns need nothing extra here, and that is worth saying rather
+than assuming.** They are rows in `chat_messages` under a `conversation_id`, not
+a table of their own — so they are already in **both** exports and already go
+with the account on the cascade that was there before. Verify it the same way as
+everything else in this table: `node run.mjs data-export --email …` and
+`npm run test -- lib/privacy/export.test.ts`. The parity guard is what would
+catch a *separate* table reaching one export and not the other, which is the
+failure a second table would have introduced.
 
 **The two exports must not drift.** The member's own download omits the raw
 webhook bodies (they can carry a third party's data and nobody is in between to
@@ -418,7 +467,7 @@ template** — that is what makes them worth having and what a template cannot d
 | `tom.md` | technical and organisational measures (Art. 32) | the real ones: scrypt hashes, SHA-512 IPN signature, `lib/rate-limit.ts`, `requireOwner()`, `readOnly` as the MCP boundary, no IP storage |
 | `loeschkonzept.md` | deletion concept | the windows in `lib/cron/jobs.ts`; the proof is `node run.mjs cron --list` |
 | `avv-register.md` | processor agreements (Art. 28) | recipients from `docs/data-protection.md` §5, with the AI company actually in use |
-| `ki-register.md` | AI systems, role, risk class, Art. 50 measures | check 4 |
+| `ki-register.md` | AI systems, role, risk class, Art. 50 measures | check 4 — **one row per surface**: the assistant and any companion are two systems, possibly on two companies |
 | `ki-kompetenz.md` | AI literacy measures (Art. 4) | ask the user what they did |
 | `datenpanne.md` | breach procedure (Art. 33/34) | write it now, not during one |
 
@@ -458,7 +507,7 @@ yet / and here is what changes it*, using the `scope` answers.
 Into `docs/reports/compliance-<YYYY-MM-DD>.md`, always, even when everything
 passes — "have we already done that?" needs an answer next month. Structure:
 
-1. **Scope** — the six answers, dated. Everything else depends on them.
+1. **Scope** — the seven answers, dated. Everything else depends on them.
 2. **Findings** by severity, in the four-line format.
 3. **What was built** in this run — files created, pages filled, purposes declared.
 4. **Accepted risks**, if the user accepted any (same table as
@@ -475,6 +524,10 @@ Prepare these, do not decide them:
   membership) — Art. 9, and a different regime.
 - **Data about children.**
 - **Anything the map calls high-risk under the AI Act** (`scope` question 6).
+- **A companion that advises on health, money or law** (`scope` question 7).
+  Three different regimes wearing one word — Art. 9, possibly Annex III, and
+  professional liability the AI Act does not govern at all. Mark it, prepare
+  what the app actually sends and stores, and hand the question over.
 - **A suspected data breach.** That has a 72-hour clock on it — go to
   `docs/compliance/datenpanne.md` and to a human, in that order.
 - **Any app not established in Germany**, for the national statutes.

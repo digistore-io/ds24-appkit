@@ -3,7 +3,14 @@
 
 "use client";
 
-// One answer, rendered.
+// One answer from a model, rendered — the assistant's and the companion's alike.
+//
+// It lives in `components/` and not beside one of them because BOTH AI surfaces
+// render model output, and a second copy is how the two drift: one gains a
+// markdown block the other does not, and the difference is invisible until a
+// customer sees a literal asterisk. `components/` importing out of
+// `app/dashboard/chat/` would have been the layering inversion that reads as a
+// mistake for ever.
 //
 // The parsing is `lib/ai/markdown.ts` — pure, unit-tested, and it hands back
 // DATA. This file turns that data into React elements, which is the whole

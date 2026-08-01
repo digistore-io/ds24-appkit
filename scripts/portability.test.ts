@@ -176,4 +176,18 @@ describe("everything ships with LF line endings", () => {
 
     expect(offenders).toEqual([]);
   });
+
+  it("has no file with a raw NUL byte in it", () => {
+    // A control byte in a source file makes git treat it as BINARY — no
+    // reviewable diff, no textual merge, grep answers "Binary file matches",
+    // and the LF normalisation above never runs. It happened once: a
+    // string-delimiter was written as the literal byte instead of the
+    // \u0000 escape, and every gate stayed green while the public mirror
+    // shipped an undiffable module. This is the gate that was missing.
+    const offenders = shippedFiles(ROOT)
+      .filter((file) => readFileSync(file, "utf8").includes("\u0000"))
+      .map((file) => path.relative(ROOT, file));
+
+    expect(offenders).toEqual([]);
+  });
 });

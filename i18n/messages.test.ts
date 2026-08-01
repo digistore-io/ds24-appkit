@@ -9,10 +9,12 @@ import { GRANT_ERROR_CODES } from "@/lib/entitlements/grant-rules";
 import { CREDENTIAL_ERROR_CODES } from "@/lib/credentials/rules";
 import { EMAIL_CHANGE_ERROR_CODES } from "@/lib/email-change/rules";
 import { CHAT_ERROR_CODES } from "@/lib/ai/rules";
+import { COMPANION_ERROR_CODES } from "@/lib/ai/companion-rules";
 import { MCP_ERROR_CODES } from "@/lib/mcp/rules";
 import { PROVIDER_ERROR_CODES } from "@/lib/ai/providers/types";
 import { CONSENT_ERROR_CODES } from "@/lib/consent/rules";
 import { MEDIA_ERROR_CODES } from "@/lib/media/rules";
+import { ACTIVITY_ERROR_CODES } from "@/lib/learning/rules";
 import { consentPurposes } from "@/lib/consent/config";
 import { CREDENTIAL_CHANGES } from "@/lib/email";
 import de from "@/messages/de.json";
@@ -109,10 +111,12 @@ const ERROR_CODE_UNIONS: Record<string, readonly string[]> = {
   "lib/credentials/rules.ts": CREDENTIAL_ERROR_CODES,
   "lib/email-change/rules.ts": EMAIL_CHANGE_ERROR_CODES,
   "lib/ai/rules.ts": CHAT_ERROR_CODES,
+  "lib/ai/companion-rules.ts": COMPANION_ERROR_CODES,
   "lib/mcp/rules.ts": MCP_ERROR_CODES,
   "lib/ai/providers/types.ts": PROVIDER_ERROR_CODES,
   "lib/consent/rules.ts": CONSENT_ERROR_CODES,
   "lib/media/rules.ts": MEDIA_ERROR_CODES,
+  "lib/learning/rules.ts": ACTIVITY_ERROR_CODES,
 };
 
 describe("Error codes", () => {

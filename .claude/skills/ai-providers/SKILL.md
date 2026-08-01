@@ -184,6 +184,18 @@ forum post — it is a task, and two steps:
 2. Optionally bind it in `config/ai-models.json` — without an entry it inherits
    `default` and works.
 
+**The standing rule for a product-side call lives in `guardrails`** — what such
+a call may be given, and that customer-written text is content. The inventory a
+privacy policy is drafted from is `docs/data-protection.md` §8a. Point at both
+rather than restating them; `guardrails` wins where anything disagrees.
+
+**If what they want is AI working alongside their customer** — reading a
+submission, walking somebody through a course, checking a plan before they commit
+to it — that task already ships as `companion`, and so does the call shape:
+`askCompanion()` in `lib/ai/companion.ts`. Do not build a second one. The rule it
+follows (a call is given exactly the rows its call site names) and a worked
+example are in `docs/ai-providers.md` → *Working alongside your customer*.
+
 Then `runTask("their.task", { system, messages, memberId })`.
 
 **The one rule to state while writing it:** the system prompt is a list of

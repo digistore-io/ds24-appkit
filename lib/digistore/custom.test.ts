@@ -1,6 +1,8 @@
 // Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA
 // SPDX-License-Identifier: MIT
 
+import { readFileSync } from "node:fs";
+
 import { describe, it, expect } from "vitest";
 import {
   buildIdentity,
@@ -8,6 +10,7 @@ import {
   identifiesMember,
   isCheckoutToken,
   newCheckoutToken,
+  purchaseOriginFor,
 } from "./custom";
 import { tokenCustomMarker, listTokenPackages } from "@/lib/tokens/packages";
 
@@ -165,6 +168,43 @@ describe("newCheckoutToken", () => {
   });
 });
 
+describe("purchaseOriginFor", () => {
+  it("records a one-off purchase as a plan, not as a top-up", () => {
+    // The defect: a 149 € course was attributed as `topup`, which is a false
+    // statement in the string Digistore24 hands back on every later event.
+    expect(purchaseOriginFor("one_time")).toBe("sub");
+  });
+
+  it("records a subscription as a plan", () => {
+    expect(purchaseOriginFor("subscription")).toBe("sub");
+  });
+
+  it("records a token package as a top-up", () => {
+    // The token package is the special case — everything else is a plan.
+    expect(purchaseOriginFor("token")).toBe("topup");
+  });
+
+  it("never produces a fourth origin", () => {
+    // A one-off plan deliberately shares `sub` rather than getting a value of
+    // its own: `parseCustom` reads strings stored on live purchases, and the
+    // only behavioural reader of this field is the auto top-up lock.
+    const kinds = ["subscription", "token", "one_time"] as const;
+    const produced = new Set(kinds.map(purchaseOriginFor));
+    expect([...produced].sort()).toEqual(["sub", "topup"]);
+  });
+
+  it("round-trips through the identity string", () => {
+    const v = buildIdentity({
+      memberId: MEMBER,
+      checkoutToken: TOKEN,
+      productKey: "kurs_komplett",
+      kind: purchaseOriginFor("one_time"),
+    });
+    expect(v).toContain("k:sub");
+    expect(parseCustom(v)).toMatchObject({ kind: "identity", origin: "sub" });
+  });
+});
+
 describe("kind", () => {
   it("carries the kind as a k: pair and reads it back", () => {
     const v = buildIdentity({ memberId: MEMBER, checkoutToken: TOKEN, productKey: "pro", kind: "auto" });
@@ -254,5 +294,20 @@ describe("the auto top-up flag (r:)", () => {
       origin: "auto",
       armAutoReload: true,
     });
+  });
+});
+
+describe("custom.ts stays a leaf module", () => {
+  it("touches ./products with a type-only import, and nothing else at runtime", () => {
+    // The identity grammar must not depend on registry JSON I/O — products.ts
+    // reads config/digistore-products.json at load and now THROWS on an
+    // unknown kind, and none of that may ride into every module that parses
+    // a tracking[custom] string. `import type` is erased at compile time; one
+    // future edit dropping the `type` breaks the property silently, which is
+    // why this reads the source (the leak-guard convention).
+    const source = readFileSync(new URL("./custom.ts", import.meta.url), "utf8");
+    const productImports = (source.match(/^import .*"\.\/products";?$/gm) ?? []);
+    expect(productImports).toHaveLength(1);
+    expect(productImports[0]).toMatch(/^import type /);
   });
 });

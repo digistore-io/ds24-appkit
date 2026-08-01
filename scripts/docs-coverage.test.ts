@@ -219,12 +219,14 @@ describe("every doc can be found", () => {
     ).toEqual([]);
   });
 
-  it("ships no doc it declares as generated", () => {
-    const shipped = [...GENERATED.keys()].filter((file) => DOCS.includes(file));
-    expect(shipped, `these are in docs/ but declared as generated: ${shipped.join(", ")}`).toEqual(
-      [],
-    );
-  });
+  // No "ships no doc it declares as generated" test here, deliberately: that
+  // invariant only holds for the PRISTINE template, before any app was built.
+  // `docs/app.md` existing is `build-app` having done its job, not a defect —
+  // an app that follows the golden path must not fail a check written against
+  // the state it is supposed to leave behind. (A field-test session had to
+  // delete this test mid-build; this comment is what keeps it deleted.)
+  // GENERATED keeps its other job above: a link to `docs/app.md` from
+  // CLAUDE.md is not flagged as dangling on a fresh clone.
 });
 
 // ── 5. config ───────────────────────────────────────────────────────────────

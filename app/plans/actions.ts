@@ -24,7 +24,7 @@ import { getLocale } from "next-intl/server";
 import { auth } from "@/auth";
 import { getProduct } from "@/lib/digistore/products";
 import { checkoutLinkFor } from "@/lib/digistore/checkout";
-import { buildIdentity } from "@/lib/digistore/custom";
+import { buildIdentity, purchaseOriginFor } from "@/lib/digistore/custom";
 import { ensureCheckoutToken } from "@/lib/users/checkout-token";
 
 export async function startCheckoutAction(formData: FormData): Promise<void> {
@@ -62,9 +62,11 @@ export async function startCheckoutAction(formData: FormData): Promise<void> {
           memberId,
           checkoutToken,
           productKey,
-          // Subscriptions and one-off token packages are told apart in the
-          // ledger by this. Auto top-ups carry "auto" (set in autoReloadIfNeeded).
-          kind: def.kind === "subscription" ? "sub" : "topup",
+          // Plans and prepaid top-ups are told apart by this; an unattended
+          // auto top-up carries "auto" (set in autoReloadIfNeeded). The rule
+          // lives with the type it belongs to — a `one_time` purchase is a
+          // plan, not a top-up, and used to be recorded as one.
+          kind: purchaseOriginFor(def.kind),
           // Travels as one more pair in tracking[custom] (AD-5) rather than a
           // column, because the thing it will be attached to does not exist yet:
           // the chargeable purchase_id is created when Digistore24 confirms this

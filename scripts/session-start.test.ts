@@ -36,10 +36,16 @@ describe("the session greeting knows which pages ship with the template", () => 
     expect(declared, "const SHIPPED = new Set([…]) not found in the hook").not.toBeNull();
   });
 
-  it("names exactly the folders app/dashboard/ actually ships", () => {
-    const shipped = [...declared![1].matchAll(/"([^"]+)"/g)].map((m) => m[1]);
-    // Both directions matter. A missing name makes a fresh clone look like a
-    // project under way; a leftover name hides a page the customer built.
-    expect(shipped.sort()).toEqual(onDisk.sort());
+  it("names only folders that still exist under app/dashboard/", () => {
+    const shipped = [...declared![1].matchAll(/"([^"]+)"/g)].map((x) => x[1]);
+    // ONE direction, deliberately. A shipped name pointing at nothing (a
+    // template page renamed without updating the list) is the leftover this
+    // guards against. The reverse is NOT required: an app built on this
+    // template adds its own dashboard folders on purpose, and onDisk growing
+    // past SHIPPED is exactly the "project under way" the greeting detects.
+    // (A field-test session had to relax this mid-build; the one-directional
+    // form is what survives build-app actually being used.)
+    const stale = shipped.filter((name) => !onDisk.includes(name));
+    expect(stale, "SHIPPED names folders that no longer exist").toEqual([]);
   });
 });

@@ -243,8 +243,21 @@ same conversation, and the handbook. So she is told, in the persona, that she
 cannot see the account, and she says so rather than guessing. This is a
 data-protection decision as much as a product one; see
 [`data-protection.md`](data-protection.md) §8, which you need if you switch her
-on: the chat is the first feature in this template that sends customer input to
-a third party outside the payment and mail path.
+on: the chat was the first feature in this template that sends customer input to
+a third party outside the payment and mail path — first, and no longer the only
+one (§8a).
+
+**That rule is about HER, and it stays.** It is not a limitation waiting to be
+lifted — it is what makes an assistant safe to switch on for every signed-in
+member without a second thought about their data. A companion built into the
+product is the other case, and it has its own rule pointing the other way: a
+product-side call is given exactly the rows its call site names, one field at a
+time, because it is worthless unless it can see the challenge day and the answer
+somebody wrote. The two are different surfaces with different rules, and
+harmonising them would break one of the two. The standing rule for the other
+direction is in the skill `guardrails`; the inventory is
+[`data-protection.md`](data-protection.md) §8a; the shape of the call is
+[`ai-providers.md`](ai-providers.md) → *Working alongside your customer*.
 
 Transcripts live in `chat_messages`, are part of `node run.mjs data-export`, and
 are deleted with the account (`on delete cascade`) — unlike orders, which are
@@ -279,7 +292,7 @@ withheld — she answers customers, and "Admin" is a dead end for them.
 ### What her formatting does
 
 She may use `**bold**`, `*italic*`, `` `code` `` and bullet or numbered lists.
-`lib/ai/markdown.ts` parses exactly that much and `app/dashboard/chat/answer.tsx`
+`lib/ai/markdown.ts` parses exactly that much and `components/answer-text.tsx`
 renders it as React elements — no `dangerouslySetInnerHTML`, so there is no
 sanitiser to keep current, and anything outside the subset (a table, a heading,
 a link) is shown to the customer literally. That is the safe direction, and the
@@ -300,6 +313,15 @@ Two places, one conversation:
 
 Both render `ChatWindow` (`app/dashboard/chat/ui.tsx`) with a different
 `variant` — one component, so a fix to the streaming loop is a fix in both.
+
+**A companion is a different component, and the two must not be merged.**
+`<CompanionPanel>` looks similar and is not: she answers from a handbook and is
+told nothing about the person, it reads what the customer produced and is given
+exactly the fields its registry entry names. Merging them would mean one data
+rule for both surfaces, and whichever rule won would be wrong for the other one.
+They do share the one thing worth sharing — `components/answer-text.tsx`, which
+turns a model's markdown into React elements. See
+[`ai-providers.md`](ai-providers.md) → *Working alongside your customer*.
 Both are shown only when `isChatEnabled()` **and**, if `requiresPlan` is set,
 the member holds that plan (`mayUseChat()` in `lib/ai/rules.ts`). That decides
 what is drawn, never what is allowed: `app/api/chat/route.ts` asks every

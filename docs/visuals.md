@@ -272,6 +272,11 @@ is not this. Every row above shows the customer *their own thing* — their page
 their result, their progress. A picture that would be identical for every
 customer is a picture nobody needed.
 
+**And there is a second question next door.** This section is about what the
+customer is *handed*; [`ai-in-product.md`](ai-in-product.md) is about what the
+app *does with them* while they work — reading what they submitted, walking them
+through it, producing the thing together. An app usually wants both.
+
 ---
 
 ## Asking a customer to produce or choose something

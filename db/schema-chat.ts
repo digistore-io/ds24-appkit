@@ -36,6 +36,27 @@ export const chatMessages = pgTable(
     memberId: text("member_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
+    // Which conversation this row belongs to — and **NULL is the assistant's
+    // one conversation**, the `NULL` means "not" idiom this schema already uses
+    // for `users.blockedAt`. So every row that existed before this column did is
+    // a support row by construction, with no backfill and no default.
+    //
+    // The value is an OPAQUE KEY composed by this app's own code
+    // (`conversationIdFor(companionId, subject)` in lib/ai/companion-rules.ts),
+    // never a foreign key: a subject is the app's own slug for a lesson or a
+    // challenge day, not a row the template could reference — a real foreign
+    // key would demand a taxonomy for subjects it cannot know about. One
+    // column rather than a `(kind, id)` pair for the same reason.
+    // `activity_results` (schema-learning.ts) keys a learner's RESULTS by the
+    // same slug, deliberately: a lesson's coach and a lesson's game share
+    // coordinates without either knowing the other exists.
+    //
+    // A companion's turns being rows HERE, rather than in a table of their own,
+    // is what makes the whole of FR-119 free: the cascade above already removes
+    // them with the account, and both exports already find them. A second table
+    // would have needed its own cascade, its own export section and its own
+    // deletion path — four places for one requirement to go half-done.
+    conversationId: text("conversation_id"),
     role: chatRoleEnum("role").notNull(),
     // What was said. Bounded before it gets here: MAX_MESSAGE_CHARS in
     // lib/ai/rules.ts for a question, `max_tokens` on the API call for an
@@ -46,7 +67,15 @@ export const chatMessages = pgTable(
   },
   (t) => [
     // Every read is "this member's messages, newest last" — one index for the
-    // filter and the order together.
+    // filter and the order together. Kept as it is: it is the path of the
+    // subject access request and of the cascade delete, both of which want every
+    // row of a member regardless of conversation.
     index("chat_messages_member").on(t.memberId, t.createdAt),
+    // The path of every companion turn: `member_id = $1 AND conversation_id = $2
+    // ORDER BY created_at`. The index above can only answer that by reading all
+    // of a member's rows and filtering, which is fine at ten rows and not at ten
+    // thousand. It serves the support read (`conversation_id IS NULL`) exactly
+    // as well, so one index answers both scopes.
+    index("chat_messages_conversation").on(t.memberId, t.conversationId, t.createdAt),
   ],
 );

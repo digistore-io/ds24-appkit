@@ -43,7 +43,15 @@
 import productsFile from "@/config/digistore-products.json";
 import { DEFAULT_LOCALE } from "@/i18n/config";
 
-export type ProductKind = "subscription" | "token" | "one_time";
+/**
+ * Every kind the registry may declare. The union below is DERIVED from this
+ * list so the two cannot drift — and it is exported because two guards
+ * enumerate it at runtime: the loader's own check right under `allProducts()`,
+ * and `plan-sections.test.ts`, which proves every kind reaches a section on
+ * the sales page.
+ */
+export const PRODUCT_KINDS = ["subscription", "token", "one_time"] as const;
+export type ProductKind = (typeof PRODUCT_KINDS)[number];
 
 export interface ProductDef {
   /** Stable key (e.g. "pro"). */
@@ -199,6 +207,45 @@ const raw = productsFile as unknown as ProductsFile;
 /** All declared products (with the key resolved). */
 export function allProducts(): ProductDef[] {
   return Object.entries(raw.products).map(([key, def]) => ({ key, ...def }));
+}
+
+/**
+ * The registry entries whose `kind` is not one this app knows — as messages,
+ * one per offending entry. Pure and takes the list, so the typo case is
+ * asserted by tests rather than trusted (the shipped registry is always
+ * clean, which is exactly why a check reading it directly would prove
+ * nothing).
+ */
+export function unknownKindProblems(
+  products: ReadonlyArray<{ key: string; kind: unknown }>,
+): string[] {
+  return products
+    .filter((p) => !(PRODUCT_KINDS as readonly unknown[]).includes(p.kind))
+    .map(
+      (p) =>
+        `"${p.key}": unbekannte Produktart ${JSON.stringify(p.kind)} — erlaubt: ${PRODUCT_KINDS.join(", ")}`,
+    );
+}
+
+// The cast above (`as unknown as ProductsFile`) is a claim, and the registry
+// is a JSON file the vendor edits by hand — so the claim is checked here,
+// once, when the module loads, and a `"kind": "one-time"` (hyphen typo)
+// refuses to start instead of doing what it used to do: silently vanish from
+// the sales page while STAYING BUYABLE via a direct POST, where the buyer
+// pays and the IPN's strict `kind === "token"` credits nothing.
+//
+// Loud on purpose, and the opposite trade from `billingMode()`, which falls
+// back to `"both"` on a typo: there, one direction is harmless (a card too
+// many). Here there is no harmless direction — dropping the product IS the
+// damage — so this follows `getProduct()` and `hasPlan()` instead: an
+// unchecked value does not mean "not shown", it takes the app down at the
+// first `node run.mjs start`, which is the cheapest moment anybody can learn
+// about it.
+{
+  const problems = unknownKindProblems(allProducts());
+  if (problems.length > 0) {
+    throw new Error(`config/digistore-products.json: ${problems.join("; ")}`);
+  }
 }
 
 /**

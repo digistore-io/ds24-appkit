@@ -185,6 +185,8 @@ There are guided skills in `.claude/skills/` — use them in this order:
 - **`market-research`** — when there is no clear idea yet: interview + research
   → target audience, challenges and a concrete product proposal (product brief).
 - **`build-app`** — entry point: choose an archetype, create the data model + pages.
+  For an online course, the three shapes — self-study, week-by-week, accompanied
+  workshop — and their schemas are in [`docs/courses.md`](docs/courses.md).
 - **`setup-digistore`** — set up billing (API key, IPN, checkout).
 - **`billing-modes`** — *(optional)* set up subscriptions (monthly/yearly) and/or prepaid
   tokens with auto top-up + subscription self-service (cancel/payment details/invoices).
@@ -199,14 +201,27 @@ There are guided skills in `.claude/skills/` — use them in this order:
   patterns from the catalogue, switch on image generation or customer uploads,
   put a file behind a purchase. Use it when somebody says "my app is only text".
   The reference is [`docs/visuals.md`](docs/visuals.md).
+- **`ai-companion`** — *(optional)* make the app work **alongside** its customer
+  rather than only delivering to them: read what they submitted, walk them
+  through a course or a challenge, produce the thing with them. Decides whether
+  it should at all, builds one of the patterns, and says who may use it and what
+  one use costs. Use it when somebody says "my app only saves what they type".
+  The reference is [`docs/ai-in-product.md`](docs/ai-in-product.md).
+- **`learning-activities`** — *(optional)* the elements a course's customer
+  DOES: a learning game, a check with a pass mark, a graded exercise — decided,
+  built on the shipped seam (verdict on the server, never in the browser),
+  gated, and checked for the failure no other gate finds. Use it when a course
+  hands out videos and asks nothing back. Needs template 0.9.0 — on an older
+  clone `node run.mjs update` refuses the skill text until the code is there.
+  The reference is [`docs/learning.md`](docs/learning.md).
 - **`ux-gateway`** — once the app has pages: the same shape for the experience.
   The first five minutes after a purchase, dead ends, actions that report
   nothing back, hand-built elements, wording, keyboard and small screens —
   measured where it can be (`node run.mjs ux-check`), looked at where it
   cannot, report in `docs/reports/`. The rules it audits against are
   [`docs/ux.md`](docs/ux.md).
-- **`security-gateway`** — before the launch: eight checks (access control,
-  money, secrets, packages, endpoints, hosting), each finding with a severity,
+- **`security-gateway`** — before the launch: nine checks (access control,
+  money, secrets, packages, endpoints, judged elements, hosting), each finding with a severity,
   the serious ones fixed, and a report in `docs/reports/`.
 - **`performance-gateway`** — the same shape for speed: response times, database
   and indexes, ~100 parallel users, memory, CPU, front end — measured against a
@@ -236,7 +251,10 @@ next one):
 optional `ai-chat-knowledge` for the in-app assistant, optional `ai-providers`
 to choose the AI company, optional `mcp-server` for the AI interface)* →
 *(optional `visuals` — pictures, video, files, and what the customer actually
-sees)* → **(3) Experience** `ux-gateway` → **(4) Security** `security-gateway` →
+sees; optional `ai-companion` — what the app DOES with them while they work;
+optional `learning-activities` — what the customer DOES, judged on the
+server)* →
+**(3) Experience** `ux-gateway` → **(4) Security** `security-gateway` →
 **(5) Scaling** `performance-gateway` → **(6) Legal** `compliance-check` →
 **(7) Live** `go-live` *(which begins with `setup-hosting` — host, database,
 secrets, domain)* → **(8) Marketing** `go-to-market`. Alongside all of it:
@@ -282,12 +300,14 @@ their way around one skill has then found their way around all of them:
 - **Anything that produces a verdict writes it down**, dated, into
   `docs/reports/` — so that "have we already done that?" has an answer next
   month. Anything that produces a plan or a text writes it into `docs/`.
-- **Anything the customer will SEE is proposed, never assumed.** Where an app
-  produces something a person looks at, shows or publishes, the agent lays the
-  possibilities out as a numbered menu and **waits**. It does not pick on the
-  developer's behalf, and it does not quietly build the text-only version
-  either — that is a decision too, and an unmade decision is how an app ends up
-  handing its customers paragraphs.
+- **Anything the customer will SEE, and anything the app will DO for them, is
+  proposed, never assumed.** Where an app produces something a person looks at,
+  shows or publishes — or could read, judge or produce *alongside* them while
+  they work — the agent lays the possibilities out as a numbered menu and
+  **waits**. It does not pick on the developer's behalf, and it does not quietly
+  build the version with nobody in it either — that is a decision too, and an
+  unmade decision is how an app ends up handing its customers paragraphs and a
+  form.
 
   Three answers, and all three are valid:
 
@@ -295,14 +315,16 @@ their way around one skill has then found their way around all of them:
   |---|---|
   | **numbers** | exactly those get built |
   | **"you choose"** | take the default and carry on, no further question. The shortcut for somebody who trusts the suggestion, and it must be offered IN the menu rather than hidden in prose |
-  | **"none of it"** | text only — and it goes into `docs/app.md` under the decisions, because a rejected alternative that was not written down is one that gets proposed again three sessions later |
+  | **"none of it"** | nothing of it gets built — and it goes into `docs/app.md` under the decisions either way, because a rejected alternative that was not written down is one that gets proposed again three sessions later. For the second question the reason is sharper: it costs money on every use, so a "no" is an answer to a real cost rather than a failure to persuade |
 
   **When** matters as much as whether: before the data model, because whether a
-  message can carry a picture is a column before it is a layout. **Once**, at
-  that point — not again on every page afterwards. A menu per page would be the
-  same question asked six times, which trains people to answer it without
-  reading; later pages inherit the decision and only ask again where they hand
-  the customer something the first decision did not cover.
+  message can carry a picture is a column before it is a layout — and a
+  companion needs columns too, for the submission it reads and the subject its
+  turns hang on. **Once**, at that point — not again on every page afterwards. A
+  menu per page would be the same question asked six times, which trains people
+  to answer it without reading; later pages inherit the decision and only ask
+  again where they hand the customer something, or take something from them,
+  that the first decision did not cover.
 
   **Trying things out is exempt**, on the same boundary as the SAAS rule above.
   Somebody who asks for "Hello World" gets Hello World, not a menu.
@@ -1378,6 +1400,46 @@ before you write a model call:
   template's operators is the worse failure. A hard stop belongs on the provider
   account. Do not build one here without reading `docs/ai-providers.md` first.
 
+- **Working alongside your customer is a task too — `companion` — and it is the
+  one whose SHAPE ships without a caller.** `askCompanion()`
+  (`lib/ai/companion.ts`) is for reading what a customer submitted, walking
+  somebody through a course, checking a plan before they commit. What calls it is
+  the app you build. Two things it does so a call site cannot get them wrong:
+  **customer data never touches `system`** (the two cacheable blocks are your
+  instruction and the layer's own rule; facts, the customer's text and the ask
+  travel in the user message, which is what keeps the cached prefix stable by
+  construction), and **what the customer wrote is fenced** in
+  `<customer-text …>` with the system block naming it as content to answer
+  about and never to follow. **The assistant's rule that nothing about the person
+  is sent is about HER and stays** — a product-side call is given exactly the
+  rows its call site names, one field at a time, which is why `about` is labelled
+  values and not a member id. The module imports no database, no entitlement and
+  no token function, and a test reads the file to keep that true. Who may use one
+  is `hasPlan()`, what a use costs is `spendTokens` in the order check → work →
+  charge. No streaming, deliberately.
+
+  **Switching one on is four things, each in exactly one place.** The switch is
+  `config/ai-companion.json` and ships off (read through `isCompanionEnabled()`
+  in `lib/ai/companion-switch.ts`, never by re-reading the JSON; a malformed
+  value counts as off). The **registry** is `lib/ai/companions.ts` — the list
+  your app edits, the same role `lib/mcp/tools.ts` and `lib/cron/jobs.ts` play,
+  and **a second companion is a second entry, never a second component**. The
+  **surface** is `<CompanionPanel companionId subject />`, rendered on any page.
+  The **conversation** you never name: `app/companion-actions.ts` composes the
+  key server-side from the companion it looked up and the subject the browser
+  sent, so a client cannot name another companion's conversation and read its
+  turns. 🚨 **An entry's `load()` is where an IDOR would live** — the subject is
+  a string the customer's browser sent, so every read inside it is scoped by
+  `memberId`, and `null` is both "no such subject" and "somebody else's" so
+  nothing enumerates. Turns are rows in `chat_messages` with a
+  `conversation_id`; `NULL` is the assistant's, so both exports and the cascade
+  already cover them. Details:
+  [`docs/ai-providers.md`](docs/ai-providers.md) → *Working alongside your
+  customer* for the mechanics, and
+  [`docs/ai-in-product.md`](docs/ai-in-product.md) for **what to build with
+  them** — the catalogue, per app shape, and the skill `ai-companion` that walks
+  it.
+
 - **A picture is a task too, and it is the one where the provider is not
   interchangeable.** `generateImage()` (`lib/media/generate.ts`) asks the
   `image` task and puts the result in the bucket, so what comes back is a stored
@@ -2115,12 +2177,19 @@ still missing. Four things are worth knowing before you touch any of it:
 
 - **The AI disclosure is law, not copy.** Art. 50(1) EU AI Act, applicable since
   2 August 2026: a system that talks to people must say it is a machine, at the
-  latest at the first interaction. In this app that is `chat.disclaimer`,
-  rendered above the transcript in **both** chat variants, and
-  `lib/ai/disclosure.test.ts` fails the build if either language stops naming
-  the assistant as an AI. **The rule is not "the chat carries a notice" — it is
-  "anything here that talks to a person as a machine says so".** Whatever AI
-  feature you add next inherits it.
+  latest at the first interaction. **The rule is not "the chat carries a notice"
+  — it is "anything here that talks to a person as a machine says so"**, so it is
+  a rule about a LIST of surfaces. That list is `DISCLOSURE_SURFACES` in
+  `lib/ai/disclosure.mjs`, and there are two: the assistant and a companion. Each
+  mounts `<AiDisclosure surface="…" />` (`components/ai-disclosure.tsx`) above its
+  transcript, unconditionally — a notice behind "once there are messages" is one
+  the first interaction never sees. **A companion owes it earlier and says more**:
+  the interaction *is* the customer handing over their work, so the sentence says
+  a model **reads what you write**. `lib/ai/disclosure.test.ts` fails the build if
+  either language stops naming it as an AI, and `node run.mjs legal-check` fails
+  when a surface is switched **on** and its notice is missing or unrendered.
+  Whatever AI feature you add next inherits all of it — and adding it to that
+  registry is what makes anything notice when its notice goes missing.
 - **This app needs no consent from anybody, and that is the shipped answer.** A
   purchase runs on Art. 6(1)(b) (a contract, not permission), and the only
   cookies set are the session, the language and the theme. **Do not add a cookie

@@ -97,7 +97,8 @@ Digistore24, whose role depends on your contract with them.
 | **Digistore24** | Everything about a purchase. Where they act as **reseller**, they are the buyer's contractual partner and a controller in their own right for parts of it — check your contract, it changes what your policy has to say. |
 | **The mail provider** (Postmark or your SMTP host) | Recipient address and the content of every sign-in link, confirmation link and credential notice. |
 | **The host** (Railway, Render, Fly, …) | Everything, by virtue of running the database and the app. |
-| **An AI company** — only with the AI assistant switched on | What a member types into the chat, plus the handbook. No name, address, balance or purchase. **Which company it is, is the Operator's choice** (`config/ai-models.json`, five candidates, shipped as `"auto"` = whichever key is in the `.env`) — so this row cannot name one for you, and a privacy policy that guesses is wrong for most installations. `node run.mjs ai-check` says which it is. See §8. |
+| **An AI company** — only with the AI **assistant** switched on | What a member types into the chat, plus the handbook. No name, address, balance or purchase. **Which company it is, is the Operator's choice** (`config/ai-models.json`, five candidates, shipped as `"auto"` = whichever key is in the `.env`) — so this row cannot name one for you, and a privacy policy that guesses is wrong for most installations. `node run.mjs ai-check` says which it is. See §8. |
+| **An AI company** — only with a **companion** switched on | What the customer wrote, plus the named facts that companion's entry passes it. This is content they PRODUCED, not only a question they asked, and it is the difference from the row above rather than a variation on it. It may be a **different company** from the assistant's — the binding is the `companion` task in `config/ai-models.json`, so an app can have two AI recipients. `node run.mjs ai-check` names both. See §8a. |
 
 No analytics, no tracking pixels, no advertising SDKs ship with this template.
 **If you add none, you need no cookie banner** — the only cookies set are the
@@ -186,9 +187,12 @@ followed and merged.
   person. They belong in the answer — the app hides them from the customer's own
   screen as a matter of tone, and that is not an exemption from a legal request.
   Read them before they are read to you.
-- **`chatMessages[].content`** is what they typed into the assistant. Same
-  redaction rule as the payloads: people paste things into a chat box that
-  nobody asked for, sometimes about somebody else.
+- **`chatMessages[].content`** is what they typed into the assistant **or into a
+  companion** — the table holds both, told apart by `conversation_id` (§8a).
+  Same redaction rule as the payloads, and the companion half is the larger
+  case: people paste things into a chat box that nobody asked for, and a
+  companion asks them to hand over a whole piece of work, which routinely names
+  somebody else.
 
 Deliberately not in the file: the password (a one-way hash nobody can read back,
 and handing over a credential creates risk rather than satisfying a right),
@@ -202,9 +206,11 @@ Only relevant if the in-app chat is switched on — `config/ai-chat.json`
 **Name that company in your privacy policy**: it is the recipient of the data,
 and with the shipped `"auto"` binding it is decided by which key is in the
 `.env` rather than by anything in this file. `node run.mjs ai-check` says which
-one it is. **It is the first feature in this
+one it is. **It was the first feature in this
 template that sends customer input to a third party outside the payment and mail
-path, so it needs a paragraph in your privacy policy of its own.**
+path, so it needs a paragraph in your privacy policy of its own.** It is no
+longer the only one — a companion (§8a) sends more, and sends what the customer
+wrote rather than what they asked.
 
 | Where | What |
 |---|---|
@@ -241,6 +247,99 @@ under `docs/compliance/` is where `compliance-check` writes the list down.
 
 **Switching it off removes all of it.** An app that leaves `"enabled": false`
 sends nothing, stores nothing and needs none of the above in its policy.
+
+## 8a. A companion (an AI that reads what the customer wrote)
+
+> **Why 8a and not 9.** The numbers in this file are referenced from eight places
+> outside it. Renumbering would have to move every one of them by hand, and
+> nothing checks that it happened.
+
+Only relevant if a companion is switched on — `config/ai-companion.json`
+(`"enabled"`) **and** at least one entry in `lib/ai/companions.ts`. It ships off
+and the registry ships empty, so an app that has not built one has none of this.
+`node run.mjs legal-check` reports the switch.
+
+**This is not §8 with a different name, and the difference is the thing to put
+in your policy.** The assistant answers questions out of a handbook and is told
+nothing about the person. A companion is the opposite case by construction: it
+reads what your customer **produced** — their submission, their draft, their
+plan — and it is given named facts about them, because it is worthless without
+them.
+
+| Where | What |
+|---|---|
+| `chat_messages` | the same table as the assistant's transcripts, told apart by `conversation_id`: `NULL` is the assistant, a value is a companion's, keyed `<companion>:<subject>` |
+
+That it is the same table is the reason there is no second rule anywhere: the
+deletion cascade in §6 and both export paths in §7 carry companion turns
+unchanged, because Story 13.2 added a column and not a table.
+
+**What leaves the app.** Three things, and the second is what makes this section
+necessary:
+
+1. the companion's `instruction` from its entry — your words, not the customer's;
+2. **the named facts that entry's `load()` returned, one field at a time** —
+   this is the list of personal data that reaches a third party, and it is
+   readable off the code rather than remembered, because the entry *is* the call
+   site;
+3. **the customer's own text**, fenced as content so the model treats it as
+   material to answer about rather than as instruction.
+
+Deliberately **not** sent: anything the entry did not name. There is no member
+id in the call and no way for it to fetch more for itself — the rule is in
+`guardrails`, and `lib/ai/companion.ts` is written so a call site cannot break
+it.
+
+**To whom.** The company bound to the **`companion` task** in
+`config/ai-models.json` — which may be a **different company from the
+assistant's**, because they are separate tasks. An app can therefore have two AI
+recipients, and a privacy policy that names one may be naming the wrong one.
+`node run.mjs ai-check` prints both. The third-country reasoning, the data
+processing agreement and the "not used for training" question are the same as
+§8's — read that paragraph against whichever company answers this task.
+
+**How long.** The same as the assistant's, and for the same reason: turns are
+rows in `chat_messages`, so they are kept until the account is deleted and go
+with it (`on delete cascade`). **There is no automatic pruning**, and a policy
+that promises a window it does not implement is worse than one that promises
+nothing. If you want one, it is a `prune-` job in `lib/cron/jobs.ts` with a
+`retentionMonths` in `config/cron.json`, on the pattern §10 describes for AI
+usage — and `node run.mjs legal-check` then reports it if it has never run.
+
+**What a customer hands over is bigger than what they type into a chat.** §7's
+redaction note applies here with more force: a submission routinely names other
+people, and a companion asks for a whole piece of work rather than a question.
+
+**Switching it off removes all of it.** `"enabled": false` — the shipped state —
+sends nothing, stores nothing, and needs no paragraph in your policy.
+
+## 8b. Interactive elements — learning performance
+
+An app built on this template can carry interactive elements — a learning
+game, a check, an exercise (`lib/learning/`). What a member does on one is
+stored in `activity_results`, and it should be named for what it is: **data
+about a person's ability.** A score on a test says more about somebody than
+their invoice address does, and an employer who paid for the course will
+eventually ask for it — the answer to that request is the vendor's decision,
+not an export default, which is why nothing in this template shares these
+rows with anybody but the member themselves.
+
+| Column | What it holds |
+|---|---|
+| `member_id` | whose performance this is (cascades on account deletion) |
+| `activity_id`, `subject` | which element, on which unit — the app's own slugs |
+| `state` | the resume point the server stored — the member's own work in progress |
+| `score`, `max_score` | the verdict's numbers, `NULL` while nothing was judged |
+| `passed` | the judgement — `NULL` is "not judged", which is not "failed" |
+| `attempts` | finalised tries |
+| `started_at`, `updated_at`, `completed_at` | when the first submission was recorded, the last write, and the first time they got through |
+
+**Retention: until the account is deleted, like the transcripts (§8).** The
+cascade removes every row with the member (`db/schema-learning.ts` says why
+it is `cascade` and not `set null`: this is not a financial record). Both
+subject-access exports carry the table — the member's own download and
+`node run.mjs data-export` — including `state`, because the server's record
+of their work is their work.
 
 ## 9. The MCP server (AI interface)
 

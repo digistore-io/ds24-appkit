@@ -65,6 +65,7 @@ two narrow duties inside it, not to the regulation.
 | Keeping the order record | Art. 6(1)(c) — legal obligation (§ 147 AO, § 257 HGB) |
 | Counting failed sign-ins by IP, rate limits | Art. 6(1)(f) — legitimate interest in securing the service |
 | The in-app assistant, as part of the paid product | Art. 6(1)(b) |
+| A companion reading what the customer submitted, as part of the paid product | Art. 6(1)(b) — the same reasoning, and it carries further: reading their work IS the thing they bought |
 | Analytics, tracking, marketing mail | **Art. 6(1)(a) — consent**, and § 25 TDDDG on top (§ 2) |
 
 **A purchase needs no consent.** This is the single most common mistake in this
@@ -124,6 +125,13 @@ Two more that are about people rather than paper:
   where the company is certified.
 
 ---
+
+**Learning performance is personal data of its own weight.** Where the app
+judges what a member did (`activity_results`), it holds data about a
+person's *ability* — inventoried field by field in
+`docs/data-protection.md` §8b, carried by both subject-access exports,
+deleted with the account. A privacy policy for an app with judged elements
+names it.
 
 ## 2. TDDDG § 25 — reading or writing on the device
 
@@ -214,12 +222,21 @@ interaction**, clearly and distinguishably. The exception is where it is
 **Do not lean on that exception here.** An assistant with a human name, a
 portrait and a warm tone is precisely the case where it is not obvious.
 
-In this app the notice is one line — `chat.disclaimer` in `messages/de.json` and
-`messages/en.json` — rendered at the top of the chat window, above the
-transcript, in both the page and the floating-panel variant.
-`lib/ai/disclosure.test.ts` fails the build if either language stops naming the
-assistant as an AI, because the realistic way it disappears is not deletion but
-a friendlier rewrite.
+In this app the notice is one line per surface — `chat.disclaimer` and
+`companion.disclaimer` in `messages/de.json` and `messages/en.json` — rendered
+by `components/ai-disclosure.tsx` at the top of each, above the transcript, in
+every variant. `lib/ai/disclosure.test.ts` fails the build if either language
+stops naming it as an AI, because the realistic way it disappears is not
+deletion but a friendlier rewrite, and `node run.mjs legal-check` reports a
+surface that is switched on and has no notice.
+
+**A companion owes the notice earlier than the assistant does, and the wording
+says so.** "At the latest at the first interaction" is easy to satisfy for a
+chat, where the interaction is a question somebody chose to ask. For a companion
+the interaction *is* the customer handing over a piece of their work — so the
+notice has to be readable **before they write**, not once there is a transcript,
+and it says what happens rather than only what it is: a model reads what you
+write here.
 
 **Art. 50(2)** — providers of systems that generate synthetic audio, image,
 video or text must mark the output in a machine-readable way. This bites if you
@@ -230,12 +247,23 @@ the Commission proposed February 2027 and the political agreement shortened it.
 Look up where it landed before you
 build a generator.
 
+**A companion is inside this question the moment it drafts something the
+customer publishes** — a sales page, a post, a chapter. Reading somebody's work
+and answering them about it is not that; writing text they then put their name
+on may well be. This map stops here: look up where the date landed, and ask an
+advisor about the marking rather than assuming either answer.
+
 **Art. 50(4)** — deployers publishing AI-generated text on matters of public
 interest, and deepfakes, must disclose it.
 
 **Whatever AI feature you add next, this applies to it too.** The rule is not
 "the chat carries a notice"; it is "anything in this app that talks to a person
 as a machine says so".
+
+**Both surfaces are the same conversation about roles.** §3.2's reasoning —
+assume provider until an advisor tells you otherwise — applies at least as
+strongly to a companion: it runs on the vendor's own instruction, for the
+vendor's own purpose, on the vendor's own subject.
 
 ### 3.4 Art. 4 — AI literacy
 
@@ -323,6 +351,14 @@ knowing about a year before it applies to you rather than a week after.
 
 The exemption is for *services*. It does not extend to products.
 
+**Interactive elements raise the stakes here** (`lib/learning/` — a game, a
+check, a graded exercise). A page of text can fail WCAG gracefully; an exam
+a keyboard cannot finish is not degraded, it is closed. If the app carries
+elements, the keyboard-only playthrough in `ux-gateway` §7 and the skill
+`learning-activities` (item `check`) are the audits — and they are worth
+running even inside the § 3(3) exemption, because "your paying customer
+cannot take the test" is a refund and a review long before it is a statute.
+
 ### 6.2 Digital Services Act
 
 Applies to intermediary services. An app that merely stores its own customers'
@@ -371,7 +407,10 @@ Not a substitute for the checks — a starting position, and better than most:
 - **Operator access to a customer account is recorded** and the customer can be
   told — `data-protection.md` §12.
 - **The AI assistant is sent nothing about the person** — no name, address,
-  balance or purchase history.
+  balance or purchase history. That is about **her**. A companion is the other
+  case and is given exactly the fields its entry names, one at a time; the
+  standing rule is in the skill `guardrails` and the inventory is
+  `data-protection.md` §8a.
 
 The gaps are the honest half of the same list, and `compliance-check` walks
 them: the legal pages ship as placeholders until you fill them, nothing deletes

@@ -157,3 +157,11 @@ export * from "./schema-consent";
 // visibilities: product imagery, a customer's own upload, and the file a buyer
 // paid for (gated by hasPlan()). See schema-media.ts and docs/visuals.md.
 export * from "./schema-media";
+
+// --- Learning -----------------------------------------------------------------
+// `activity_results` — what a learner did on an interactive element: their own
+// attempt, score, resume point, per activity and subject. The verdict is only
+// ever written by the server. Deleted with the member, like `chat_messages` —
+// it is data about a person's ability, not a financial record.
+// See schema-learning.ts and lib/learning/.
+export * from "./schema-learning";

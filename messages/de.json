@@ -451,11 +451,26 @@
     "noAccessTitle": "Kein Zugang",
     "noAccessBody": "Der Assistent gehört zu einem Tarif, den dieses Konto nicht hat."
   },
+  "companion": {
+    "disclaimer": "Was du hier schreibst, liest und beantwortet eine KI. Sie kann sich irren — bei Geld und Zugang lieber den Support fragen.",
+    "emptyBody": "Schreib auf, woran du gerade sitzt — du bekommst eine Rückmeldung dazu.",
+    "emptyTitle": "Noch nichts besprochen",
+    "loading": "Wird geladen …",
+    "offBrokenConfig": "Die Einstellungen sind unvollständig oder widersprüchlich. Im Terminal: node run.mjs ai-check",
+    "offDisabledInConfig": "Sie ist ausgeschaltet. Setze \"enabled\" in config/ai-companion.json auf true.",
+    "offNoApiKey": "Für die Aufgabe \"companion\" (config/ai-models.json) ist kein Anbieter-Schlüssel in der .env hinterlegt. Im Terminal: node run.mjs ai-check",
+    "offTitle": "Diese Begleitung ist nicht verfügbar",
+    "placeholder": "Schreib hier, woran du arbeitest …",
+    "send": "Abschicken",
+    "sending": "Wird gelesen …"
+  },
   "plans": {
     "title": "Tarife",
     "subtitle": "Alle Preise inklusive gesetzlicher Mehrwertsteuer. Die Abrechnung übernimmt Digistore24.",
     "subscriptionsTitle": "Abo",
     "subscriptionsBody": "Läuft weiter, bis du kündigst.",
+    "oneTimeTitle": "Einmalkauf",
+    "oneTimeBody": "Einmal zahlen, dauerhaft freigeschaltet.",
     "tokensTitle": "Token-Guthaben",
     "tokensBody": "Einmal kaufen, nach Verbrauch einsetzen — kein Abo.",
     "mostPopular": "Beliebteste Wahl",
@@ -530,6 +545,13 @@
     "chatNoKnowledge": "Für den Assistenten ist noch kein Wissen hinterlegt.",
     "chatRateLimited": "Das waren viele Fragen in kurzer Zeit. Bitte warte ein paar Minuten.",
     "chatUnavailable": "Der Assistent ist gerade nicht verfügbar.",
+    "companionBadSubject": "Dazu lässt sich nichts finden.",
+    "companionEmptyMessage": "Bitte schreib etwas, worauf geantwortet werden kann.",
+    "companionFailed": "Das hat gerade nicht geklappt. Bitte versuch es noch einmal.",
+    "companionInsufficientBalance": "Dafür reicht dein Guthaben nicht. Es wurde nichts abgebucht.",
+    "companionMessageTooLong": "Das ist zu lang. Bitte kürze es etwas.",
+    "companionRateLimited": "Zu viele Anfragen in kurzer Zeit. Bitte warte einen Moment.",
+    "companionUnavailable": "Diese Begleitung steht gerade nicht zur Verfügung.",
     "credentialUserNotFound": "Dieses Konto gibt es nicht mehr.",
     "emailNotConfigured": "Es ist kein E-Mail-Versand eingerichtet. Im Terminal: node run.mjs mail-setup",
     "emailTaken": "Diese E-Mail-Adresse gehört bereits zu einem anderen Konto.",
@@ -595,7 +617,15 @@
     "userBlocked": "Dieses Konto ist gesperrt. Hebe die Sperre auf, bevor du einen Anmelde-Link schickst.",
     "userNotFound": "Benutzer nicht gefunden.",
     "userWithoutEmail": "Dieses Konto hat keine E-Mail-Adresse — es gibt kein Ziel für den Link.",
-    "zeroAmount": "0 ist keine Korrektur — bitte einen Betrag ungleich null angeben."
+    "zeroAmount": "0 ist keine Korrektur — bitte einen Betrag ungleich null angeben.",
+    "activityUnavailable": "Dieses Element ist gerade nicht verfügbar.",
+    "activityNoAccess": "Dieses Element gehört zu einem Produkt, das du noch nicht hast.",
+    "activityRateLimited": "Kurz durchatmen — gleich geht es weiter.",
+    "activityBadSubject": "Diese Anfrage war fehlerhaft.",
+    "activityMaxAttempts": "Alle Versuche sind aufgebraucht.",
+    "activityInsufficientBalance": "Dein Guthaben reicht dafür nicht aus.",
+    "activityNotRecorded": "Schon erledigt — dieser Versuch wurde nicht doppelt gezählt.",
+    "activityFailed": "Das hat gerade nicht geklappt. Versuch es noch einmal."
   },
   "confirmEmail": {
     "title": "E-Mail-Adresse bestätigen",
@@ -813,5 +843,13 @@
   "media": {
     "uploadLabel": "Datei auswählen",
     "uploading": "wird hochgeladen …"
+  },
+  "activity": {
+    "loading": "Wird geladen …",
+    "attemptsOf": "{count} von {max} Versuchen verbraucht",
+    "checkpointSaved": "Zwischenstand gespeichert.",
+    "passedYes": "Bestanden!",
+    "passedNo": "Diesmal nicht bestanden.",
+    "finished": "Abgeschlossen."
   }
 }

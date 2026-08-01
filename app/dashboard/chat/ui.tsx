@@ -41,7 +41,8 @@ import {
 import { useActionToast } from "@/hooks/use-action-toast";
 import { MAX_MESSAGE_CHARS } from "@/lib/ai/rules";
 import { clearChatAction } from "./actions";
-import { AnswerText } from "./answer";
+import { AiDisclosure } from "@/components/ai-disclosure";
+import { AnswerText } from "@/components/answer-text";
 
 const EMPTY = { error: null, ok: null };
 
@@ -208,14 +209,17 @@ export function ChatWindow({
               because it is outside the `panel ?` branch below — keep it that
               way.
 
+              The markup moved into `components/ai-disclosure.tsx` — the same
+              paragraph, mounted by the companion panel too, and the thing
+              `lib/ai/disclosure.mjs` looks for when `node run.mjs legal-check`
+              asks whether every live surface carries its notice.
+
               Do not reword it into something friendlier. `lib/ai/disclosure.test.ts`
               fails the build if either language stops naming the assistant as an
               AI, and `docs/compliance.md` says why. An assistant with a human
               name and a face is exactly the case the law has in mind: nothing
               about her is obviously a machine. */}
-          <p className="text-muted-foreground border-b pb-3 text-xs">
-            {t("disclaimer", { name: assistantName })}
-          </p>
+          <AiDisclosure surface="chat" name={assistantName} />
 
           <div
             className={

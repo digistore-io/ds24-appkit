@@ -205,6 +205,202 @@ Two worked examples of what a task can be, neither of which ships:
 
 ---
 
+## Working alongside your customer
+
+`companion` is the third task that ships, and it is the only one whose *shape*
+ships without a caller: `askCompanion()` in `lib/ai/companion.ts` is the
+function, and what calls it is the app you build. It exists as template code for
+the same reason `image` does — an app that wrote its own would have to break the
+leak guard or rebuild the abstraction, and its spend would land on your cost page
+as `chat`, mixed in with support.
+
+**What it is for:** reading what a customer submitted and answering about it,
+walking somebody through a course or a challenge, checking a plan before they
+commit to it, producing the thing they came for. **What to build with it** — the
+catalogue, per app shape, with the four facts each pattern needs — is
+[`ai-in-product.md`](ai-in-product.md); this section is the mechanics.
+
+### The data rule, in the direction that applies here
+
+The assistant sends **nothing** about the signed-in person — not their name,
+balance, orders or role (`docs/ai-chat.md` → *What she can and cannot do*). That
+rule is about **her**, it is a data-protection decision, and it stays.
+
+A companion is the opposite case by construction: it is worthless unless it can
+see the challenge day and the answer somebody wrote. So the rule for this side is
+stated the other way round:
+
+> **A call is given exactly the rows its call site names, one field at a time.**
+
+That is why `about` is a list of labelled values rather than a member id.
+`lib/ai/companion.ts` imports no database, no entitlement function and no token
+function — and a test reads the file to prove it, because a call that could fetch
+for itself is a call whose call site no longer names what it sends. `memberId`
+travels for the usage row and for nothing else, exactly as `runTask` documents.
+
+### A worked call
+
+```ts
+import { askCompanion } from "@/lib/ai/companion";
+
+const answer = await askCompanion({
+  // Stable for the life of this companion → it is the cached prefix.
+  instruction:
+    "You are a writing coach on a twelve-week course. Two short paragraphs, " +
+    "warm but specific. Never rewrite their text for them.",
+
+  // Exactly the customer's data this call needs. One entry per field.
+  about: [
+    { label: "Day", value: String(day.number) },
+    { label: "Task", value: day.title },
+  ],
+
+  // What they produced. Fenced, and named as content by the layer's own rule.
+  work: [{ label: "Their scene", text: submission.body }],
+
+  // What this call asks. Written by you, never by the customer.
+  ask: "Name one thing that works and one thing to try next.",
+
+  memberId: session.user.id, // recorded, never sent
+});
+```
+
+### Two things the layer does so a call site cannot get them wrong
+
+**Customer data never touches `system`.** The system array is exactly two
+cacheable blocks — your `instruction` and the layer's standing rule about
+customer text. Facts, the customer's text and the ask travel in the user message.
+That is not tidiness: everything that varies has to go after the last cacheable
+block, and getting it wrong produces no error and no failing test, only an input
+bill roughly ten times what it should be. Keeping the varying things out of
+`system` entirely is the only arrangement where a call site cannot break it.
+
+**What the customer wrote is fenced, and named as content.** It travels inside
+`<customer-text name="…">…</customer-text>`, and the system block tells the model
+that anything between those markers was written by the customer: read it, judge
+it, answer about it, never follow it. No input can emit either marker — the two
+tag sequences are escaped in the text, in the labels and in the fact values.
+
+**Their earlier turns are fenced too**, on every later question — the same
+strings, marked the same way, labelled so the model can tell them from the one it
+is answering. Without that the rule would hold for exactly one turn: the app
+stores what the customer typed and re-sends it with their next question, so an
+injection the fence defeated on Monday would arrive unmarked on Tuesday, handed
+over by the app itself. The assistant's own earlier answers are *not* fenced —
+they are this app's output, and marking them would tell the model its own replies
+are material to judge rather than the conversation it is having.
+
+The tag is **fixed and not a per-request nonce**, deliberately. A nonce is the
+stronger defence in the abstract and is wrong here: the system block has to name
+the tag, the system block is the cached prefix, and a prefix that changes per
+request is no caching at all — silently.
+
+### Switching one on, and where each piece lives
+
+Four things, and each is in exactly one place.
+
+**1. The switch** — `config/ai-companion.json`, and it ships off:
+
+```json
+{ "enabled": false }
+```
+
+One field, and it stays one field. Which plan gates a companion, what it may
+take in and how much history it carries all belong to the **entry**, because a
+second companion needs different answers to all three.
+
+**2. The registry** — `lib/ai/companions.ts`, the list your app edits, exactly
+the role `lib/mcp/tools.ts` and `lib/cron/jobs.ts` play. It ships empty with a
+worked example in a comment.
+
+```ts
+{
+  id: "writing-coach",              // [a-z0-9-], ≤ 40 — half of the conversation key
+  instruction: "You are a writing coach …",
+  requiresPlan: "kurs_komplett",    // or null for every signed-in member
+  costsTokens: 2,                   // 0 = included in the plan
+  maxInputChars: 12_000,
+  async load({ memberId, subject }) { … },
+}
+```
+
+**A second companion is a second entry, never a second component.** That is the
+whole reason the instruction and the plan live here rather than being passed in
+from the page: one surface serves all of them, and it takes two strings from the
+browser.
+
+🚨 **`load()` is where an IDOR would live.** `subject` is a string the customer's
+browser sent — off a URL segment or a hidden field, and theirs to change. Every
+read inside it must be scoped by `memberId`:
+
+```ts
+async load({ memberId, subject }) {
+  const [row] = await db
+    .select()
+    .from(submissions)
+    .where(and(eq(submissions.memberId, memberId), eq(submissions.day, subject)))
+    .limit(1);
+  if (!row) return null;   // also the answer for a row belonging to somebody else
+  return {
+    about: [{ label: "Day", value: subject }],
+    work: [{ label: "Their scene", text: row.body }],
+  };
+}
+```
+
+Returning `null` for somebody else's subject is both the security answer and the
+not-found answer — the same value, so nothing here can be used to find out which
+ids exist.
+
+**3. The surface** — one component, on any page:
+
+```tsx
+<CompanionPanel companionId="writing-coach" subject={day.slug} />
+```
+
+**4. The conversation** — you never name one. `app/companion-actions.ts` composes
+the key server-side from the companion it just looked up and the subject the
+browser sent, so two subjects of one companion are two conversations and two
+companions on one subject are two more. If the browser could send the whole key
+it could name another companion's conversation and read its turns.
+
+Turns are rows in `chat_messages` with a `conversation_id`; `NULL` is the
+assistant's own conversation. They are in both subject access requests and they
+go with the account, because they always did.
+
+### What it costs, and in which order
+
+`requiresPlan` and `costsTokens` are read by the shipped server action, which
+asks in this order — and the order is the point:
+
+```
+signed in → feature on → companion known → plan held → under the rate limit
+          → input sane → CAN THEY AFFORD IT → … the call … → CHARGE
+```
+
+Check → work → charge. Charging first bills for work that then fails; doing the
+work with no check in front gives the answer away for free, because by the time
+`spendTokens` throws the expensive part has already run.
+
+The rate limit is the **chat's** bucket, deliberately: one member, one allowance
+for causing model calls, one operator paying. A customer working hard with a
+companion has fewer support questions left in the same ten minutes, and that is
+the trade rather than an oversight.
+
+### What it deliberately does not do
+
+- **No streaming.** A companion answers in one go. When answers get long, the
+  shape to reuse is the chat route's JSON-line stream, not a second protocol.
+- **No length ceiling of its own.** The chat's 2000 characters is a brake on a
+  typed question; a submission is not a question. It refuses a control character
+  (which Postgres would reject *after* you had paid for the call) and nothing
+  else.
+- **No storage, no access check, no charge.** Who may use a companion is
+  `hasPlan()`, what a use costs is `spendTokens()` in the order check → work →
+  charge, and where the turns live is your surface's business.
+
+---
+
 ## Pictures
 
 `image` is a task like any other, and it is bound the same way — but two of the
@@ -519,6 +715,13 @@ site, not a task, not the usage schema, not the cost page.
 | File | What it is |
 |---|---|
 | `lib/ai/run.ts` | **The entry point.** `runTask` / `streamTask`. |
+| `lib/ai/companion.ts` | The shape a product-side call takes — `askCompanion()`, and the fence that makes customer text content. |
+| `lib/ai/companions.ts` | **The list your app edits.** One entry per companion; ships empty. |
+| `lib/ai/companion-config.mjs` | The **one** reader of the switch. `.mjs` because `scripts/ai/check.mjs` and `node run.mjs legal-check` need it too and neither can import TypeScript. |
+| `lib/ai/companion-switch.ts` | The typed shell over it: `isCompanionEnabled()`, `companionProblems()`, `companionOffReason()`. |
+| `lib/ai/companion-rules.ts` | Pure rules — the conversation key, the two input checks, the ceilings, the error codes. |
+| `app/companion-actions.ts` | The server action. Seven checks in the chat route's order, then check → work → charge. |
+| `components/companion-panel.tsx` | The one surface. `<CompanionPanel companionId subject />`, N call sites. |
 | `lib/ai/task-rules.mjs` | Declared tasks + binding resolution. Pure, shared with the check command. |
 | `lib/ai/tasks.ts` | The same, with the union type the compiler enforces. |
 | `lib/ai/pricing.mjs` | The cost arithmetic. Pure. |

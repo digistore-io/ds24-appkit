@@ -1,6 +1,6 @@
 ---
 name: ux-gateway
-description: The experience check for this app. Looks at it the way a paying customer does — the first five minutes after a purchase, dead ends in the flows, actions that report nothing back, hand-built elements, unreadable text, wording nobody understands, keyboard and screen reader, small screens — judges each finding by severity, fixes what has to be fixed and writes a report. Use it after the app has pages and billing, before the security gateway, and whenever somebody says "my customers do not find their way around", "nobody uses it after they buy", "this looks unfinished", "is this understandable?".
+description: The experience check for this app. Looks at it the way a paying customer does — the first five minutes after a purchase, dead ends in the flows, actions that report nothing back, hand-built elements, unreadable text, wording nobody understands, keyboard and screen reader, small screens, work the customer hands over that nothing comes back from — judges each finding by severity, fixes what has to be fixed and writes a report. Use it after the app has pages and billing, before the security gateway, and whenever somebody says "my customers do not find their way around", "nobody uses it after they buy", "this looks unfinished", "is this understandable?".
 requires: 0.4.0
 ---
 <!-- Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA — SPDX-License-Identifier: MIT -->
@@ -25,11 +25,11 @@ the audit against it. Where the two disagree, `docs/ux.md` wins.
 
 ## How to use this skill
 
-Nine checks. You do not have to know which one you want.
+Ten checks. You do not have to know which one you want.
 
 | # | Check | What it looks at | Roughly |
 |---|---|---|---|
-| 1 | **`all`** | everything below, in the right order | 30–55 min |
+| 1 | **`all`** | everything below, in the right order | 40–65 min |
 | 2 | **`first-run`** | the first five minutes: purchase → dashboard. Does the empty app say what to do? | 10 min |
 | 3 | **`flows`** | every path a member takes, including the unhappy ones. Dead ends | 10–15 min |
 | 4 | **`feedback`** | does every action say what happened, and does destructive ask first | 5–10 min |
@@ -37,7 +37,8 @@ Nine checks. You do not have to know which one you want.
 | 6 | **`words`** | wording, i18n gaps, error codes shown raw, empty states with nothing in them | 10 min |
 | 7 | **`access`** | keyboard, focus, names, contrast — WCAG 2.1 AA | 10 min |
 | 8 | **`visuals`** | pages that hand the customer nothing but paragraphs; pictures that are broken, heavy, or contact somebody | 10 min |
-| 9 | **`fix`** | fix the findings of the last report | depends |
+| 9 | **`alongside`** | surfaces that take a customer's work and hand back nothing but a confirmation; a companion that is undisclosed or given away | 10 min |
+| 10 | **`fix`** | fix the findings of the last report | depends |
 
 **How to dispatch:**
 
@@ -156,10 +157,15 @@ usable at all come before the ones that decide whether it is pleasant.
 4. **`kit`** — cheap, measured, and it explains half of "looks unfinished".
 5. **`words`** — after the structure, because rewording a dead end does not fix it.
 6. **`access`** — independent of all of the above; run it whenever.
-7. **`visuals`** — last, because it asks whether the app hands over anything
-   worth looking at, and that is a question about the product rather than about
-   the interface. It is also the one whose fixes are new features, so it is the
-   one somebody may reasonably defer.
+7. **`visuals`** — second to last, because it asks whether the app hands over
+   anything worth looking at, and that is a question about the product rather
+   than about the interface. It is also one of the two whose fixes are new
+   features, so it is one somebody may reasonably defer.
+8. **`alongside`** — last, and beside `visuals` for the same reason. `visuals`
+   asks whether there is anything to look at; this asks whether anything comes
+   **back**. Both are questions about the product rather than about the
+   interface, both have fixes that are new features rather than repairs, and
+   both are ones somebody may reasonably defer.
 
 Then: one report, one summary, one offer to fix.
 
@@ -289,6 +295,19 @@ follow the app, not the statute.
 Measured by `ux-check`: contrast in both modes, the focus ring at 3:1, icon
 buttons with no name.
 
+**Where the app carries interactive elements** (`ACTIVITIES` in
+`lib/learning/activities.ts` — a game, a check, a graded exercise), this
+check gets a second half that no command measures: **play every element with
+the keyboard alone, to the final verdict.** A drag without a key path is the
+naive way to build a game and a BFSG defect in a consumer product; a time
+limit without an alternative is a wall. The verdict must reach a screen
+reader (the panel announces through its live region — verify it does, and
+that the game announces its own state through `announce()`). ❌ HIGH where
+stuck: unlike a contrast ratio, there is no partial credit on "cannot finish
+the exam without a mouse". The build-side rules are the five in the panel
+header (`components/activity-panel.tsx`); the deeper audit is the skill
+`learning-activities`, item `check`.
+
 `ux-check` also measures **images with no `alt`** — but file that finding under
 check 8 with the rest of what goes wrong with pictures. One fix should not
 produce two findings in one report.
@@ -361,7 +380,114 @@ embed — and the rest is opening the pages and looking, in both themes.
 **Where this check does NOT go:** decoration. A stock photograph on a settings
 page is not a finding fixed — `docs/visuals.md` says why, under the catalogue.
 
-## 9 · `fix` — fixing what was found
+## 9 · `alongside` — does anything come back?
+
+**What this check is for.** An app can pass every check above and still hand its
+customers a form. Check 8 asks whether there is anything to look at; this one
+asks whether anything comes **back**. The case it was written from: a customer
+writes three paragraphs about their day into a paid challenge, and the app
+replies *"saved"*. Nothing reads it, nothing returns tomorrow, and the
+subscription is paying for a text box. This check finds it in an app that
+already exists — `build-app` step 1c is where it is decided for one that does
+not.
+
+**Two commands first**, and neither needs a browser. Their findings are already
+measured, so they go straight into the report with a command as evidence:
+
+```bash
+node run.mjs legal-check    # a companion switched on and undisclosed
+node run.mjs ai-check       # a key configured, the layer called from nowhere but support
+```
+
+`legal-check` settles the disclosure — which surface, which language, and what is
+missing. `ai-check` settles the whole-app observation at the bottom of the table.
+
+**Read `docs/app.md` FIRST, and read it properly.** Its *Decisions worth
+remembering* section may already say "no AI companion, deliberately, because …".
+If it does, that is not a finding — it is an answer, and reporting it anyway is
+how this gateway teaches people to stop writing decisions down. Say you found it,
+and move on. `docs/product-brief.md` is the second place to look and the first in
+time: an `Alongside the customer:` line there says what was decided when the
+product was worked out.
+
+Then walk the app's **work surfaces**: the places where a customer hands
+something over — a submission, an answer, a photo, a plan. **Not every form.** A
+settings page, an address, a payment method, a support message: the customer is
+not handing over their *work* there, and a confirmation is the right answer.
+
+*(`askCompanion()`, `<CompanionPanel>`, `config/ai-companion.json` and the
+catalogue all arrived with template **0.8.0** — on an older copy the three rows
+that name them never fire, and the work-surface row applies unchanged, back to
+0.4.0. That row is also the one that matters most on an old app: it needs no
+companion code at all, only a page and a `docs/app.md`. Which is why the
+`requires:` on this skill stays at 0.4.0 — bumping it would withhold all nine
+other checks from an app on 0.6.0 over one row it could not use anyway, and
+withhold precisely the row it could.)*
+
+| | Severity | What |
+|---|---|---|
+| ❌ | **HIGH** | A companion is switched on and the customer is not told a model reads what they write. `node run.mjs legal-check` names it and names the fix. **The most severe finding this check raises** |
+| ❌ | **HIGH** | A companion whose registry entry has `requiresPlan: null` **and** `costsTokens: 0` — every signed-in visitor spends the vendor's money on it, once per use, for ever |
+| ⚠️ | **MEDIUM** | A surface takes a customer's work and returns nothing but a confirmation, and nothing in `docs/app.md` says that was chosen |
+| ℹ️ | **LOW** | A provider key is configured and nothing outside the support chat calls the AI layer. `ai-check` prints it under *Worth knowing* — a whole-app observation, **one line, once**, and it does not fire on an app with no key |
+
+**The disclosure row is quoted, never re-derived.** The fix is
+`<AiDisclosure surface="companion" />` on the page the customer writes into, plus
+*"`node run.mjs legal-check` says which surface and which language"* — and
+nothing about the message key or the wording rule. One copy of that rule exists,
+in `lib/ai/disclosure.mjs`, precisely because it had been written twice; a third
+copy in a skill would be the same mistake in prose. It is ❌ HIGH and not
+🚨 CRITICAL deliberately: `compliance-check` owns Art. 50 and its own ladder puts
+an undisclosed AI at HIGH, and two reports of the same week contradicting each
+other is worse than one being a notch low.
+
+**The gating row's evidence is a file and a line** — the two fields in the
+entry, read out of `lib/ai/companions.ts`. A companion gated by a **token
+package** is a different thing and not this check's: `companionProblems()`
+already refuses that config, because `hasPlan()` answers `false` for a balance
+for ever.
+
+**The fix names the entry, not the problem.** *"Build a companion"* is not
+something anybody can act on.
+[`docs/ai-in-product.md`](../../../docs/ai-in-product.md) has a row per app shape
+— quote the one that applies:
+
+```
+⚠️ MEDIUM — the daily challenge takes an answer and gives back "saved"
+Where:    app/dashboard/challenges/[day]/ui.tsx:74, actions.ts:31
+Why:      a customer writes three paragraphs about their day and the app
+          replies with a toast. Nothing reads it, nothing comes back
+          tomorrow, and the subscription is paying for a text box.
+Fix:      docs/ai-in-product.md → 2.1 "the companion that walks a course or a
+          challenge with them" → a companion on the submission, gated by
+          hasPlan(memberId, "coach_monatlich"). The stored answer stays.
+Evidence: the action inserts one row and returns { ok: true }; the page renders
+          the list and the form and nothing else.
+```
+
+Some of it is countable — the two commands above, and reading
+`lib/ai/companions.ts` — and the rest is opening the pages, signing in as a
+member and **doing the thing the app is for**. `node run.mjs ux-check` measures
+nothing for this check, deliberately: whether a surface takes a customer's
+*work* or a *setting* is a question about what the app is for, and a scan for
+"an action that inserts a row and returns `{ ok: true }`" matches every settings
+form in the app — which is the **passing** state of check 4. A check that fires
+on the thing another check requires is not a weak check, it is a wrong one.
+
+**Where this check does NOT go:** settings, addresses, payment methods, support
+messages — a confirmation is the correct answer to those. And it does not go
+near **building** anything; see STOP below.
+
+**`ai-companion` → `check` looks at one companion — the one somebody is building
+or has just built — and fixes it. This walks the whole app and finds the surfaces
+where there is no companion at all**, which is the case that has nothing for
+`ai-companion` to be pointed at yet. So the ⚠️ MEDIUM row is this check's alone,
+and on the two companion rows this check **hands over rather than duplicates**:
+report it, name the fix, and send the user to `ai-companion` → `check` for the
+instruction, the `load()` scoping, the ceiling and the cost — four things a UX
+gateway has no business judging.
+
+## 10 · `fix` — fixing what was found
 
 1. **CRITICAL and HIGH first**, in the order they are in the report.
 2. **Fix it where the rule lives**, not where it showed up. A missing
@@ -388,7 +514,7 @@ already has one). Create the folder if it is not there.
 ```markdown
 # UX report — 2026-07-27
 
-Checks: first-run, flows, feedback, kit, words, access, visuals
+Checks: first-run, flows, feedback, kit, words, access, visuals, alongside
 Seen:   opened in a browser, signed in as a member        (or: judged from code)
 App:    local, commit a1b2c3d
 
@@ -427,6 +553,17 @@ deliberately sparse page. Rather than rediscovering it every run, it goes into
 | Hand-built checkbox | app/plans/page.tsx | the kit ships none | Anna | 2026-07-27 | when shadcn checkbox is added |
 ```
 
+**Two records, and check 9 is the first thing here that reads both.** They mean
+opposite things and must not be merged:
+
+- **`docs/app.md`** holds the decision *against building* something — "no
+  companion, deliberately, because …". That is what makes a check **silent**, and
+  it is written there by `build-app`, not by this gateway.
+- **`docs/reports/ux-accepted.md`**, below, holds a finding a check **did** raise
+  that the user then accepted. The realistic one for check 9 is a companion left
+  deliberately free in a free tier — the ❌ HIGH gating row, accepted with a
+  reason.
+
 An accepted deviation is **not counted** in the totals and appears in its own
 section. Only the user accepts one — never you, and never silently. A CRITICAL
 is not accepted: a customer who cannot reach what they paid for is not a matter
@@ -451,6 +588,14 @@ Do not decide these on your own:
   a fix. Report it, name the catalogue entry, and hand over to **`visuals`** if
   they want it. A gateway that quietly grows the product is one nobody can let
   run unattended.
+- **Building the companion check 9 proposes.** Reporting that a surface takes a
+  customer's work and gives nothing back is this gateway's job; deciding to build
+  a companion is the user's, and it is a feature rather than a fix — one that
+  costs money on **every use** and sends what the customer wrote to a third
+  party. Report it, name the catalogue entry, and hand over to **`ai-companion`**
+  if they want it. The same goes for switching `config/ai-companion.json` on, and
+  for changing what a companion is gated by — that is *"Changing what a plan
+  unlocks"* above, with a bill attached.
 
 ## Next step
 

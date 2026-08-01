@@ -113,6 +113,55 @@ describe("the two exports cover the same tables", () => {
   });
 });
 
+describe("both exports carry the conversation a turn belongs to", () => {
+  // ── Why this describe exists at all ──────────────────────────────────────
+  // The parity check above compares section NAMES. A column added to one export
+  // and forgotten in the other passes it silently — both files still have a
+  // "chat messages" section, and both are still listed. So a companion's turns
+  // would reach one answer differentiated and the other as an undifferentiated
+  // heap, and nothing would say so.
+  //
+  // Matched as COLUMN REFERENCES, following this file's own precedent: the
+  // prose above each query names the thing, and a guard that grepped for the
+  // bare word would fail on its own documentation.
+  const module = readFileSync(join(ROOT, "lib", "privacy", "export.ts"), "utf8");
+  const command = readFileSync(join(ROOT, "scripts", "privacy", "export-data.mjs"), "utf8");
+
+  it("read both files", () => {
+    // Non-vacuity: without this, a wrong path makes both assertions below pass.
+    expect(module.length).toBeGreaterThan(1000);
+    expect(command.length).toBeGreaterThan(1000);
+  });
+
+  it("the member's own download names conversationId in its chat select", () => {
+    expect(module).toMatch(/conversationId:\s*chatMessages\.conversationId/);
+  });
+
+  it("the operator's command names conversation_id in its chat query", () => {
+    expect(command).toMatch(/select[^;]*\bconversation_id\b[^;]*from chat_messages/);
+  });
+});
+
+describe("deleting the account still removes the transcripts", () => {
+  // No code was needed for this and that is exactly why it is asserted: the
+  // companion's turns are rows in `chat_messages`, so the cascade that already
+  // existed removes them. The day somebody changes it to `set null` — the
+  // treatment the FINANCIAL tables get, and a reasonable-looking edit — a
+  // deleted customer's own words would survive their deletion.
+  const schema = readFileSync(join(ROOT, "db", "schema-chat.ts"), "utf8");
+
+  it("chat_messages still cascades from the member", () => {
+    expect(schema.length).toBeGreaterThan(500);
+    expect(schema).toMatch(/references\(\(\)\s*=>\s*users\.id,\s*\{\s*onDelete:\s*"cascade"\s*\}\)/);
+  });
+
+  it("and there is no second table for a companion's turns", () => {
+    // A second table would need its own cascade, its own export section and its
+    // own deletion path — four places for one requirement to go half-done.
+    expect(schema).not.toMatch(/pgTable\(\s*"companion/);
+  });
+});
+
 describe("what the member's export must never contain", () => {
   const source = readFileSync(join(ROOT, "lib", "privacy", "export.ts"), "utf8");
 
@@ -139,5 +188,43 @@ describe("what the member's export must never contain", () => {
     // the point of matching the query rather than the word.
     expect(source).not.toMatch(/from\(ipnEvents\)/);
     expect(source).not.toMatch(/import[\s\S]*?\bipnEvents\b[\s\S]*?from "@\/db\/schema"/);
+  });
+});
+
+describe("learning performance in the answer", () => {
+  it("activity_results still cascades from the member — member_id specifically", () => {
+    const schema = readFileSync(
+      new URL("../../db/schema-learning.ts", import.meta.url),
+      "utf8",
+    );
+    // Pin the CASCADING column by name: a second users-reference added to the
+    // file must not let this pass while member_id loses its cascade.
+    expect(schema).toMatch(
+      /member_id"\)\s*\.notNull\(\)\s*\.references\(\(\)\s*=>\s*users\.id,\s*\{\s*onDelete:\s*"cascade"\s*\}\)/,
+    );
+  });
+
+  it("both exports select the same activity_results columns — §8b's whole list", () => {
+    // The section-parity test cannot see a column dropped from ONE export.
+    const columns = [
+      ["activityId", "activity_id"],
+      ["subject", "subject"],
+      ["state", "state"],
+      ["score", "score"],
+      ["maxScore", "max_score"],
+      ["passed", "passed"],
+      ["attempts", "attempts"],
+      ["startedAt", "started_at"],
+      ["updatedAt", "updated_at"],
+      ["completedAt", "completed_at"],
+    ];
+    const ts = readFileSync(new URL("./export.ts", import.meta.url), "utf8");
+    const tsSection = ts.slice(ts.indexOf("Learning performance"), ts.indexOf(".from(activityResults)"));
+    const mjs = readFileSync(new URL("../../scripts/privacy/export-data.mjs", import.meta.url), "utf8");
+    const mjsLine = mjs.slice(mjs.indexOf("from activity_results") - 400, mjs.indexOf("from activity_results"));
+    for (const [camel, snake] of columns) {
+      expect(tsSection, `export.ts: ${camel}`).toContain(camel);
+      expect(mjsLine, `export-data.mjs: ${snake}`).toContain(snake);
+    }
   });
 });

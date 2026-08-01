@@ -112,6 +112,21 @@ Server Action, and both refuse without a written reason.
   Operator then reads as "unknown error". That note is the sole record of why
   money or access moved.
 
+## A verdict is never reached in the browser
+
+Where the app judges what a customer did — a quiz, a game, a graded exercise
+(`lib/learning/`) — **the score, the pass and the completion come into being
+on the server, and the solution never leaves it.** A submission from a
+browser is data about an attempt, never the result of one.
+
+This rule sits beside money because the failure is invisible the same way: a
+quiz whose answers ship in the client bundle renders correctly, returns 200
+and passes every test — and is worthless the day one buyer opens the dev
+tools. `grade()` in the activity's registry entry is the only place a score
+comes into being; `load()` sends the questions, never the expected answers;
+a checkpoint verdict carries no score. The check that finds a breach is the
+skill `learning-activities` (item `check`) and `security-gateway` §8 (`verdicts`).
+
 ## Secrets & API keys
 
 - **Never** put API keys, passphrases or tokens into the code, the repo or logs.
@@ -135,6 +150,43 @@ Server Action, and both refuse without a written reason.
   It is a fact from the payload, not a permission.
 - Do not pass buyer data on to third parties/external services without a clear
   purpose and a legal basis.
+
+## Talking to a model about a customer's work
+
+Every model call in this app goes through `runTask()`, and one shape of call
+sends a third party something a **customer produced** rather than something the
+app computed. That is the case these rules are about.
+
+- **The assistant's rule is about HER, and it stays.** Nothing about the
+  signed-in person is sent to the API — not their name, balance, orders, plan or
+  role (`docs/ai-chat.md`). It is a data-protection decision, not a limitation
+  waiting to be lifted, and it is what makes her safe to switch on for every
+  member without a second thought.
+- **A product-side call is given exactly the rows named at its call site, one
+  field at a time.** Never a member id it resolves for itself, never a whole
+  record. `askCompanion()` takes labelled facts and nothing else, and
+  `lib/ai/companion.ts` imports no database, no entitlement function and no token
+  function — a test reads the file to keep that true. This is not tidiness: it is
+  what makes the inventory in `docs/data-protection.md` §8a writable from the
+  code instead of from an intention.
+- **Text a customer wrote is content, never instruction — including the text
+  they wrote last week.** The fence lives in the layer and is tested there, and
+  it covers their earlier turns as well as the current one. Do not restate it per
+  call site, and do not build a second path that skips it — a companion reads
+  what somebody else wrote by design, which is exactly the surface where prompt
+  injection pays. The half that gets missed is the second turn: an app that
+  fences a submission and then re-sends it as bare history has a fence that
+  lasts one question.
+- 🚨 **A registry entry's `load()` is where an IDOR would live.** It receives the
+  session's member id and a subject string the customer's browser sent. Scope
+  every read by that member id, and return `null` for a subject that is not
+  theirs — the same value as "no such subject", so nothing enumerates.
+- **The disclosure comes before the customer writes**, not once there is a
+  transcript. `<AiDisclosure surface="…" />`, above the transcript, and
+  `node run.mjs legal-check` reports a surface that is switched on without one.
+- **Never**: a call that takes a member id and fetches the context itself; a
+  second consent store; a second disclosure mechanism; a second way to reach a
+  provider.
 
 ## Signing in as a user
 
@@ -198,6 +250,11 @@ Do **not** carry on alone, ask instead, when you are about to:
 - adjust or deactivate the signature/auth checks — **including anything in
   `lib/impersonation/`**, which rewrites the subject of a signed-in session,
 - export, delete or send personal data to external systems,
+- build a companion that **advises on health, money or law** — sending customer
+  data to an external system is what a companion does by construction, and those
+  three subjects are three different regimes (Art. 9 special categories, possibly
+  Annex III, and professional liability the AI Act does not govern at all). The
+  skill `compliance-check` prepares the question; a person answers it,
 - connect a new external integration with access to payments or customer data,
 - run database migrations that change existing order/user data,
 - correct a token balance or hand out a plan for somebody you cannot account

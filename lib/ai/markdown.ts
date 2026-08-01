@@ -18,7 +18,7 @@
 // with their question, for formatting a two-sentence answer never uses. What
 // this file cannot express, it shows literally, which is the safe direction.
 //
-// The output is DATA, not HTML. `app/dashboard/chat/answer.tsx` turns it into
+// The output is DATA, not HTML. `components/answer-text.tsx` turns it into
 // React elements, so there is no `dangerouslySetInnerHTML` anywhere in the
 // chat and no sanitiser to keep up to date. Being pure is also why the parser
 // lives in `lib/` — it is unit-tested, where the component could not be

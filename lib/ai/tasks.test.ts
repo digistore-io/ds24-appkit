@@ -41,18 +41,25 @@ describe("the two copies of each list agree", () => {
 });
 
 describe("the shipped registry", () => {
-  it("declares the two tasks that exist, and no more", () => {
-    // `chat` is the assistant; `image` is a picture. Both have code that calls
-    // them. Moderation and content generation are what the layer MAKES
+  it("declares the three tasks that exist, and no more", () => {
+    // `chat` is the assistant and `image` is a picture — both have code in this
+    // template that calls them. `companion` is the shape a product-side call
+    // takes (`lib/ai/companion.ts`); what calls it is the app somebody builds
+    // here, and it is bound anyway so its spend is separable from support's on
+    // the cost page. Moderation and your own jobs are what the layer MAKES
     // POSSIBLE and live as worked examples in the docs — not here, because a
     // bound task nobody calls is a line `ai-check` complains about for ever.
-    expect([...TASKS]).toEqual(["chat", "image"]);
+    expect([...TASKS]).toEqual(["chat", "image", "companion"]);
   });
 
   it("knows which kind of provider each task needs", () => {
     // The reason two of the five companies are not interchangeable here.
     expect(taskKind("chat")).toBe("text");
     expect(taskKind("image")).toBe("image");
+    // `companion` has no entry in TASK_KINDS and must not need one — text is
+    // what an unlisted task falls back to, which is what keeps adding an
+    // ordinary task a one-line change.
+    expect(taskKind("companion")).toBe("text");
   });
 
   it("recognises its own tasks and nothing else", () => {

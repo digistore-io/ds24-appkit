@@ -22,7 +22,7 @@ single copy, this one is the audit against it. Where the two ever disagree,
 
 ## How to use this skill
 
-Eight checks. You do not have to know which one you want.
+Nine checks. You do not have to know which one you want.
 
 | # | Check | What it looks at | Roughly |
 |---|---|---|---|
@@ -33,7 +33,8 @@ Eight checks. You do not have to know which one you want.
 | 5 | **`deps`** | the packages and their known holes | 2 min |
 | 6 | **`api`** | the endpoints that answer without a session | 5–10 min |
 | 7 | **`host`** | environment, headers, the live configuration | 5 min |
-| 8 | **`fix`** | fix the findings of the last report | depends |
+| 8 | **`verdicts`** | judged elements: is the solution where the customer can read it | 5–10 min |
+| 9 | **`fix`** | fix the findings of the last report | depends |
 
 **How to dispatch:**
 
@@ -91,7 +92,10 @@ worst things come first, so a launch that has to stop stops early.
 3. **`code`** — the long one, and the one that finds what scanners cannot.
 4. **`pay`** — small, sharp, and the most expensive when wrong.
 5. **`api`** — needs the app running (`node run.mjs start`).
-6. **`host`** — only meaningful once there is a host; skip it with a note before
+6. **`verdicts`** — only where `ACTIVITIES` has entries; skip it with a note
+   otherwise. It needs the production build, and it finds the failure every
+   other check is blind to.
+7. **`host`** — only meaningful once there is a host; skip it with a note before
    the first deploy.
 
 Then: one report, one summary, one offer to fix.
@@ -447,7 +451,29 @@ rather than inventing findings.
   backups are **MEDIUM** the day before they are needed and CRITICAL the day
   after.
 
-## 8 · `fix` — fixing what was found
+## 8 · `verdicts` — is the solution where the customer can read it?
+
+Only where `ACTIVITIES` (`lib/learning/activities.ts`) has entries. The
+failure this section exists for is invisible to every other check: a judged
+element whose answers reach the browser renders, returns 200 and stays green
+everywhere — and is worthless.
+
+1. **Read every entry's `load()`** and the client components under its
+   panel: do the expected answers, the split, the correct options appear in
+   anything the browser receives — including checkpoint verdicts and the
+   resume `state`? (`state` ships to the client on the next load.)
+2. **Search the built bundle.** `node run.mjs build`, then grep `.next/` for
+   a known answer string of each element. 🚨 CRITICAL if found, naming the
+   file and what a buyer does with it.
+3. **The gates as registry fields.** `requiresPlan` present where the
+   element is paid; `maxAttempts` where it judges; grading logic imported by
+   any `"use client"` file is the same finding as 1.
+
+The rule behind all three is `guardrails` → *A verdict is never reached in
+the browser*; the deeper audit (keyboard included) is the skill
+`learning-activities`, item `check`.
+
+## 9 · `fix` — fixing what was found
 
 Fix in severity order: every CRITICAL, then every HIGH. MEDIUM and LOW are the
 user's call — name what each one costs and let them decide.

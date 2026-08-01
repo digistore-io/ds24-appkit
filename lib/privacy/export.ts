@@ -41,6 +41,7 @@ import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { db } from "@/db";
 import {
   accounts,
+  activityResults,
   aiUsage,
   chatMessages,
   consentRecords,
@@ -74,6 +75,7 @@ export const MEMBER_EXPORT_SECTIONS = [
   "tokenLedger",
   "grants",
   "chatMessages",
+  "activityResults",
   "aiUsage",
   "impersonations",
   "media",
@@ -232,6 +234,7 @@ export async function buildMemberExport(memberId: string): Promise<MemberExport>
     ledgerRows,
     grantRows,
     chatRows,
+    activityRows,
     usageRows,
     impersonationRows,
     mediaRows,
@@ -264,6 +267,12 @@ export async function buildMemberExport(memberId: string): Promise<MemberExport>
     db
       .select({
         id: chatMessages.id,
+        // Which conversation each turn belongs to — `null` is the assistant,
+        // anything else is a companion, keyed `<companion>:<subject>`. Without
+        // it a person receives two hundred undifferentiated turns from five
+        // different subjects: technically complete, practically useless, and a
+        // subject access request is answered by what somebody can read.
+        conversationId: chatMessages.conversationId,
         role: chatMessages.role,
         content: chatMessages.content,
         createdAt: chatMessages.createdAt,
@@ -271,6 +280,26 @@ export async function buildMemberExport(memberId: string): Promise<MemberExport>
       .from(chatMessages)
       .where(eq(chatMessages.memberId, memberId))
       .orderBy(asc(chatMessages.createdAt)),
+
+    // Learning performance — data about a person's ability, which is why it
+    // is in this file at all (docs/data-protection.md §8b). The resume
+    // `state` is included: it is the server's record of THEIR work.
+    db
+      .select({
+        activityId: activityResults.activityId,
+        subject: activityResults.subject,
+        state: activityResults.state,
+        score: activityResults.score,
+        maxScore: activityResults.maxScore,
+        passed: activityResults.passed,
+        attempts: activityResults.attempts,
+        startedAt: activityResults.startedAt,
+        updatedAt: activityResults.updatedAt,
+        completedAt: activityResults.completedAt,
+      })
+      .from(activityResults)
+      .where(eq(activityResults.memberId, memberId))
+      .orderBy(asc(activityResults.startedAt)),
 
     // Numbers only. `ai_usage` holds no prompt and no answer — there is no
     // column that could carry one (`db/schema-ai-usage.ts`). It belongs here
@@ -374,6 +403,7 @@ export async function buildMemberExport(memberId: string): Promise<MemberExport>
     tokenLedger: ledgerRows,
     grants: grantRows,
     chatMessages: chatRows,
+    activityResults: activityRows,
     aiUsage: usageRows,
     impersonations: impersonationRows,
     media: mediaRows,

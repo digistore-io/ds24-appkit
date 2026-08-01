@@ -1,0 +1,4 @@
+{
+  "_comment": "Does this app work alongside its customer? Ships OFF. One field, and it stays one field: which plan gates a companion, what one may take in and how much history it carries belong to the ENTRY in lib/ai/companions.ts, because a second companion needs different answers. config/ai-chat.json can hold six settings because there is exactly one assistant. Read through isCompanionEnabled() in lib/ai/companion-switch.ts, never by re-reading this file; a malformed value counts as off. Details: docs/ai-providers.md.",
+  "enabled": false
+}

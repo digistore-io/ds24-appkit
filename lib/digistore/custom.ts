@@ -42,6 +42,10 @@
 
 import crypto from "crypto";
 
+// Type-only, so this stays a leaf module at runtime: `products.ts` reads the
+// registry JSON, and nothing in the identity grammar should depend on that.
+import type { ProductKind } from "./products";
+
 /** A parsed `tracking[custom]` value. `null` means "not ours, or incomplete". */
 export type CustomValue =
   | {
@@ -79,6 +83,36 @@ const PRODUCT_KEY_RE = /^[A-Za-z0-9_-]+$/;
 /** The recognised values of the `k:` pair. */
 export type PurchaseOrigin = "sub" | "topup" | "auto";
 const ORIGINS: readonly PurchaseOrigin[] = ["sub", "topup", "auto"];
+
+/**
+ * How a checkout the buyer started is recorded — from what they are buying.
+ *
+ * **The token package is the special case, not the subscription.** A
+ * `one_time` product is a PLAN: `hasPlan()` answers for it, `grantableProducts()`
+ * hands it out, and `lib/billing-mode.ts` counts it on the plan side. It used
+ * to be recorded here as a top-up, which put a false statement about a
+ * course purchase into the string Digistore24 stores and hands back on every
+ * later event.
+ *
+ * 🚨 **There is deliberately no fourth value for a one-off plan**, and the
+ * reasons are worth reading before adding one:
+ *
+ *  - `parseCustom()` below reads values stored on purchases that are already
+ *    live. Widening what it accepts is a change in the money path, which
+ *    `CLAUDE.md` → *STOP criteria* asks a human about.
+ *  - The only reader that BEHAVES on this value is the auto top-up lock
+ *    (`origin === "auto"`, `lib/digistore/payment-event.ts`). `sub` and `topup`
+ *    exist to separate *a plan the buyer chose* from *a balance they bought*,
+ *    and a one-off course is the former.
+ *  - The only place it is STORED is `token_ledger.origin`, which a plan never
+ *    reaches, so a fourth value would be written nowhere and read by nobody.
+ *
+ * Telling a one-off plan from a subscription after the fact is
+ * `orders.productKey` plus the registry, not a marker here.
+ */
+export function purchaseOriginFor(kind: ProductKind): PurchaseOrigin {
+  return kind === "token" ? "topup" : "sub";
+}
 
 const TOKEN_ALPHABET =
   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";

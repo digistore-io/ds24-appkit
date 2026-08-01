@@ -43,7 +43,7 @@ hands over to the next:
 | 2d | **Which AI company** *(optional)* | `ai-providers` | pick OpenAI, Anthropic, Gemini, Mistral or OpenRouter, get the key in, bind each job to a model and set the prices the cost page reports |
 | 2e | **AI interface (MCP)** *(optional)* | `mcp-server` | let your customers connect Claude to your app: decide which capabilities become tools, then switch it on |
 | 3 | **The experience** | `ux-gateway` | the app as your customer meets it: the first five minutes after a purchase, dead ends, actions that report nothing back, wording, keyboard and phone — measured with `node run.mjs ux-check` where it can be, looked at where it cannot |
-| 4 | **Security** | `security-gateway` | eight checks — access control, money, secrets, packages, endpoints, hosting — findings by severity, the serious ones fixed, report in `docs/reports/` |
+| 4 | **Security** | `security-gateway` | nine checks — access control, money, secrets, packages, endpoints, hosting — findings by severity, the serious ones fixed, report in `docs/reports/` |
 | 5 | **Scaling** | `performance-gateway` | measure instead of guess: response times, database and indexes, ~100 concurrent users, memory, CPU, front end — fixed and measured again |
 | 6 | **Legal** | `compliance-check` | which EU rules reach your app: imprint, privacy policy, terms — plus the **AI Act**, consent, your customers' rights and the records you have to be able to show |
 | 6b | **The server** | `setup-hosting` | pick a host (Railway/Render/Fly.io/DigitalOcean), say what it costs, install its CLI, authenticate, app + managed Postgres, secrets, migration in the deploy, domain |

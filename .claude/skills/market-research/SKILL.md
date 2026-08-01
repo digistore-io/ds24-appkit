@@ -54,16 +54,36 @@ one or two problems that are frequent, painful and solvable.
 
 ## Phase 4 — Product proposal
 
-**Ask one question before you write a single feature down.** It is the earliest
-place the rule in `CLAUDE.md` → *How a skill works* (**"Anything the customer
-will SEE is proposed, never assumed"**) applies — here it shapes the product
-rather than a page.
+**Ask two questions before you write a single feature down**, in one breath —
+they are the same move at two depths, and splitting them would double the
+ceremony for a one-sentence answer. It is the earliest place the rule in
+`CLAUDE.md` → *How a skill works* (**"Anything the customer will SEE, and
+anything the app will DO for them, is proposed, never assumed"**) applies — here
+it shapes the product rather than a page.
 
 > "What does your customer end up holding? A text they still have to put
 > somewhere themselves — or something finished they can look at, show or
 > publish?"
 
-**Then let the answer change how every feature is WORDED** — it is not a note
+> "And what does your app DO alongside them while they work — does it read what
+> they hand in, judge it, or produce the thing with them? Or do they do the work
+> themselves and the app keeps it?"
+
+**If the product is an online course, one more question — in the vendor's
+terms, never in this file's:** *"Do your customers work through it at their
+own pace, get it piece by piece, or hand something in that you read — or does
+it never end?"* The answer is the course's SHAPE — three different
+applications, told apart in [`docs/courses.md`](../../../docs/courses.md) —
+and "it never ends" is the honest fourth answer: that is no course but the
+Membership archetype, and the chooser's last section says so. Write the
+answer into the brief **in the vendor's words** (there is deliberately no
+third machine-read label — see Phase 5's warning about the two that exist),
+so `build-app` Step 1 can CONFIRM the shape in one sentence instead of
+deriving it from nothing. (If they also hand something in **that a person
+reads**, it is the workshop, regardless of pacing — auto-graded self-checks
+are not hand-ins.)
+
+**Then let THOSE answers — all of them — change how every feature is WORDED** — it is not a note
 to add beside the list, it is the list. An app that "generates sales copy" and
 one that "generates a finished sales page with a picture" are two different
 products, built two different ways, and only one of them is something somebody
@@ -74,13 +94,26 @@ So: *"produces the ad text"* is a feature that has not had this question asked
 of it. *"produces a finished ad — headline, body and image — that the customer
 can post"* is the same feature after it has.
 
-Three shapes the answer usually takes, to make it concrete:
+**The second question does the same thing to the other half of the product.**
+*"a challenge a day"* and *"a challenge a day with somebody reading your answer"*
+are two different products, built two different ways, and only one of them is
+one people stay subscribed to. A customer who is alone with the work is a
+customer who stops after week two, and no amount of finished output fixes that.
+
+Three shapes each answer usually takes, to make both concrete:
 
 | Instead of | The finished thing |
 |---|---|
 | a block of sales copy | a rendered sales page under its own address, with a hero image, that the customer can share |
 | a number ("your score: 73") | a result card they can download and show somebody |
 | a list of suggestions | the same suggestions as cards with previews |
+
+| Instead of | Alongside the customer |
+|---|---|
+| a form that stores the day's answer | an answer that gets read, and replied to before tomorrow's task |
+| a list of the entries they made | a look back over the week that names what changed |
+| a checklist they tick off | a check on the plan before they commit to it |
+| a video and a PDF per lesson | something the learner DOES that answers back — a check, a game, judged on the server (`docs/learning.md`) |
 
 **This is not a request for more features.** It is the same feature, delivered
 one step further along — and that step is usually where the willingness to pay
@@ -93,7 +126,8 @@ Now derive **one concrete SAAS proposal** (2 variants to choose from if needed):
 - **MVP feature scope:** 3–5 core features — **deliberately small** and
   buildable on this template (auth + data model + a few pages, access tied to
   the purchase). Each one describes what the customer RECEIVES, not what the app
-  computes.
+  computes — **and, where it applies, what the app does with them while they use
+  it.**
 - **Digistore billing:** What is the "product"? One-off purchase, subscription
   or membership? How does the purchase unlock the value (the IPN records it, the
   app asks the entitlement API — see `docs/entitlements.md`)?
@@ -117,8 +151,30 @@ how the next skill knows what to propose instead of asking the question again:
 address, that the customer can share
 ```
 
-Write it exactly like that — the bold label, then the thing itself in one
+**A second line has the same fixed shape**, for the same reason and read by the
+same skill:
+
+```md
+**Alongside the customer:** a coach that reads each day's answer and replies
+before the next task goes out
+```
+
+and, for the honest other answer, which is a real one:
+
+```md
+**Alongside the customer:** nothing — they do the work themselves and the app
+keeps it for them
+```
+
+Write both exactly like that — the bold label, then the thing itself in one
 sentence. Not "a sales page (see features)"; the sentence has to stand on its own.
+
+⚠️ **Both labels are load-bearing, literally.** `build-app` matches on
+`**Output artifact:**` and on `**Alongside the customer:**` character for
+character, and so does `coach` when it works out where a project stands.
+Reword either label and the step that reads it silently turns back into an open
+question — the vendor is asked something they already answered, in a later
+session, by an agent with no way of knowing.
 
 Then continue with the skill **`build-app`** (archetype, data model, pages) and
 **`setup-digistore`** (connecting the billing).
@@ -136,3 +192,6 @@ Then continue with the skill **`build-app`** (archetype, data model, pages) and
 - **Finish the output, not the feature list.** The usual way a proposal from
   this skill disappoints is not too few features — it is each one stopping one
   step short of what the customer wanted to hold (Phase 4).
+- **And the second way is a product nobody is inside.** Everything is delivered,
+  nothing is accompanied: the customer gets the material and does the work alone.
+  That is the one people cancel in week two, and it is decided in Phase 4 too.

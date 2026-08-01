@@ -132,7 +132,7 @@ try {
   // a deletion request correctly finds none. Empty when the chat is switched
   // off, and empty for a purchase with no account behind it.
   const chatMessages = memberId
-    ? await sql`select id, role, content, created_at from chat_messages where member_id = ${memberId} order by created_at`
+    ? await sql`select id, conversation_id, role, content, created_at from chat_messages where member_id = ${memberId} order by created_at`
     : [];
 
   // What this person's use of the AI features consumed.
@@ -148,6 +148,14 @@ try {
                cached_input_tokens, thinking_tokens, outcome, latency_ms, created_at
         from ai_usage where member_id = ${memberId} order by created_at`
     : [];
+
+  // Learning performance — the member's results on interactive elements.
+  // Deleted with the account (cascade), so a post-deletion export correctly
+  // finds none. See docs/data-protection.md §8b.
+  const activityResults = memberId
+    ? await sql`select activity_id, subject, state, score, max_score, passed, attempts, started_at, updated_at, completed_at from activity_results where member_id = ${memberId} order by started_at`
+    : [];
+
 
   // --- Who signed in as this person --------------------------------------------
   // Every time an operator used "sign in as this user" on this account. The
@@ -242,6 +250,7 @@ try {
     tokenLedger,
     grants,
     chatMessages,
+    activityResults,
     aiUsage,
     impersonations,
     media: mediaRows,

@@ -17,6 +17,15 @@ import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 
+// The registry, the language patterns and the problem codes — one copy, shared
+// with `lib/ai/disclosure.test.ts` so the build guard and this report cannot
+// disagree about a rule that has a legal deadline behind it.
+import {
+  DISCLOSURE_SURFACES,
+  disclosureProblems,
+  mountFor,
+} from "../../lib/ai/disclosure.mjs";
+
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 
 /** The marker a shipped placeholder carries — mirrors lib/legal/pages.ts. */
@@ -55,6 +64,15 @@ const ok = (what) => console.log(`  ✓ ${what}`);
 function readJson(relative) {
   try {
     return JSON.parse(readFileSync(join(ROOT, relative), "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+/** A source file as text, or `null`. For "does anything actually render it?". */
+function readSource(relative) {
+  try {
+    return readFileSync(join(ROOT, relative), "utf8");
   } catch {
     return null;
   }
@@ -115,45 +133,92 @@ for (const slug of LEGAL_SLUGS) {
   }
 }
 
-// ── 2. The AI disclosure ───────────────────────────────────────────────────
+// ── 2. Anything here that talks as a machine ───────────────────────────────
+// The rule is not "the chat carries a notice" — it is *anything here that talks
+// to a person as a machine says so*, and whatever AI surface is added next
+// inherits it. So this walks a REGISTRY rather than asking about the assistant.
+//
+// The registry, the language patterns and the problem codes all live in
+// `lib/ai/disclosure.mjs`, which `lib/ai/disclosure.test.ts` also reads. Until
+// this story that rule existed twice — once as assertions, once as a regular
+// expression right here with a comment admitting it was a copy. Two copies of a
+// rule with a legal deadline attached is what this template does not do.
 console.log("\nAI transparency (Art. 50(1) EU AI Act, since 2 August 2026)");
 
-const chat = readJson("config/ai-chat.json");
+const problemsBySurface = new Map();
+for (const problem of disclosureProblems({
+  locales: locales(),
+  messagesFor: (locale) => readJson(`messages/${locale}.json`),
+  sourceOf: readSource,
+  configFor: readJson,
+})) {
+  if (!problemsBySurface.has(problem.surface)) problemsBySurface.set(problem.surface, []);
+  problemsBySurface.get(problem.surface).push(problem);
+}
 
-if (!chat || chat.enabled !== true) {
-  ok("the assistant is switched off — nothing to disclose");
-} else {
-  // How each language names a machine. Mirrors lib/ai/disclosure.test.ts, which
-  // fails the build on the same rule; this says it in a sentence instead of in
-  // an assertion, at the moment somebody is asking whether they may go live.
-  const NAMES_A_MACHINE = {
-    de: /\bKI\b|\bkünstliche[rn]? Intelligenz\b/i,
-    en: /\bAI\b|\bartificial intelligence\b/i,
-  };
+for (const surface of DISCLOSURE_SURFACES) {
+  const config = readJson(surface.configFile);
 
+  // Switched off owes nothing, and saying so is the honest answer rather than a
+  // pass. For the companion this is the shipped state.
+  if (!surface.isOn(config)) {
+    ok(`${surface.label}: switched off — nothing to disclose`);
+    continue;
+  }
+
+  const found = problemsBySurface.get(surface.id) ?? [];
+
+  // Report the locales that are fine, whether or not another one is not. The
+  // first version of this made "all correct" and "one locale has no word
+  // pattern" the same branch — so an app that added `messages/fr.json` was told
+  // nothing at all about the German and English sentences this command had just
+  // verified.
+  const troubled = new Set(found.map((problem) => problem.locale).filter(Boolean));
   for (const locale of locales()) {
-    const messages = readJson(`messages/${locale}.json`);
-    const line = messages?.chat?.disclaimer;
-    const pattern = NAMES_A_MACHINE[locale];
+    if (troubled.has(locale)) continue;
+    const line = readJson(`messages/${locale}.json`)?.[surface.id]?.disclaimer;
+    if (line) ok(`${surface.label} (${locale}): "${line}"`);
+  }
 
-    if (!line) {
+  if (found.length === 0) continue;
+
+  // The one accepted false positive, named in the message rather than left for
+  // somebody to work out: the switch says "on" and the registry may be empty.
+  // `lib/ai/companions.ts` is TypeScript and this command has no bundler, so it
+  // cannot be asked. A misconfigured app should read the right sentence.
+  const emptyRegistryClause =
+    surface.id === "companion"
+      ? ` If you switched it on but have not declared a companion in ` +
+        `lib/ai/companions.ts yet, switch it back off until you do.`
+      : "";
+
+  for (const problem of found) {
+    if (problem.code === "missingKey") {
       fail(
-        `${locale}: chat.disclaimer is missing`,
-        `The assistant is on, so people must be told they are talking to a ` +
-          `machine at the latest at the first interaction.`,
+        `${surface.label} (${problem.locale}): ${surface.id}.disclaimer is missing`,
+        `It is switched on, so people must be told they are dealing with a ` +
+          `machine at the latest at the first interaction. Add the key to ` +
+          `messages/${problem.locale}.json.${emptyRegistryClause}`,
       );
-    } else if (pattern && !pattern.test(line)) {
+    } else if (problem.code === "doesNotNameAMachine") {
       fail(
-        `${locale}: chat.disclaimer no longer says it is an AI`,
-        `"${line}"`,
+        `${surface.label} (${problem.locale}): ${surface.id}.disclaimer no longer says it is an AI`,
+        `"${problem.text}" — whatever else it says, it has to say that. ` +
+          `The skill compliance-check (check "ai") has the wording.`,
       );
-    } else if (!pattern) {
-      warn(
-        `${locale}: cannot check chat.disclaimer automatically`,
-        `No word pattern for this language. Read it yourself: "${line}"`,
+    } else if (problem.code === "nothingRendersIt") {
+      fail(
+        `${surface.label}: the notice is written but nothing renders it`,
+        `${problem.rendersIn} no longer mounts ${mountFor(surface.id)}. ` +
+          `The sentence existing is not the same as the customer seeing it, and ` +
+          `it has to be above the transcript, not under the input box.` +
+          emptyRegistryClause,
       );
     } else {
-      ok(`${locale}: "${line}"`);
+      warn(
+        `${surface.label} (${problem.locale}): cannot check the wording automatically`,
+        `No word pattern for this language. Read it yourself: "${problem.text}"`,
+      );
     }
   }
 }

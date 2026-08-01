@@ -5,11 +5,12 @@ import { getLocale, getTranslations } from "next-intl/server";
 import { Check } from "lucide-react";
 
 import {
-  productsByKind,
+  allProducts,
   formatPrice,
   intervalKey,
   type ProductDef,
 } from "@/lib/digistore/products";
+import { planSections, SECTION_TEXT } from "@/lib/digistore/plan-sections";
 import {
   checkoutLinksFor,
   checkoutBlockersFor,
@@ -52,6 +53,10 @@ const SETUP_HINTS: Record<CheckoutBlocker, string | undefined> = {
   notConnected: "node run.mjs ds24-connect",
   error: undefined,
 };
+
+// The section headings come from SECTION_TEXT (lib/digistore/plan-sections.ts),
+// where a test holds every key against both language files — a missing key
+// would render as the raw key with nothing in the log.
 
 async function PlanCard({
   def,
@@ -182,8 +187,10 @@ export default async function PlansPage({
 }) {
   const t = await getTranslations("plans");
   const locale = await getLocale();
-  const subscriptions = productsByKind("subscription");
-  const tokens = productsByKind("token");
+  // Every kind the registry holds, grouped and ordered in ONE place
+  // (lib/digistore/plan-sections.ts). Enumerating the kinds here is what once
+  // left `one_time` off the page entirely.
+  const sections = planSections(allProducts());
 
   // A signed-in visitor gets buttons instead of links; the URL is then built
   // on click (app/plans/actions.ts). auth() is safe here even though this page
@@ -192,7 +199,10 @@ export default async function PlansPage({
   const signedIn = Boolean(session?.user);
   const checkoutFailed = (await searchParams).checkout === "error";
 
-  const defs = [...subscriptions, ...tokens];
+  // Flattened, so a blocker and a cached link are resolved for every product
+  // that will be rendered — including the one-off purchase, which reached
+  // neither before the grouping moved into one place.
+  const defs = sections.flatMap((section) => section.defs);
 
   // Signed in: NOTHING is asked of Digistore24 while rendering — the checkout
   // URL is built on click (./actions.ts). Only the locally knowable blockers
@@ -235,7 +245,7 @@ export default async function PlansPage({
           </Callout>
         )}
 
-        {subscriptions.length === 0 && tokens.length === 0 && (
+        {sections.length === 0 && (
           <EmptyState
             title={t("emptyTitle")}
             description={t.rich("emptyBody", {
@@ -244,16 +254,26 @@ export default async function PlansPage({
           />
         )}
 
-        {subscriptions.length > 0 && (
-          <section className="flex flex-col gap-4">
+        {sections.map((section) => (
+          <section key={section.id} className="flex flex-col gap-4">
             <div>
-              <h2 className="text-xl font-medium">{t("subscriptionsTitle")}</h2>
+              <h2 className="text-xl font-medium">
+                {t(SECTION_TEXT[section.id].title)}
+              </h2>
               <p className="text-muted-foreground text-sm">
-                {t("subscriptionsBody")}
+                {t(SECTION_TEXT[section.id].body)}
               </p>
             </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              {subscriptions.map((def) => (
+            {/* Both class strings stand in the source, so Tailwind's scanner
+                finds them — a computed `sm:grid-cols-${n}` would not exist in
+                the built stylesheet. */}
+            <div
+              className={cn(
+                "grid gap-4",
+                section.columns === 3 ? "sm:grid-cols-3" : "sm:grid-cols-2",
+              )}
+            >
+              {section.defs.map((def) => (
                 <PlanCard
                   key={def.key}
                   def={def}
@@ -263,26 +283,7 @@ export default async function PlansPage({
               ))}
             </div>
           </section>
-        )}
-
-        {tokens.length > 0 && (
-          <section className="flex flex-col gap-4">
-            <div>
-              <h2 className="text-xl font-medium">{t("tokensTitle")}</h2>
-              <p className="text-muted-foreground text-sm">{t("tokensBody")}</p>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-3">
-              {tokens.map((def) => (
-                <PlanCard
-                  key={def.key}
-                  def={def}
-                  {...cardFor(def)}
-                  signedIn={signedIn}
-                />
-              ))}
-            </div>
-          </section>
-        )}
+        ))}
       </main>
 
       {/* The legal links. Public pages need them most: § 5 DDG asks for the

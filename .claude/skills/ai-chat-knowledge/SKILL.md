@@ -15,13 +15,20 @@ she answers confidently and wrongly, and the customer believes her.
 **You write the files. Not the user.** They know the product; you know the
 format. Interview, then write.
 
+**What this skill is not:** it is not how an app works alongside its customer on
+their own work — reading what they submitted, walking them through a course,
+producing the thing with them. That is a different feature with the opposite data
+rule, and it is the skill **`ai-companion`**, with
+[`docs/ai-in-product.md`](../../../docs/ai-in-product.md) behind it.
+
 Full reference — format, caching, cost, privacy: **`docs/ai-chat.md`**.
 
 ## Step 1 — Is the chat wanted here at all?
 
-Ask once, plainly. It costs money per answer and it is the first feature in this
-template that sends customer input to a third party (see `guardrails` and
-`docs/data-protection.md` §8).
+Ask once, plainly. It costs money per answer, and it was the first feature in
+this template that sends customer input to a third party — first, and no longer
+the only one: a companion sends what the customer *produced* (see `guardrails`,
+and `docs/data-protection.md` §8 for her, §8a for that).
 
 > "Shall your app get an assistant that answers your customers' questions out of
 > a handbook we write together? She costs a cent or two per answer and she can

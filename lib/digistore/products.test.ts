@@ -10,6 +10,8 @@ import {
   hasProductId,
   productId,
   productByDs24Id,
+  unknownKindProblems,
+  PRODUCT_KINDS,
   productIdsOf,
   productLanguages,
   checkoutProductFor,
@@ -289,5 +291,33 @@ describe("productByDs24Id — the reverse lookup", () => {
       { key: "pro", name: "Pro", kind: "token", productIdByLanguage: { de: "111", en: "222" } },
     ];
     expect(productByDs24Id("222", bilingual)?.key).toBe("pro");
+  });
+});
+
+describe("unknownKindProblems — the loader's refusal", () => {
+  it("names the entry, the value and the allowed kinds", () => {
+    // The realistic input: a hand-edited registry with a hyphen typo. The
+    // module-load check turns this into a refusal to start; here the message
+    // itself is pinned so it names everything the vendor needs to fix it.
+    const problems = unknownKindProblems([{ key: "kurs", kind: "one-time" }]);
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain('"kurs"');
+    expect(problems[0]).toContain('"one-time"');
+    expect(problems[0]).toContain("subscription, token, one_time");
+  });
+
+  it("reports a missing kind too", () => {
+    expect(unknownKindProblems([{ key: "kurs", kind: undefined }])).toHaveLength(1);
+  });
+
+  it("stays silent for every declared kind", () => {
+    const products = PRODUCT_KINDS.map((kind) => ({ key: kind, kind }));
+    expect(unknownKindProblems(products)).toEqual([]);
+  });
+
+  it("stays silent for an empty registry", () => {
+    // An empty registry is the normal state mid-setup; the empty state on
+    // /plans is what reports it, not a load failure.
+    expect(unknownKindProblems([])).toEqual([]);
   });
 });
