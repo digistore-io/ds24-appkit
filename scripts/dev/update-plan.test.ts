@@ -7,7 +7,14 @@
 // file wrongly overwritten costs whatever the customer had written in it.
 import { describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
-import { normalizeText, planUpdate, requiresFrom, versionAtLeast, writable } from "./update-plan.mjs";
+import {
+  confirmsApply,
+  normalizeText,
+  planUpdate,
+  requiresFrom,
+  versionAtLeast,
+  writable,
+} from "./update-plan.mjs";
 
 const action = (plan: ReturnType<typeof planUpdate>, path: string) =>
   plan.find((entry) => entry.path === path)?.action;
@@ -169,6 +176,27 @@ describe("planUpdate", () => {
       codeVersion,
     });
     expect(plan).toEqual([]);
+  });
+});
+
+describe("confirmsApply", () => {
+  it("takes an explicit yes", () => {
+    expect(confirmsApply("y")).toBe(true);
+    expect(confirmsApply("Y")).toBe(true);
+    expect(confirmsApply("yes")).toBe(true);
+    expect(confirmsApply(" Yes ")).toBe(true);
+  });
+
+  it("reads everything else as no", () => {
+    // The question guards a write into somebody's repo, so an unclear answer —
+    // an empty return, a stray character, a pasted command — must leave
+    // everything alone.
+    expect(confirmsApply("")).toBe(false);
+    expect(confirmsApply("n")).toBe(false);
+    expect(confirmsApply("yess")).toBe(false);
+    expect(confirmsApply("node run.mjs update --apply")).toBe(false);
+    expect(confirmsApply(null)).toBe(false);
+    expect(confirmsApply(undefined)).toBe(false);
   });
 });
 

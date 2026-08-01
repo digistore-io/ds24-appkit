@@ -136,3 +136,14 @@ export function planUpdate({ local, remote, content = {}, codeVersion }) {
 export function writable(plan) {
   return plan.filter((entry) => entry.action === "new" || entry.action === "update");
 }
+
+/**
+ * Does this answer to "write it? [y/N]" mean yes?
+ *
+ * Only an explicit yes counts. Everything else — an empty line, a stray
+ * character, a copy-pasted command — is a no, because the question guards a
+ * write and the safe reading of an unclear answer is "leave everything alone".
+ */
+export function confirmsApply(answer) {
+  return ["y", "yes"].includes(String(answer ?? "").trim().toLowerCase());
+}

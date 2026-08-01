@@ -27,6 +27,12 @@ node run.mjs update           # what would change — nothing is written
 node run.mjs update --apply   # write it
 ```
 
+For a person at the terminal there is also the guided form,
+`node run.mjs update-agents`: it shows the same plan, asks `[y/N]`, and writes
+only on an explicit yes. It is the two commands above folded into one sitting —
+nothing more. Without a terminal to ask on (a pipe, a CI step) it refuses
+rather than deciding by itself.
+
 ## What it touches, and what it never touches
 
 | | |

@@ -7,6 +7,8 @@
 //
 //   node run.mjs update            what would change (nothing is written)
 //   node run.mjs update --apply    write it
+//   node run.mjs update --confirm  show the plan, ask on the terminal, then write
+//                                  (this is what `node run.mjs update-agents` runs)
 //   node run.mjs update --from <url>   a different manifest (for testing)
 //
 // Why this exists: the app is a copy of a template that keeps being worked on.
@@ -35,11 +37,14 @@
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { normalizeText, planUpdate, writable } from "./update-plan.mjs";
+import { createInterface } from "node:readline/promises";
+import { confirmsApply, normalizeText, planUpdate, writable } from "./update-plan.mjs";
 
 const STAMP = ".template-version";
 const args = process.argv.slice(2);
 const apply = args.includes("--apply");
+// --apply wins over --confirm: whoever says "write it" is not asked again.
+const confirm = !apply && args.includes("--confirm");
 const fromIndex = args.indexOf("--from");
 const override = fromIndex !== -1 ? args[fromIndex + 1] : null;
 
@@ -202,13 +207,33 @@ if (skipped.length > 0) {
   console.log("");
 }
 
-if (!apply) {
+if (!apply && !confirm) {
   console.log(
     changes.length === 0
       ? "Nothing to write."
       : `${changes.length} file(s) would change. Nothing written — run: node run.mjs update --apply`,
   );
   process.exit(0);
+}
+
+if (confirm && changes.length > 0) {
+  // The question needs a person on the other end. Without a terminal — an agent,
+  // a pipe, a CI step — refuse rather than guess: applying would be the very
+  // "--apply on its own initiative" that CLAUDE.md rules out, and declining
+  // silently would report an update that never happened.
+  if (!process.stdin.isTTY) {
+    console.error("✗ --confirm needs a terminal to ask on. Nothing written.");
+    console.error("  Read the plan above and decide: node run.mjs update --apply");
+    process.exit(2);
+  }
+  const terminal = createInterface({ input: process.stdin, output: process.stdout });
+  const answer = await terminal.question(`Write these ${changes.length} file(s)? [y/N] `);
+  terminal.close();
+  if (!confirmsApply(answer)) {
+    console.log("Nothing written.");
+    process.exit(0);
+  }
+  console.log("");
 }
 
 // ── writing ─────────────────────────────────────────────────────────────────

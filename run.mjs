@@ -384,6 +384,14 @@ const TASKS = {
     help: "Bring the guidance up to date (CLAUDE.md, docs/, skills) — --apply writes",
     run: (args) => script("scripts/dev/update.mjs", args),
   },
+  "update-agents": {
+    group: "Setup",
+    help: "The same update, guided: show what would change, ask, then write it",
+    // `update` with the safety question built in — for a person at the terminal.
+    // An agent keeps using `update` / `update --apply`: the question needs a TTY,
+    // and without one this refuses rather than applying on its own.
+    run: (args) => script("scripts/dev/update.mjs", ["--confirm", ...args]),
+  },
   "agent-setup": {
     group: "Setup",
     help: "Reduce this app to the AI program you use (--apply writes; --undo restores all four)",
