@@ -41,8 +41,8 @@
     ".claude/skills/setup-digistore/SKILL.md": "e86553da0878fefce3682787d6c5aed1f65736f5a1d31a1905a6fc3263b24fbb",
     ".claude/skills/setup-hosting/SKILL.md": "291481f432a70e5fb19f94fa7f98075f50cfbcfc2baf07e18b664a493fb4c6d5",
     ".claude/skills/setup-machine/SKILL.md": "7f366480e7f1174a831182ba141b8aa27269da20be066aa71bb0a5a59a0ede9d",
-    ".claude/skills/ux-gateway/SKILL.md": "5f4bf8cede3052071b7e769470abbe845d4e69a8ec8f8f93977812dc0208a2de",
-    ".claude/skills/visuals/SKILL.md": "a06c53065b616c8aa620702399494d1b6f89ee9e4eb580ad25a885ada77c447f",
+    ".claude/skills/ux-gateway/SKILL.md": "28f27ea8595ddddd4da0ab8c999e87e7165f17d71525b21672ae64e83098a095",
+    ".claude/skills/visuals/SKILL.md": "e45ba6abbf62ac26e3ef5d0425aaff556e8e6d7a81f4d32b0dc72a1ec43e65dd",
     "AGENTS.md": "dc90410eda87f626ccfc9a81626af9baef136aac5c869d6bdb3ea3a80684a317",
     "CLAUDE.md": "dc90410eda87f626ccfc9a81626af9baef136aac5c869d6bdb3ea3a80684a317",
     "README.md": "2305042d517b989ead08285d04ca5a3c6dac203907b0e935b87144acd73f367c",
@@ -65,7 +65,7 @@
     "docs/mcp.md": "73e9c74f2a02e39652ed80dfbcdcecc2842944d6142359a3136f6b614d203126",
     "docs/start.md": "f68e15de1712824905f48a1352eaf2924044b58de4aca02c8df716819e50cb51",
     "docs/updates.md": "76f5eaeda6c69578c27582b709b6f5d2d1a33e326ec5aa18a174983168b6e5f6",
-    "docs/ux.md": "80e09eed9876728ee30358a6b569619e8d25deb13d592658030d2350209fd5c3",
-    "docs/visuals.md": "17f67e4b05a4c843b6a9001855db6cde8f739b89df55a17e48d9917d3d26452c"
+    "docs/ux.md": "4f9b8db53615e08ba9931e5721116184503b0520b8731f8cff49a5c8816df0bb",
+    "docs/visuals.md": "181210b286657840f49f4a7c19f3c23cdc4b389e51585cbc7c08d355a0756761"
   }
 }

@@ -272,6 +272,16 @@ is not this. Every row above shows the customer *their own thing* — their page
 their result, their progress. A picture that would be identical for every
 customer is a picture nobody needed.
 
+**A diagram of the app itself is decoration too, and it is the commonest way
+this rule gets broken.** A flow diagram of "how the tool works", a process
+chart beside a form, boxes and arrows explaining a sequence the page itself
+already walks the customer through — each is identical for every customer, so
+each is the stock photograph in different clothes. The charts in the catalogue
+earn their place because the customer's own numbers are in them; that is the
+test, not "is it graphical". At most one diagram survives it: one a customer
+genuinely has to understand before they act, and a second one in the same app
+means the first was not it.
+
 **And there is a second question next door.** This section is about what the
 customer is *handed*; [`ai-in-product.md`](ai-in-product.md) is about what the
 app *does with them* while they work — reading what they submitted, walking them
@@ -555,6 +565,15 @@ it says nothing about where somebody was standing.
 `decorative` is the right answer for a divider or a texture and the wrong answer
 for anything a reader would miss. Nobody but the person writing the page can
 tell those apart, which is why the component asks.
+
+**And however large the source file is, an image never gets a scrollbar.** It
+scales to the width of its container — `className="w-full h-auto"` (or
+`max-w-full`) — and a frame that crops uses `overflow-hidden`, the way the
+video recipe above does. An image inside an `overflow-auto` container hands the
+customer a scrollbar instead of a picture, on exactly the screens with no room
+to scroll sideways. Sideways scrolling is for tables
+([`docs/ux.md`](ux.md) → *Small screens*); a picture that is too big is scaled,
+never panned.
 
 ---
 

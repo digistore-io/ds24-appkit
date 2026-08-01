@@ -354,6 +354,8 @@ older copy the rows that name them never fire, and the rest applies unchanged.)*
 | ❌ HIGH | An image with no alternative text and no `decorative` | A screen reader reads the filename instead |
 | ⚠️ MEDIUM | An image that carries its own light background, seen in dark mode | Switch the theme and look; nobody does this while building |
 | ⚠️ MEDIUM | An image not going through `next/image` | A phone downloading four megabytes to show two hundred pixels, on somebody else's data plan. Note it here and leave the number to `performance-gateway`, which measures what it costs — one fix, one finding |
+| ⚠️ MEDIUM | An image that scrolls — a picture inside an `overflow-auto` container | A too-big picture is scaled to the container's width (`w-full h-auto`, crop with `overflow-hidden`), never panned. Sideways scrolling is for tables (`docs/ux.md` → *Small screens*) |
+| ⚠️ MEDIUM | A diagram identical for every customer — a flow chart of the app's own process, boxes and arrows beside a form | Decoration wearing a chart's clothes (`docs/visuals.md` → *What NOT to do*). Remove it, or replace it with the customer's own data; at most one survives, and only where somebody must understand a sequence before they act |
 | 🚨 CRITICAL | An `<iframe>` at a video host with no consent gate in front of it | It contacts Google or Vimeo before the visitor agreed to anything — § 25 TDDDG. `compliance-check` reports the same thing from the legal side |
 | ❌ HIGH | A generated image with an empty `alt` | It should be impossible — `generateImage()` requires one, so somebody has written a row by hand |
 
@@ -375,7 +377,9 @@ Evidence: page renders 1 heading, 1 table, 0 images or charts.
 
 Some of it is countable — `grep -rn "<img" app components` for pictures outside
 `Figure`, `grep -rn "youtube.com\|player.vimeo.com" app components` for the
-embed — and the rest is opening the pages and looking, in both themes.
+embed, `grep -rn "overflow-auto\|overflow-x-auto" app components` and then
+looking at what sits inside each hit (a table is right, an image is the
+finding) — and the rest is opening the pages and looking, in both themes.
 
 **Where this check does NOT go:** decoration. A stock photograph on a settings
 page is not a finding fixed — `docs/visuals.md` says why, under the catalogue.

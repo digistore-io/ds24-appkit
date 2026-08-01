@@ -160,6 +160,12 @@ Not a full pass; that is `ux-gateway`. This is the media-specific half:
   it.
 - Every image goes through `next/image`. A phone downloading a 4 MB photograph
   to show it at 200 px is the finding `performance-gateway` reports next.
+- **No image scrolls.** `w-full h-auto`, crop with `overflow-hidden` — an image
+  inside an `overflow-auto` container is a finding however big the file is,
+  because a too-big picture is scaled, never panned.
+- **Every diagram carries the customer's own data.** A flow diagram of how the
+  app works is decoration — `docs/visuals.md` says so under the catalogue — and
+  more than one diagram per app means at least one of them is.
 - Both themes. A picture with its own light background sitting on a dark page is
   the thing nobody sees, because nobody switches while building.
 - **No `<iframe>` at a video host without a consent gate in front of it.** That

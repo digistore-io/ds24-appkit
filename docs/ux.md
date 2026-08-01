@@ -163,8 +163,8 @@ inside the BFSG, darkening `--input` is one of the first things to do.
 ## 6. Small screens
 
 Roughly half of a Digistore24 buyer's traffic arrives on a phone, and the
-checkout return lands there too. Three things break and they are always the
-same three:
+checkout return lands there too. Four things break and they are always the
+same four:
 
 - **Tables.** A `<Table>` does not wrap. Put it in a container that scrolls
   (`overflow-x-auto`), or render cards below `sm:`.
@@ -172,6 +172,10 @@ same three:
   or the submit button ends up under the keyboard.
 - **Fixed widths.** `w-[720px]` is a horizontal scrollbar on the whole page.
   `max-w-` and a grid instead.
+- **Images.** An image never scrolls — it scales to the width of its container
+  (`w-full h-auto`, crop with `overflow-hidden`). The `overflow-x-auto` that is
+  right for a table is wrong here: it hands the customer a scrollbar instead of
+  a picture.
 
 The shell itself is handled: below `md:` the sidebar becomes a `<Sheet>`.
 
