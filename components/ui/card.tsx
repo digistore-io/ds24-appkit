@@ -31,9 +31,18 @@ function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
   )
 }
 
-function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
+// Deviation from the shadcn default, which renders a <div>: a card's title is
+// a heading, or somebody navigating by headings finds the page's h1 and
+// nothing below it. Tailwind's preflight resets heading font styles, so the
+// tag change is invisible. `level` exists because the right level depends on
+// the page — h3 under a <PageHeader>'s h1 is the common case.
+function CardTitle({
+  className,
+  level: Level = "h3",
+  ...props
+}: React.ComponentProps<"h3"> & { level?: "h2" | "h3" | "h4" }) {
   return (
-    <div
+    <Level
       data-slot="card-title"
       className={cn("leading-none font-semibold", className)}
       {...props}

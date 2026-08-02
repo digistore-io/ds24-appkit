@@ -19,6 +19,26 @@ that is the skill's job, and yours.
 
 ---
 
+## 0. What a page is built from, per archetype
+
+Every archetype's pages are the same handful of kit components, arranged
+differently. Reach for these before inventing a layout — and if the app has a
+`docs/design.md`, its composition section refines this table for THIS app:
+
+| Archetype | The page usually is | Reach for |
+|---|---|---|
+| Content-Access | a lesson and its progress | a `<Figure>` cover, the progress bar, a `<Card>` around the lesson body |
+| Drip/Automation | today's message and the trail behind it | the message first, then the history as `<Card>`s — never the archive first |
+| Gated-Tool | the RESULT, not a form | the result in a `<Card>` **above** the input form, never below it |
+| Membership | a profile and a standing | `<Avatar>`, `<Badge>` for the standing, `<Table>` for the history |
+| Usage/Tokens | a balance and its story | the balance as a number first, the chart (`lib/ai/report.ts` has the shape) above any table |
+
+The rule behind all five rows: **the thing the customer came for sits above
+the fold and above the form.** A page that opens with settings and buries the
+result is the layout mistake this table exists to prevent.
+
+---
+
 ## 1. The first five minutes
 
 **The most expensive screen in your app is the first one after a purchase.** The
@@ -42,6 +62,12 @@ The template ships the answer as a component:
 steps ship — buy a plan, top up a balance — and **they are meant to be
 replaced** the moment your app does something of its own. Leave them and the
 app's only advice to a new customer is "buy something".
+
+How to choose what the steps *say* — the activation event they lead to, and
+the rest of the first-session patterns (survey, wizard, sample data, the
+comeback nudge) — is [`onboarding.md`](onboarding.md); the skill that walks it
+is `user-onboarding`. This section owns the mechanics, that file owns the
+content.
 
 Three properties, and all three are load-bearing:
 

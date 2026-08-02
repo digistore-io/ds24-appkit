@@ -319,7 +319,7 @@ switched on without its notice.
 
 ## Step 1d — What the customer DOES, and how it is judged
 
-The third of the three sibling questions, in the same grammar as 1b and 1c,
+The third of the four sibling questions, in the same grammar as 1b and 1c,
 and **only where the archetype carries a ✅ in its DO column** (courses and
 programmes, mostly): a course that delivers videos and asks nothing back is
 the shape the market is leaving behind.
@@ -341,6 +341,39 @@ every other. **Skip entirely for an experiment.**
 **On an older clone** (before 0.9.0) the `learning-activities` skill is
 refused by `node run.mjs update` because its code is not there — then skip
 1d and say so in one sentence, rather than improvising an unmaintained menu.
+
+## Step 1e — How should it look?
+
+The cheapest question of the four, asked last because it needs the answers of
+the others: a coaching app and a calculator wear their pages differently, and
+by now you know which one this is.
+
+Every app on this template starts with the same look — neutral grey, indigo
+accent, Geist. Ask once, as a yes/no, not a menu:
+
+> "Should this app get a look of its own — an accent colour, a type pairing
+> and a page style that fit <the product>? Costs nothing to run, about
+> fifteen minutes. Or keep the default look?"
+
+- **Yes, or "you choose"** → run the skill **`design`**. It researches how
+  comparable apps present themselves (bounded — two or three searches),
+  proposes two or three named directions, writes the choice into
+  `docs/design.md` and recolours the tokens. Then come back here.
+- **No** → the default stays, and **write it into `docs/app.md`** under
+  *Decisions worth remembering*:
+
+  ```md
+  - **No custom identity.** Decided on <date>: the shipped look (indigo on
+    neutral, Geist) stays. If it comes back, the way in is the skill `design`.
+  ```
+
+Unlike 1b and 1c this is not a per-use cost and not a column — it can be done
+later without a second migration. It sits here anyway because the pages built
+in Step 3 follow `docs/design.md` when it exists, and restyling six pages
+afterwards is the expensive version of a decision that was free before the
+first one. **A "no" is an answer and is not negotiated.**
+
+**Skip this step entirely for an experiment.** Same boundary as 1b, 1c and 1d.
 
 ## Step 2 — Extend the data model
 
@@ -443,6 +476,10 @@ alongside your customer* for the second.
   Details: `CLAUDE.md` → **Charging tokens**.
 - UI with shadcn/ui: `npx shadcn@latest add <component>`. Colors only via tokens
   from `app/globals.css`, nothing hard-coded.
+- **If `docs/design.md` exists, a new page follows its composition section** —
+  which components carry a result, what sits above the fold, the one signature
+  element. Read it before laying out the page; do not re-decide per page what
+  that file already settled (the skill `design` is where it changes).
 - Messages (notice/success/warning/error) always via `Callout`
   (`components/ui/callout.tsx`, variants `info` | `success` | `warning` |
   `danger`) — no hand-picked color classes. Details in `CLAUDE.md`.
@@ -535,6 +572,12 @@ lines in its output are worth reading rather than skimming:
 
 Dynamic pages (`[id]`) are skipped either way — open those once by hand with a
 real record.
+
+**If you have a way to open a real browser, use it here too** — `smoke` proves
+every page answers, not that it looks right. If you have none, `ux-gateway`
+explains how to offer the user the Playwright MCP server (a one-minute change
+to their own program, not to this app); seeing the pages once now is cheaper
+than meeting them broken in the `ux-gateway` pass later.
 
 Only then tell the user that they can take a look — and write down what they
 will see and at which address.

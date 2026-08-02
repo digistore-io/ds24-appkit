@@ -187,6 +187,11 @@ There are guided skills in `.claude/skills/` — use them in this order:
 - **`build-app`** — entry point: choose an archetype, create the data model + pages.
   For an online course, the three shapes — self-study, week-by-week, accompanied
   workshop — and their schemas are in [`docs/courses.md`](docs/courses.md).
+- **`design`** — *(optional)* give the app a look of its own: researches how
+  comparable apps present themselves, proposes two or three named directions,
+  writes the choice into `docs/design.md` and recolours the tokens. Use it when
+  somebody says "it looks like every other app". `build-app` asks once
+  (step 1e); this is the way back in afterwards.
 - **`setup-digistore`** — set up billing (API key, IPN, checkout).
 - **`billing-modes`** — *(optional)* set up subscriptions (monthly/yearly) and/or prepaid
   tokens with auto top-up + subscription self-service (cancel/payment details/invoices).
@@ -214,6 +219,12 @@ There are guided skills in `.claude/skills/` — use them in this order:
   hands out videos and asks nothing back. Needs template 0.9.0 — on an older
   clone `node run.mjs update` refuses the skill text until the code is there.
   The reference is [`docs/learning.md`](docs/learning.md).
+- **`user-onboarding`** — *(optional, but read its first item once)* the END
+  USER's first session, built on purpose: pin the activation event, replace the
+  blueprint checklist with steps that mean this app, add a welcome survey or a
+  comeback nudge only where they earn their place. Use it when somebody says
+  "nobody uses it after they buy" or "my customers sign up and never come
+  back". The reference is [`docs/onboarding.md`](docs/onboarding.md).
 - **`ux-gateway`** — once the app has pages: the same shape for the experience.
   The first five minutes after a purchase, dead ends, actions that report
   nothing back, hand-built elements, wording, keyboard and small screens —
@@ -250,10 +261,12 @@ next one):
 `setup-digistore` *(→ optional `billing-modes` for subscriptions/prepaid tokens,
 optional `ai-chat-knowledge` for the in-app assistant, optional `ai-providers`
 to choose the AI company, optional `mcp-server` for the AI interface)* →
-*(optional `visuals` — pictures, video, files, and what the customer actually
-sees; optional `ai-companion` — what the app DOES with them while they work;
-optional `learning-activities` — what the customer DOES, judged on the
-server)* →
+*(optional `design` — a look of the app's own, chosen once and written into
+`docs/design.md`; optional `visuals` — pictures, video, files, and what the
+customer actually sees; optional `ai-companion` — what the app DOES with them
+while they work; optional `learning-activities` — what the customer DOES,
+judged on the server; optional `user-onboarding` — the customer's first
+session, designed instead of inherited from the blueprint)* →
 **(3) Experience** `ux-gateway` → **(4) Security** `security-gateway` →
 **(5) Scaling** `performance-gateway` → **(6) Legal** `compliance-check` →
 **(7) Live** `go-live` *(which begins with `setup-hosting` — host, database,
@@ -441,6 +454,13 @@ colors doesn't make the app more individual, only inconsistent: the
 hand-built variant tips over in dark mode, has no focus ring and looks
 different again two pages later.
 
+**A look of its own is not an exception to that rule — it is the skill
+`design`.** It fills slots the kit already has (the accent tokens, the font
+variables, the radius, the composition of pages from these components), writes
+the choice into `docs/design.md`, and licenses nothing beyond them: no new
+component, no hex class, no fourth feedback mechanism. When that file exists,
+pages follow it.
+
 **This section says which component to reach for.
 [`docs/ux.md`](docs/ux.md) says what the app has to do for the person in front
 of it** — the first five minutes after a purchase, dead ends, wording, keyboard
@@ -454,6 +474,7 @@ and small screens. The skill that audits an app against it is `ux-gateway`, and
 | Button, link-as-button | `<Button>` (`asChild` for `<Link>`) | `<button className="…">` |
 | Input field, label | `<Input>`, `<Label>`, `<Textarea>` | raw `<input>` |
 | Selection | `<Select>` (with `name` for the form) | raw `<select>` |
+| Yes/no, one-of-several, on/off | `<Checkbox>`, `<RadioGroup>`, `<Switch>` | raw `<input type="checkbox">` — with one exception: a plain-POST form that must work without JavaScript keeps the native input, styled from tokens (`app/plans/page.tsx` shows why, above its checkbox) |
 | Box with content | `<Card>` + `CardHeader/Content/Title` | `<div className="rounded-lg border">` |
 | List of records | `<Table>` + `TableHeader/Row/Cell` | raw `<table>` |
 | Form in a window | `<Dialog>` | your own overlay logic |
@@ -501,6 +522,13 @@ and small screens. The skill that audits an app against it is `ux-gateway`, and
    `app/dashboard/layout.tsx`. It gets into the navigation with one line in
    `NAVIGATION` (`components/app-shell.tsx`) — plus the text in both
    language files.
+
+   And it ships its **empty state in the same commit**: any list, table or
+   result area that can legitimately hold nothing yet gets `<EmptyState>` with
+   a sentence and, where there is one, the button that fills it — never a
+   blank `<Card>` or a bare heading. Empty is the state most customers meet
+   first, and it is the one nobody remembers to add afterwards
+   (`docs/ux.md` §1).
 4. **Both modes, always.** Colors come from tokens (`bg-card`,
    `text-muted-foreground`, `bg-primary`), never from Tailwind palettes
    (`bg-blue-600`, `text-gray-500`). Then light and dark work out by themselves.
@@ -508,6 +536,9 @@ and small screens. The skill that audits an app against it is `ux-gateway`, and
 **Recoloring** (the whole look): `--primary`, `--primary-foreground`
 and `--ring` in `app/globals.css` — in **both** blocks (`:root` and
 `.dark`). Nothing more is needed. The file explains what to watch out for.
+The guided way to choose the colour — and the type pairing and the page
+style that go with it — is the skill `design`; run `node run.mjs ux-check`
+after any recolour either way.
 
 **The app icon** (browser tab, bookmark, home screen) is `app/icon.png` plus
 `app/apple-icon.png`. Next.js picks both up by their file name — there is no

@@ -182,9 +182,12 @@ describe("findRawElements", () => {
     expect(findRawElements(source)).toEqual([]);
   });
 
-  it("softens a control the kit does not ship", () => {
-    // A checkbox and a segmented control. Reported so they stay visible, never
-    // failed — there is no <Checkbox> and no <ToggleGroup> to point at.
+  it("softens a checkbox, a radio and a segmented control", () => {
+    // Reported so they stay visible, never failed. The kit ships <Checkbox>,
+    // <RadioGroup> and <Switch> for client forms, but a Radix control cannot
+    // reach FormData without JavaScript — app/plans/page.tsx keeps a native
+    // checkbox for exactly that reason — and there is no <ToggleGroup> at all.
+    // The bucket text in rules.mjs carries the full reasoning.
     const checkbox = findRawElements('<input type="checkbox" name="autoReload" />');
     expect(checkbox[0]).toMatchObject({ kind: "soft" });
 

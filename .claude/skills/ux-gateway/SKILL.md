@@ -120,13 +120,23 @@ This matters more here than anywhere else in the template: taste arguments are
 cheap to produce and expensive to read, and a report full of them is a report
 nobody opens twice.
 
-**Never report a deliberate decision as a defect.** Three that come up every
+**Never report a deliberate decision as a defect.** Four that come up every
 time, all documented, none of them findings:
 
 - The app sets **no cookie banner** and must not grow one (`docs/compliance.md`).
 - Sign-in is a **magic link** by default; a password is optional on purpose.
-- A **checkbox or segmented control built by hand** — the kit ships none, and
-  `ux-check` reports those as a warning rather than a failure for that reason.
+- A **segmented control built by hand** — the kit ships no ToggleGroup, and
+  `ux-check` reports one as a warning rather than a failure for that reason.
+  The kit DOES ship `<Checkbox>`, `<RadioGroup>` and `<Switch>` — a hand-built
+  one of those is a finding, with one carve-out: a **native input in a form
+  that must work without JavaScript** (the `/plans` auto-reload consent is the
+  shipped example, with the reasoning in a comment above it). A Radix control
+  cannot reach `FormData` without JS, so there the native input is the correct
+  element, styled from tokens.
+- **The shipped default look on an app with no `docs/design.md`.** Keeping it
+  is the `0` from `build-app` step 1e, recorded in `docs/app.md` — an answer,
+  not an unfinished job. The way to a look of its own is the skill `design`,
+  and only the user opens that door.
 
 **The format of a finding — the same as in `security-gateway`:**
 
@@ -192,6 +202,7 @@ What to look for, and what the template already gives you:
 |---|---|
 | Does the app say what to do first? | `<OnboardingChecklist>` on `app/dashboard/page.tsx` — steps derived from real state, `lib/onboarding/rules.ts` |
 | Do the steps mean anything for THIS app? | the two shipped steps (buy a plan, top up) are a **blueprint** and are meant to be replaced |
+| What should the steps say instead? | [`docs/onboarding.md`](../../../docs/onboarding.md) — the activation event, and 3–5 milestones toward it |
 | Does the purchase survive a reload? | it has to be visible in the app's state, not only in the toast (`docs/ux.md` §2) |
 | Is every empty list explained? | `<EmptyState>` with a sentence and, where there is one, a button |
 
@@ -199,7 +210,10 @@ What to look for, and what the template already gives you:
 holds the two shipped steps, so the app's only advice to a new customer is "buy
 something" — while the thing they bought sits behind a menu entry nobody
 mentioned. That is ❌ HIGH, and the fix is three lines in
-`app/dashboard/page.tsx`.
+`app/dashboard/page.tsx`. *Choosing* what the steps should be — the activation
+event, and whether this app wants a survey or a nudge around them — is the
+skill **`user-onboarding`**; report the finding here and hand over there when
+the user wants it built.
 
 ## 3 · `flows` — every path, including the unhappy ones
 
@@ -249,6 +263,14 @@ Three mechanisms, and between them they cover every case
   the button.
 
 ## 5 · `kit` — the design system
+
+**If the app has `docs/design.md`, read it first.** That file is the look this
+app chose — tokens, type pairing, page composition, the signature element —
+and this check audits **against it**: a page that ignores the composition its
+own file names, a hand-picked colour beside the chosen tokens, a second look
+growing beside the first. It is a baseline, never a restyling licence — what
+to change about the look is the skill `design`, not this gateway. An app
+without the file is on the shipped default, which is a decision (see above).
 
 Mostly measured. Run `node run.mjs ux-check` and fold the findings in; then look
 at the two things it cannot see.
@@ -554,7 +576,7 @@ deliberately sparse page. Rather than rediscovering it every run, it goes into
 ```markdown
 | Finding | Where | Why accepted | By | Date | Review |
 |---|---|---|---|---|---|
-| Hand-built checkbox | app/plans/page.tsx | the kit ships none | Anna | 2026-07-27 | when shadcn checkbox is added |
+| Hand-built segmented control | app/plans/page.tsx | the kit ships no ToggleGroup | Anna | 2026-07-27 | when shadcn toggle-group is added |
 ```
 
 **Two records, and check 9 is the first thing here that reads both.** They mean
@@ -585,13 +607,20 @@ Do not decide these on your own:
 - **Changing what a plan unlocks** to make an empty page look fuller.
 - **A redesign.** This gateway fixes findings; it does not restyle an app
   somebody chose the look of. If the answer is "this needs to look different",
-  say so and let the user decide.
+  say so and hand over to the skill **`design`** if the user wants it — that
+  is the one place a look is chosen, changed and written down
+  (`docs/design.md`).
 - **Building the visual features check 8 proposes.** Reporting that a page hands
   out nothing but text is this gateway's job; deciding to build a chart, a
   result card or an image feature is the user's, and it is a feature rather than
   a fix. Report it, name the catalogue entry, and hand over to **`visuals`** if
   they want it. A gateway that quietly grows the product is one nobody can let
   run unattended.
+- **Building the onboarding check 2 proposes.** Reporting that the checklist
+  still says "buy something" is this gateway's job; choosing the activation
+  event and building the steps, a survey or a nudge is the user's, and it is
+  product design rather than a fix. Report it, name the section in
+  `docs/onboarding.md`, and hand over to **`user-onboarding`** if they want it.
 - **Building the companion check 9 proposes.** Reporting that a surface takes a
   customer's work and gives nothing back is this gateway's job; deciding to build
   a companion is the user's, and it is a feature rather than a fix — one that

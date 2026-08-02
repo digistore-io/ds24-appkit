@@ -83,7 +83,9 @@ stops the same conversation happening again in three sessions.
 
 Take the catalogue entry, build it, and stay inside the design system: colours
 from the tokens in `app/globals.css`, never a hand-picked class
-(`CLAUDE.md` → **UI**). The recipes in the reference are written that way, which
+(`CLAUDE.md` → **UI**). **If the app has `docs/design.md`, read it first** —
+where its composition section already names a pattern for this page type,
+build that one, in its place. The recipes in the reference are written that way, which
 is why they are correct in light and dark without a `dark:` class anywhere.
 
 Two things to get right, because they are what separates a chart from a

@@ -42,6 +42,7 @@ hands over to the next:
 | 2c | **AI assistant** *(optional)* | `ai-chat-knowledge` | switch the in-app chat on, give her a name, and write the handbook she answers your customers from |
 | 2d | **Which AI company** *(optional)* | `ai-providers` | pick OpenAI, Anthropic, Gemini, Mistral or OpenRouter, get the key in, bind each job to a model and set the prices the cost page reports |
 | 2e | **AI interface (MCP)** *(optional)* | `mcp-server` | let your customers connect Claude to your app: decide which capabilities become tools, then switch it on |
+| 2f | **Your customer's first session** *(optional)* | `user-onboarding` | pin the activation event and replace the blueprint checklist with steps that mean your app — so the person who just paid knows what to do first |
 | 3 | **The experience** | `ux-gateway` | the app as your customer meets it: the first five minutes after a purchase, dead ends, actions that report nothing back, wording, keyboard and phone — measured with `node run.mjs ux-check` where it can be, looked at where it cannot |
 | 4 | **Security** | `security-gateway` | nine checks — access control, money, secrets, packages, endpoints, hosting — findings by severity, the serious ones fixed, report in `docs/reports/` |
 | 5 | **Scaling** | `performance-gateway` | measure instead of guess: response times, database and indexes, ~100 concurrent users, memory, CPU, front end — fixed and measured again |

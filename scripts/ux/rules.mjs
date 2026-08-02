@@ -191,9 +191,13 @@ export function findPaletteClasses(source) {
  *
  *   `hard` — `<button>`, `<select>`, `<textarea>`, `<table>` and a text
  *            `<input>`. All of them are in components/ui/. No excuse.
- *   `soft` — a checkbox, a radio, a segmented control. The kit ships none of
- *            these, so a careful hand-built one is honest work. Reported so it
- *            stays visible, never failed.
+ *   `soft` — a checkbox, a radio, a segmented control. The kit ships
+ *            <Checkbox>, <RadioGroup> and <Switch> for client forms — but a
+ *            Radix control cannot reach FormData without JavaScript, so a
+ *            native input in a plain-POST form is sometimes the correct
+ *            element (app/plans/page.tsx says why above its checkbox), and a
+ *            segmented control has no kit counterpart at all (no ToggleGroup).
+ *            Reported so they stay visible, never failed.
  */
 export function findRawElements(source) {
   const hits = [];
