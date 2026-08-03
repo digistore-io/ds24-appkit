@@ -181,337 +181,70 @@ Then: one report, one summary, one offer to fix.
 
 ## 2 · `first-run` — the first five minutes
 
-**Do this as the customer, in order, and write down what you did not
-understand.** Not what you would improve — what you did not understand. The
-second list is short and it is the one worth acting on.
-
-The walk:
-
-1. Land on `/` as a stranger. What is this, who is it for, what does it cost?
-2. Go to `/plans`. Is it clear what each plan gives you?
-3. Buy one (test purchase — `setup-digistore` explains the cookie), land back
-   through `/optin/[orderId]`.
-4. **Stop on `/dashboard` and look at it as somebody who has just paid.** Does
-   anything on this page confirm the purchase? Does anything say what to do
-   next? Now **reload it** — is that still true?
-5. Do the thing the app is for. Count the clicks and the guesses.
-
-What to look for, and what the template already gives you:
-
-| Question | Where the answer lives |
-|---|---|
-| Does the app say what to do first? | `<OnboardingChecklist>` on `app/dashboard/page.tsx` — steps derived from real state, `lib/onboarding/rules.ts` |
-| Do the steps mean anything for THIS app? | the two shipped steps (buy a plan, top up) are a **blueprint** and are meant to be replaced |
-| What should the steps say instead? | [`docs/onboarding.md`](../../../docs/onboarding.md) — the activation event, and 3–5 milestones toward it |
-| Does the purchase survive a reload? | it has to be visible in the app's state, not only in the toast (`docs/ux.md` §2) |
-| Is every empty list explained? | `<EmptyState>` with a sentence and, where there is one, a button |
-
-**The finding that is almost always there on a young app:** the checklist still
-holds the two shipped steps, so the app's only advice to a new customer is "buy
-something" — while the thing they bought sits behind a menu entry nobody
-mentioned. That is ❌ HIGH, and the fix is three lines in
-`app/dashboard/page.tsx`. *Choosing* what the steps should be — the activation
-event, and whether this app wants a survey or a nudge around them — is the
-skill **`user-onboarding`**; report the finding here and hand over there when
-the user wants it built.
+The walk from purchase to dashboard, done as the customer: what to do at each
+step, where the template already holds the answer, and the finding that is
+almost always there on a young app. The full recipe is in
+[`references/checks-first-run.md`](references/checks-first-run.md) — read it
+before running this check.
 
 ## 3 · `flows` — every path, including the unhappy ones
 
-Walk each one and ask at every screen: *what now?* A screen with no answer is a
-dead end, and dead ends are where customers write to support.
-
-The paths that exist in every app built on this template:
-
-| Path | The screen that usually has nothing on it |
-|---|---|
-| Sign in for the first time | the dashboard before anything has been bought |
-| Buy → return from checkout | `/dashboard` right after `/optin/[orderId]` |
-| Buy a second plan / upgrade | a member holding two plans at once, briefly, or neither |
-| A payment is missed | the plan simply vanishes from the page |
-| The balance runs out mid-action | the refusal, with no way to top up on it |
-| A refund | access ends, and nothing says why |
-| Cancel a subscription | access runs on — does the app say that, or read as revoked? |
-
-**The missed payment is the one to check by hand.** `hasPlan()` and
-`entitlementsFor()` both stop reporting a suspended plan, so unless the page
-uses `pausedKeys()` (`lib/entitlements/rules.ts`) the customer sees their plan
-disappear with no explanation and reads it as an account closure. It is 🚨
-CRITICAL when it is silent: they paid, and the app is telling them they did not.
-
-For each dead end, name the screen and the sentence that is missing.
+The paths that exist in every app built on this template, the screen in each
+that usually has nothing on it, and the missed payment that has to be checked
+by hand. The full recipe is in
+[`references/checks-flows-feedback.md`](references/checks-flows-feedback.md) —
+read it before running this check.
 
 ## 4 · `feedback` — does the app answer when spoken to
 
-Three mechanisms, and between them they cover every case
-(`CLAUDE.md` § **UI**, rule 1). What to check:
-
-- **Every Server Action's result reaches a person.** Read each
-  `app/**/actions.ts`, then find where its `state` is rendered. An action whose
-  page never calls `useActionToast(state)` and never shows a `<Callout>` is
-  silent on success AND on failure — ❌ HIGH.
-- **Everything that ends in `redirect()` says so on the other side.** This is
-  the one that goes missing, because it works for whoever wrote it.
-- **A message never travels in the URL.** The parameter carries an id, the
-  receiving page resolves it scoped to the session. A page rendering
-  `searchParams.message` is 🚨 CRITICAL — anyone can hand somebody a link that
-  makes your app say what they typed.
-- **Everything destructive asks first**, through `<AlertDialog>`, naming what
-  gets hit, with a red confirm button. A `confirm()` or a bare button is ❌ HIGH.
-- **Nothing can be submitted twice.** `disabled={isPending}` on anything that
-  charges, mails or bills. `spendTokens` is deliberately not idempotent.
-- **Slow things say they are working.** A `<Skeleton>`, or a pending state on
-  the button.
+What to check across the three feedback mechanisms: silent Server Actions,
+redirects that say nothing on the other side, messages travelling in the URL,
+destructive actions that do not ask, double submits, slow things. The full
+list is in
+[`references/checks-flows-feedback.md`](references/checks-flows-feedback.md),
+together with check 3 — read it before running this check.
 
 ## 5 · `kit` — the design system
 
-**If the app has `docs/design.md`, read it first.** That file is the look this
-app chose — tokens, type pairing, page composition, the signature element —
-and this check audits **against it**: a page that ignores the composition its
-own file names, a hand-picked colour beside the chosen tokens, a second look
-growing beside the first. It is a baseline, never a restyling licence — what
-to change about the look is the skill `design`, not this gateway. An app
-without the file is on the shipped default, which is a decision (see above).
-
-Mostly measured. Run `node run.mjs ux-check` and fold the findings in; then look
-at the two things it cannot see.
-
-`ux-check` settles: hard-coded palette colours, raw `<button>`/`<input>`/
-`<select>`/`<textarea>`/`<table>`, pages under `/dashboard` that are in no menu,
-and every token pair's contrast in **both** modes. Each comes with a file and a
-line, so each goes straight into the report. Its **images with no `alt`** are
-check 8's — see there.
-
-What you still have to look at yourself:
-
-- **Dark mode, by eye.** Tokens make it work; a `<div>` with a hand-picked
-  shadow or an image with a white background still falls over. Switch the theme
-  and look at every page you opened.
-- **Small screens.** Resize to ~380 px. Tables that do not scroll, dialogs whose
-  submit button sits under the keyboard, fixed widths that scroll the whole
-  page — `docs/ux.md` §6. Roughly half of Digistore24's traffic is a phone, so
-  this is not an edge case.
+What `node run.mjs ux-check` settles, how a `docs/design.md` changes the
+baseline this check audits against, and the two things you still have to look
+at yourself — dark mode by eye, small screens. The full recipe is in
+[`references/checks-kit-words-a11y.md`](references/checks-kit-words-a11y.md) —
+read it before running this check.
 
 ## 6 · `words` — is it written for the customer
 
-- **Is anything visible not in both message files?** `i18n/messages.test.ts`
-  catches a missing key, not a German sentence sitting in a `.tsx`. Grep for
-  string literals in JSX.
-- **Does any error reach a person as a code?** `lib/` returns codes and the
-  Server Action translates them. A page rendering `selfDelete` is ❌ HIGH.
-- **Is any identifier on a customer-facing page?** Order ids, member ids and
-  product keys belong in support tools.
-- **Does every empty state say something?** A heading and a blank space is not
-  an empty state.
-- **Read the five most important sentences out loud** — the plan names, the
-  purchase confirmation, the two most common errors, the destructive dialog. If
-  a sentence describes the database rather than the customer's situation,
-  rewrite it.
+The five questions: i18n gaps, error codes reaching a person, identifiers on
+customer-facing pages, empty states with nothing in them, and the five most
+important sentences read out loud. The full list is in
+[`references/checks-kit-words-a11y.md`](references/checks-kit-words-a11y.md),
+together with checks 5 and 7 — read it before running this check.
 
 ## 7 · `access` — usable without a mouse
 
-The legal position is one paragraph in `docs/ux.md` §5 and it decides how hard
-to push: most operators here are micro-enterprises and exempt from the BFSG
-today, in scope the year they grow. Report findings either way; let the severity
-follow the app, not the statute.
-
-Measured by `ux-check`: contrast in both modes, the focus ring at 3:1, icon
-buttons with no name.
-
-**Where the app carries interactive elements** (`ACTIVITIES` in
-`lib/learning/activities.ts` — a game, a check, a graded exercise), this
-check gets a second half that no command measures: **play every element with
-the keyboard alone, to the final verdict.** A drag without a key path is the
-naive way to build a game and a BFSG defect in a consumer product; a time
-limit without an alternative is a wall. The verdict must reach a screen
-reader (the panel announces through its live region — verify it does, and
-that the game announces its own state through `announce()`). ❌ HIGH where
-stuck: unlike a contrast ratio, there is no partial credit on "cannot finish
-the exam without a mouse". The build-side rules are the five in the panel
-header (`components/activity-panel.tsx`); the deeper audit is the skill
-`learning-activities`, item `check`.
-
-`ux-check` also measures **images with no `alt`** — but file that finding under
-check 8 with the rest of what goes wrong with pictures. One fix should not
-produce two findings in one report.
-
-By hand, and every one of these is a real failure rather than a nicety:
-
-- **Tab through one whole page.** Can you reach every control, and can you
-  always see where you are? A focus ring that is invisible on one surface is
-  ❌ HIGH — it is the only thing a keyboard user has.
-- **Open a dialog with the keyboard, close it with `Esc`.** The kit does this;
-  a hand-built overlay does not.
-- **Is anything said with colour alone?** A red dot means nothing to a
-  colour-blind customer and nothing at all to a screen reader.
-- **Do the headings step down** (`h1` → `h2` → `h3`) rather than being picked
-  for size? `<PageHeader>` gives you the `h1`.
-- **Does every form field have a real `<Label htmlFor>`?** A placeholder is not
-  a label — it disappears exactly when somebody needs it.
+What `ux-check` measures, the second half for interactive elements — play
+every one with the keyboard alone, to the final verdict — and the by-hand
+checks, every one of which is a real failure rather than a nicety. The full
+recipe is in
+[`references/checks-kit-words-a11y.md`](references/checks-kit-words-a11y.md) —
+read it before running this check.
 
 ## 8 · `visuals` — is there anything to look at?
 
-**What this check is for.** An app can pass every check above and still hand its
-customers paragraphs. That is not an accessibility failure or a wording failure;
-it is the product being one step short of what somebody paid for. This check
-finds it in an app that already exists — `build-app` step 1b is where it is
-decided for one that does not.
-
-**Read `docs/app.md` FIRST, and read it properly.** Its *Decisions worth
-remembering* section may already say "no pictures in the messages, deliberately,
-because …". If it does, that is not a finding — it is an answer, and reporting
-it anyway is how this gateway teaches people to stop writing decisions down.
-Say you found it, and move on.
-
-Then walk the app's **result surfaces**: the places where a customer is handed
-something. Not every page — a settings form is a settings form.
-
-*(This check audits against [`docs/visuals.md`](../../../docs/visuals.md) rather
-than `docs/ux.md`, which has nothing to say about pictures. And `Figure`,
-`generateImage()` and the catalogue all arrived with template 0.7.0 — on an
-older copy the rows that name them never fire, and the rest applies unchanged.)*
-
-| Severity | What | Why |
-|---|---|---|
-| ⚠️ MEDIUM | A result surface whose whole output is prose, and nothing in `docs/app.md` says that was chosen | The fix is a catalogue entry, named — see below |
-| ❌ HIGH | An image with no alternative text and no `decorative` | A screen reader reads the filename instead |
-| ⚠️ MEDIUM | An image that carries its own light background, seen in dark mode | Switch the theme and look; nobody does this while building |
-| ⚠️ MEDIUM | An image not going through `next/image` | A phone downloading four megabytes to show two hundred pixels, on somebody else's data plan. Note it here and leave the number to `performance-gateway`, which measures what it costs — one fix, one finding |
-| ⚠️ MEDIUM | An image that scrolls — a picture inside an `overflow-auto` container | A too-big picture is scaled to the container's width (`w-full h-auto`, crop with `overflow-hidden`), never panned. Sideways scrolling is for tables (`docs/ux.md` → *Small screens*) |
-| ⚠️ MEDIUM | A diagram identical for every customer — a flow chart of the app's own process, boxes and arrows beside a form | Decoration wearing a chart's clothes (`docs/visuals.md` → *What NOT to do*). Remove it, or replace it with the customer's own data; at most one survives, and only where somebody must understand a sequence before they act |
-| 🚨 CRITICAL | An `<iframe>` at a video host with no consent gate in front of it | It contacts Google or Vimeo before the visitor agreed to anything — § 25 TDDDG. `compliance-check` reports the same thing from the legal side |
-| ❌ HIGH | A generated image with an empty `alt` | It should be impossible — `generateImage()` requires one, so somebody has written a row by hand |
-
-**The fix names the entry, not the problem.** "Add an image" is not a finding
-anybody can act on. [`docs/visuals.md`](../../../docs/visuals.md) has a row per
-app shape — *a chart above the table*, *a result card instead of a number*, *the
-message with a picture* — and the fix quotes the one that applies:
-
-```
-⚠️ MEDIUM — the monthly report is a table and nothing else
-Where:    /dashboard/reports
-Why:      a customer opening it monthly cannot see at a glance whether the
-          month was good. The numbers answer "what exactly"; nothing answers
-          "how is it going".
-Fix:      docs/visuals.md → "a report as a table" → a bar chart above it. The
-          table stays.
-Evidence: page renders 1 heading, 1 table, 0 images or charts.
-```
-
-Some of it is countable — `grep -rn "<img" app components` for pictures outside
-`Figure`, `grep -rn "youtube.com\|player.vimeo.com" app components` for the
-embed, `grep -rn "overflow-auto\|overflow-x-auto" app components` and then
-looking at what sits inside each hit (a table is right, an image is the
-finding) — and the rest is opening the pages and looking, in both themes.
-
-**Where this check does NOT go:** decoration. A stock photograph on a settings
-page is not a finding fixed — `docs/visuals.md` says why, under the catalogue.
+Whether the app hands its customers anything but paragraphs: what a result
+surface is, the severity table, the greps, and the rule that the fix names a
+catalogue entry from `docs/visuals.md` rather than "add an image". The full
+recipe is in
+[`references/checks-visuals-alongside.md`](references/checks-visuals-alongside.md)
+— read it before running this check.
 
 ## 9 · `alongside` — does anything come back?
 
-**What this check is for.** An app can pass every check above and still hand its
-customers a form. Check 8 asks whether there is anything to look at; this one
-asks whether anything comes **back**. The case it was written from: a customer
-writes three paragraphs about their day into a paid challenge, and the app
-replies *"saved"*. Nothing reads it, nothing returns tomorrow, and the
-subscription is paying for a text box. This check finds it in an app that
-already exists — `build-app` step 1c is where it is decided for one that does
-not.
-
-**Two commands first**, and neither needs a browser. Their findings are already
-measured, so they go straight into the report with a command as evidence:
-
-```bash
-node run.mjs legal-check    # a companion switched on and undisclosed
-node run.mjs ai-check       # a key configured, the layer called from nowhere but support
-```
-
-`legal-check` settles the disclosure — which surface, which language, and what is
-missing. `ai-check` settles the whole-app observation at the bottom of the table.
-
-**Read `docs/app.md` FIRST, and read it properly.** Its *Decisions worth
-remembering* section may already say "no AI companion, deliberately, because …".
-If it does, that is not a finding — it is an answer, and reporting it anyway is
-how this gateway teaches people to stop writing decisions down. Say you found it,
-and move on. `docs/product-brief.md` is the second place to look and the first in
-time: an `Alongside the customer:` line there says what was decided when the
-product was worked out.
-
-Then walk the app's **work surfaces**: the places where a customer hands
-something over — a submission, an answer, a photo, a plan. **Not every form.** A
-settings page, an address, a payment method, a support message: the customer is
-not handing over their *work* there, and a confirmation is the right answer.
-
-*(`askCompanion()`, `<CompanionPanel>`, `config/ai-companion.json` and the
-catalogue all arrived with template **0.8.0** — on an older copy the three rows
-that name them never fire, and the work-surface row applies unchanged, back to
-0.4.0. That row is also the one that matters most on an old app: it needs no
-companion code at all, only a page and a `docs/app.md`. Which is why the
-`requires:` on this skill stays at 0.4.0 — bumping it would withhold all nine
-other checks from an app on 0.6.0 over one row it could not use anyway, and
-withhold precisely the row it could.)*
-
-| | Severity | What |
-|---|---|---|
-| ❌ | **HIGH** | A companion is switched on and the customer is not told a model reads what they write. `node run.mjs legal-check` names it and names the fix. **The most severe finding this check raises** |
-| ❌ | **HIGH** | A companion whose registry entry has `requiresPlan: null` **and** `costsTokens: 0` — every signed-in visitor spends the vendor's money on it, once per use, for ever |
-| ⚠️ | **MEDIUM** | A surface takes a customer's work and returns nothing but a confirmation, and nothing in `docs/app.md` says that was chosen |
-| ℹ️ | **LOW** | A provider key is configured and nothing outside the support chat calls the AI layer. `ai-check` prints it under *Worth knowing* — a whole-app observation, **one line, once**, and it does not fire on an app with no key |
-
-**The disclosure row is quoted, never re-derived.** The fix is
-`<AiDisclosure surface="companion" />` on the page the customer writes into, plus
-*"`node run.mjs legal-check` says which surface and which language"* — and
-nothing about the message key or the wording rule. One copy of that rule exists,
-in `lib/ai/disclosure.mjs`, precisely because it had been written twice; a third
-copy in a skill would be the same mistake in prose. It is ❌ HIGH and not
-🚨 CRITICAL deliberately: `compliance-check` owns Art. 50 and its own ladder puts
-an undisclosed AI at HIGH, and two reports of the same week contradicting each
-other is worse than one being a notch low.
-
-**The gating row's evidence is a file and a line** — the two fields in the
-entry, read out of `lib/ai/companions.ts`. A companion gated by a **token
-package** is a different thing and not this check's: `companionProblems()`
-already refuses that config, because `hasPlan()` answers `false` for a balance
-for ever.
-
-**The fix names the entry, not the problem.** *"Build a companion"* is not
-something anybody can act on.
-[`docs/ai-in-product.md`](../../../docs/ai-in-product.md) has a row per app shape
-— quote the one that applies:
-
-```
-⚠️ MEDIUM — the daily challenge takes an answer and gives back "saved"
-Where:    app/dashboard/challenges/[day]/ui.tsx:74, actions.ts:31
-Why:      a customer writes three paragraphs about their day and the app
-          replies with a toast. Nothing reads it, nothing comes back
-          tomorrow, and the subscription is paying for a text box.
-Fix:      docs/ai-in-product.md → 2.1 "the companion that walks a course or a
-          challenge with them" → a companion on the submission, gated by
-          hasPlan(memberId, "coach_monatlich"). The stored answer stays.
-Evidence: the action inserts one row and returns { ok: true }; the page renders
-          the list and the form and nothing else.
-```
-
-Some of it is countable — the two commands above, and reading
-`lib/ai/companions.ts` — and the rest is opening the pages, signing in as a
-member and **doing the thing the app is for**. `node run.mjs ux-check` measures
-nothing for this check, deliberately: whether a surface takes a customer's
-*work* or a *setting* is a question about what the app is for, and a scan for
-"an action that inserts a row and returns `{ ok: true }`" matches every settings
-form in the app — which is the **passing** state of check 4. A check that fires
-on the thing another check requires is not a weak check, it is a wrong one.
-
-**Where this check does NOT go:** settings, addresses, payment methods, support
-messages — a confirmation is the correct answer to those. And it does not go
-near **building** anything; see STOP below.
-
-**`ai-companion` → `check` looks at one companion — the one somebody is building
-or has just built — and fixes it. This walks the whole app and finds the surfaces
-where there is no companion at all**, which is the case that has nothing for
-`ai-companion` to be pointed at yet. So the ⚠️ MEDIUM row is this check's alone,
-and on the two companion rows this check **hands over rather than duplicates**:
-report it, name the fix, and send the user to `ai-companion` → `check` for the
-instruction, the `load()` scoping, the ceiling and the cost — four things a UX
-gateway has no business judging.
+Whether anything comes back for the work a customer hands over: the two
+commands to run first, the severity table, where this check does not go, and
+the handovers to `ai-companion`. The full recipe is in
+[`references/checks-visuals-alongside.md`](references/checks-visuals-alongside.md),
+together with check 8 — read it before running this check.
 
 ## 10 · `fix` — fixing what was found
 

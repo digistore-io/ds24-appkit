@@ -3,7 +3,12 @@
 
 "use client";
 
-// The Member's MCP keys — the card on their own account page.
+// The Member's keys — ONE card, rendered twice on the account page: once for
+// the MCP keys (namespace "mcp") and once for the HTTP API keys (namespace
+// "apiKeys"). The two features hand out the same credential with the same
+// lifecycle, so a second component would be the same 400 lines drifting apart
+// — the same rule as "one ChatWindow, two places". What differs rides in as
+// props: the texts (namespace), the Server Actions, and the endpoint shown.
 //
 // The whole design problem here is one moment: a new key is readable exactly
 // once, and the person looking at it usually does not yet know that. So the
@@ -22,7 +27,6 @@ import { Copy, KeyRound, Plus, ShieldCheck, ShieldOff } from "lucide-react";
 import { toast } from "sonner";
 
 import { useActionToast } from "@/hooks/use-action-toast";
-import { createKeyAction, revokeKeyAction, type McpActionState } from "./mcp-actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
@@ -73,7 +77,20 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-const EMPTY: McpActionState = { error: null, ok: null, secret: null };
+/**
+ * What the two action modules return. Structural — `mcp-actions.ts` and
+ * `api-key-actions.ts` each declare their own identical type, and this
+ * component only cares about the shape.
+ */
+export interface KeyActionState {
+  error: string | null;
+  ok: string | null;
+  secret?: string | null;
+}
+
+type KeyAction = (prev: KeyActionState, formData: FormData) => Promise<KeyActionState>;
+
+const EMPTY: KeyActionState = { error: null, ok: null, secret: null };
 
 export interface KeyRowView {
   id: string;
@@ -86,28 +103,36 @@ export interface KeyRowView {
   expiresAt: Date | null;
 }
 
-export function McpCard({
+export function KeysCard({
+  namespace,
   keys,
   endpoint,
-  serverName,
   maxLiveKeys,
   liveKeys,
   offReason,
+  descriptionValues,
+  createAction,
+  revokeAction,
 }: {
+  /** The message namespace — "mcp" or "apiKeys". Both carry the same keys. */
+  namespace: "mcp" | "apiKeys";
   keys: KeyRowView[];
   /** The absolute URL a client connects to. Built on the server. */
   endpoint: string;
-  serverName: string;
   maxLiveKeys: number;
   liveKeys: number;
   /** Why the feature is off, or null when it is on. */
   offReason: "disabledInConfig" | "brokenConfig" | null;
+  /** Values for the namespace's `description` message (e.g. serverName). */
+  descriptionValues?: Record<string, string>;
+  createAction: KeyAction;
+  revokeAction: KeyAction;
 }) {
-  const t = useTranslations("mcp");
+  const t = useTranslations(namespace);
   const format = useFormatter();
 
-  const [createState, createFormAction, creating] = useActionState(createKeyAction, EMPTY);
-  const [revokeState, revokeFormAction] = useActionState(revokeKeyAction, EMPTY);
+  const [createState, createFormAction, creating] = useActionState(createAction, EMPTY);
+  const [revokeState, revokeFormAction] = useActionState(revokeAction, EMPTY);
   const [open, setOpen] = useState(false);
 
   useActionToast(revokeState);
@@ -147,7 +172,9 @@ export function McpCard({
         <KeyRound aria-hidden className="text-muted-foreground size-5" />
         {t("title")}
       </h2>
-      <p className="text-muted-foreground mb-4 text-sm">{t("description", { serverName })}</p>
+      <p className="text-muted-foreground mb-4 text-sm">
+        {t("description", descriptionValues ?? {})}
+      </p>
 
       {/* The one moment that cannot be repeated. A Callout and not a toast:
           this has to survive a scroll, a misclick and a moment of confusion. */}
@@ -196,9 +223,9 @@ export function McpCard({
 
               <div className="grid gap-4 py-4">
                 <div className="grid gap-2">
-                  <Label htmlFor="mcp-name">{t("nameLabel")}</Label>
+                  <Label htmlFor={`${namespace}-name`}>{t("nameLabel")}</Label>
                   <Input
-                    id="mcp-name"
+                    id={`${namespace}-name`}
                     name="name"
                     required
                     maxLength={60}
@@ -208,12 +235,12 @@ export function McpCard({
                 </div>
 
                 <div className="grid gap-2">
-                  <Label htmlFor="mcp-scope">{t("scopeLabel")}</Label>
+                  <Label htmlFor={`${namespace}-scope`}>{t("scopeLabel")}</Label>
                   {/* `name` makes Radix submit a hidden field, so the selection
                       lands in FormData like any other input. Defaults to
                       `read` — the safe one, and the right one for most uses. */}
                   <Select name="scope" defaultValue="read">
-                    <SelectTrigger id="mcp-scope" className="w-full">
+                    <SelectTrigger id={`${namespace}-scope`} className="w-full">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -225,9 +252,9 @@ export function McpCard({
                 </div>
 
                 <div className="grid gap-2">
-                  <Label htmlFor="mcp-lifetime">{t("lifetimeLabel")}</Label>
+                  <Label htmlFor={`${namespace}-lifetime`}>{t("lifetimeLabel")}</Label>
                   <Select name="lifetimeDays" defaultValue="90">
-                    <SelectTrigger id="mcp-lifetime" className="w-full">
+                    <SelectTrigger id={`${namespace}-lifetime`} className="w-full">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -306,7 +333,11 @@ export function McpCard({
                         : t("neverUsed")}
                     </TableCell>
                     <TableCell>
-                      <StateBadge state={key.state} expiresAt={key.expiresAt} />
+                      <StateBadge
+                        namespace={namespace}
+                        state={key.state}
+                        expiresAt={key.expiresAt}
+                      />
                     </TableCell>
                     <TableCell>
                       {key.state === "live" && (
@@ -353,13 +384,15 @@ export function McpCard({
 }
 
 function StateBadge({
+  namespace,
   state,
   expiresAt,
 }: {
+  namespace: "mcp" | "apiKeys";
   state: KeyRowView["state"];
   expiresAt: Date | null;
 }) {
-  const t = useTranslations("mcp");
+  const t = useTranslations(namespace);
   const format = useFormatter();
 
   if (state === "revoked") return <Badge variant="destructive">{t("stateRevoked")}</Badge>;

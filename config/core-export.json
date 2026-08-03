@@ -1,0 +1,21 @@
+{
+  "_comment": "The shared core: the files `node run.mjs export-core` copies into a companion repo (typically a mobile app) — see docs/mobile.md. Every entry must pass scripts/core/purity.test.ts: no react/next/db/node imports, no process.env, and the whole import closure listed here. Adding a file is a deliberate act; renaming or deleting one is a breaking change for every exported copy.",
+  "files": [
+    "config/digistore-products.json",
+    "i18n/config.ts",
+    "lib/api-keys/rules.ts",
+    "lib/billing-mode.ts",
+    "lib/digistore/config.mjs",
+    "lib/digistore/next-payment.ts",
+    "lib/digistore/plan-sections.ts",
+    "lib/digistore/products.ts",
+    "lib/digistore/public-url.ts",
+    "lib/entitlements/grant-rules.ts",
+    "lib/entitlements/rules.ts",
+    "lib/rate-limit.ts",
+    "lib/roles.ts",
+    "lib/tokens/packages.ts",
+    "lib/tokens/rules.ts",
+    "lib/users/rules.ts"
+  ]
+}

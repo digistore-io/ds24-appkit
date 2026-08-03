@@ -188,6 +188,20 @@ export async function setUserEmail(
 }
 
 /**
+ * A member renames THEMSELVES. The one write the API's `PATCH /api/v1/me`
+ * does — the id comes from the authenticated key (or session), never from the
+ * request, which is what keeps this IDOR-free by construction. The name is
+ * already normalized (`checkDisplayName` in rules.ts); `null` clears it.
+ *
+ * Deliberately no Actor and no denial ladder: unlike every function above,
+ * this one acts on the caller's own row, and there is nothing to refuse — a
+ * person may always rename themselves.
+ */
+export async function setOwnName(memberId: string, name: string | null): Promise<void> {
+  await db.update(users).set({ name }).where(eq(users.id, memberId));
+}
+
+/**
  * Checks whether an admin may send this user a sign-in link, and returns the
  * destination address. The sending itself happens in the server action — it
  * goes through Auth.js (signIn) so that exactly the same token mechanism

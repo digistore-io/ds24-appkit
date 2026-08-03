@@ -135,11 +135,11 @@ try {
   const secret = KEY_PREFIX + randomBytes(32).toString("base64url");
   const keyId = randomUUID();
   await sql`
-    insert into mcp_keys (id, member_id, name, token_hash, prefix, scope, expires_at)
+    insert into api_keys (id, member_id, name, token_hash, prefix, scope, audience, expires_at)
     values (
       ${keyId}, ${member.id}, ${"mcp-check (temporary)"},
       ${createHash("sha256").update(secret, "utf8").digest("hex")},
-      ${secret.slice(0, KEY_PREFIX.length + 4)}, ${"write"},
+      ${secret.slice(0, KEY_PREFIX.length + 4)}, ${"write"}, ${"mcp"},
       ${new Date(Date.now() + 5 * 60_000)}
     )`;
 
@@ -203,7 +203,7 @@ try {
 
   // Revoked rather than deleted, so the row is still there to be seen if
   // somebody wonders what that key was.
-  await sql`update mcp_keys set revoked_at = now() where id = ${keyId}`;
+  await sql`update api_keys set revoked_at = now() where id = ${keyId}`;
 } finally {
   await sql.end();
 }

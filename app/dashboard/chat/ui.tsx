@@ -72,11 +72,20 @@ export function ChatWindow({
   avatar,
   initial,
   variant = "page",
+  allowedMedia,
 }: {
   assistantName: string;
   avatar: string;
   initial: ChatMessage[];
   variant?: ChatVariant;
+  /**
+   * The Media Marker whitelist for her answers — `allowedMediaMarkers()`,
+   * resolved on the SERVER (the chat page, or the layout for the launcher)
+   * because it reads the handbook off the filesystem. Optional, and absence
+   * denies all markers (AD-54): a mount that forgot the set renders plain
+   * text, never a card.
+   */
+  allowedMedia?: readonly string[];
 }) {
   const t = useTranslations("chat");
   const tCommon = useTranslations("common");
@@ -254,7 +263,7 @@ export function ChatWindow({
                         what somebody typed is shown as they typed it. */}
                     <div className="bg-muted min-w-0 rounded-lg px-3 py-2 text-sm">
                       {message.content ? (
-                        <AnswerText text={message.content} />
+                        <AnswerText text={message.content} allowedMedia={allowedMedia} />
                       ) : (
                         <span className="text-muted-foreground">
                           {t("sending", { name: assistantName })}

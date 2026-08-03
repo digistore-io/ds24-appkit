@@ -17,13 +17,16 @@ import { signInState } from "@/lib/credentials/manage";
 import { MIN_PASSWORD_LENGTH } from "@/lib/credentials/rules";
 import { pendingChangeFor } from "@/lib/email-change/manage";
 import { isEmailLoginEnabled } from "@/lib/email";
+import { countLiveKeys, listKeys } from "@/lib/api-keys/keys";
+import { MAX_LIVE_KEYS } from "@/lib/api-keys/rules";
+import { apiOffReason } from "@/lib/api/config";
 import { mcpConfig, mcpOffReason } from "@/lib/mcp/config";
-import { countLiveKeys, listKeys } from "@/lib/mcp/keys";
-import { MAX_LIVE_KEYS } from "@/lib/mcp/rules";
 import { consentStatusFor } from "@/lib/consent/manage";
 import { countOwners } from "@/lib/users/manage";
 import { SignInCard } from "./ui";
-import { McpCard } from "./mcp-ui";
+import { KeysCard } from "./keys-ui";
+import { createKeyAction, revokeKeyAction } from "./mcp-actions";
+import { createApiKeyAction, revokeApiKeyAction } from "./api-key-actions";
 import { ConsentCard, DeleteAccountCard, MyDataCard } from "./privacy-ui";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -104,15 +107,18 @@ function planName(productKey: string): string {
  * This string is copied into a config file on somebody's laptop, so getting it
  * wrong costs them a debugging session rather than a page refresh.
  */
-async function mcpEndpoint(): Promise<string> {
+async function endpointUrl(path: string): Promise<string> {
   const configured = process.env.APP_URL?.trim();
-  if (configured) return `${configured.replace(/\/+$/, "")}/api/mcp`;
+  if (configured) return `${configured.replace(/\/+$/, "")}${path}`;
 
   const h = await headers();
   const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
   const proto = h.get("x-forwarded-proto") ?? "http";
-  return `${proto}://${host}/api/mcp`;
+  return `${proto}://${host}${path}`;
 }
+
+const mcpEndpoint = () => endpointUrl("/api/mcp");
+const apiEndpoint = () => endpointUrl("/api/v1");
 
 // The Member's own account page: what they may use, until when, and what
 // balance they hold. The counterpart of the Operator's
@@ -162,14 +168,17 @@ export default async function AccountPage() {
     pendingChangeFor(memberId),
   ]);
 
-  // The MCP keys. Read unconditionally — a Member who holds keys from before
-  // the Operator switched the interface off still has to be able to see and
-  // revoke them, which is the same rule the balance card follows: a display
-  // switch may hide an EMPTY thing, never a non-empty one.
+  // The MCP and API keys. Read unconditionally — a Member who holds keys from
+  // before the Operator switched an interface off still has to be able to see
+  // and revoke them, which is the same rule the balance card follows: a
+  // display switch may hide an EMPTY thing, never a non-empty one.
   const mcpOff = mcpOffReason();
-  const [mcpKeyRows, liveKeyCount] = await Promise.all([
-    listKeys(memberId),
-    countLiveKeys(memberId),
+  const apiOff = apiOffReason();
+  const [mcpKeyRows, liveKeyCount, apiKeyRows, apiLiveKeyCount] = await Promise.all([
+    listKeys(memberId, "mcp"),
+    countLiveKeys(memberId, "mcp"),
+    listKeys(memberId, "api"),
+    countLiveKeys(memberId, "api"),
   ]);
 
   // Suspended AND not covered by something else the Member can still use. A key
@@ -348,7 +357,8 @@ export default async function AccountPage() {
             revoke them: a switch may hide an empty thing, never a non-empty
             one (the same rule the balance card above follows). */}
         {(!mcpOff || mcpKeyRows.length > 0) && (
-          <McpCard
+          <KeysCard
+            namespace="mcp"
             keys={mcpKeyRows.map((key) => ({
               id: key.id,
               name: key.name,
@@ -360,10 +370,37 @@ export default async function AccountPage() {
               expiresAt: key.expiresAt,
             }))}
             endpoint={await mcpEndpoint()}
-            serverName={mcpConfig().serverName}
+            descriptionValues={{ serverName: mcpConfig().serverName }}
             maxLiveKeys={MAX_LIVE_KEYS}
             liveKeys={liveKeyCount}
             offReason={mcpOff}
+            createAction={createKeyAction}
+            revokeAction={revokeKeyAction}
+          />
+        )}
+
+        {/* The keys for the member's OWN programs — typically a mobile app
+            talking to /api/v1. Same card, same visibility rule as the MCP
+            section above. */}
+        {(!apiOff || apiKeyRows.length > 0) && (
+          <KeysCard
+            namespace="apiKeys"
+            keys={apiKeyRows.map((key) => ({
+              id: key.id,
+              name: key.name,
+              prefix: key.prefix,
+              scope: key.scope,
+              state: key.state,
+              createdAt: key.createdAt,
+              lastUsedAt: key.lastUsedAt,
+              expiresAt: key.expiresAt,
+            }))}
+            endpoint={await apiEndpoint()}
+            maxLiveKeys={MAX_LIVE_KEYS}
+            liveKeys={apiLiveKeyCount}
+            offReason={apiOff}
+            createAction={createApiKeyAction}
+            revokeAction={revokeApiKeyAction}
           />
         )}
 

@@ -211,6 +211,16 @@ describe("the persona", () => {
     expect(text).toMatch(/numbered lists/i);
   });
 
+  it("tells her to repeat a media marker verbatim and never construct one", () => {
+    // The renderer enforces the hard half — only a marker that occurs
+    // verbatim in the handbook becomes a card (AD-54). This sentence is what
+    // makes the feature work: a rewritten or invented marker degrades to
+    // bracket text in front of the customer.
+    expect(text).toMatch(/repeat the whole marker exactly/i);
+    expect(text).toMatch(/never construct a marker/i);
+    expect(text).toMatch(/never translate its label/i);
+  });
+
   it("stays out of the operator's half of the menu", () => {
     // She answers customers. "Admin" is a dead end for them.
     expect(text).not.toContain("Admin");

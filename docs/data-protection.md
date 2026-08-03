@@ -131,7 +131,7 @@ What genuinely remains open, and what an operator should decide with advice:
 3. **Deletion is solved for the account, not for the aftermath.** A member
    deletes their own from `/dashboard/account` (Art. 17, no support ticket
    needed), and an Operator can delete one from the user list. Both cascade to
-   sessions, chat transcripts, MCP keys, grants, pending address changes,
+   sessions, chat transcripts, MCP and API keys, grants, pending address changes,
    consent records and impersonation rows — and both deliberately leave
    `orders`, `subscriptions`, `token_ledger` and `ai_usage` standing with the
    member link set to `null`, for the reason above. The dialog names both halves
@@ -147,7 +147,7 @@ What genuinely remains open, and what an operator should decide with advice:
 
 Everything else has a shape already: `ipn_events` 60 days, `email_changes` 24
 hours, IP addresses fifteen minutes, sessions until they expire, and
-`chat_messages` until the account is deleted (§8), `mcp_keys` likewise (§9).
+`chat_messages` until the account is deleted (§8), `api_keys` likewise (§9).
 `ai_usage` outlives the account with its member link removed (§10).
 
 ## 7. Answering a subject access request
@@ -341,14 +341,15 @@ subject-access exports carry the table — the member's own download and
 `node run.mjs data-export` — including `state`, because the server's record
 of their work is their work.
 
-## 9. The MCP server (AI interface)
+## 9. The MCP server (AI interface) and the HTTP API
 
-Only relevant if it is switched on — `config/mcp.json` (`"enabled"`). See
-`docs/mcp.md`.
+Only relevant if one of them is switched on — `config/mcp.json` /
+`config/api.json` (`"enabled"`). See `docs/mcp.md` and `docs/api.md`. Both
+authenticate with the same kind of key, so this section covers both.
 
 | Where | What |
 |---|---|
-| `mcp_keys` | one row per key a member issued to themselves: the name **they** typed ("Claude on my laptop"), the scope, when it was created, when it expires, when it was revoked, and the day it was last used |
+| `api_keys` | one row per key a member issued to themselves: the name **they** typed ("Claude on my laptop", "my phone"), the audience (AI client or the member's own app), the scope, when it was created, when it expires, when it was revoked, and the day it was last used |
 
 **The key itself is not in there.** The column holds a SHA-256 of it, and the
 plaintext is shown exactly once, in the dialog that created it. Nobody can read

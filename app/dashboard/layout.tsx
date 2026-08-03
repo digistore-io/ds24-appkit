@@ -7,6 +7,7 @@ import { AppShell } from "@/components/app-shell";
 import { APP_NAME } from "@/lib/app";
 import { chatConfig, isChatEnabled } from "@/lib/ai/chat-config";
 import { chatNavVisible, mayUseChat } from "@/lib/ai/rules";
+import { allowedMediaMarkers } from "@/lib/ai/knowledge";
 import { isOwner } from "@/lib/roles";
 import { hasPlan } from "@/lib/entitlements/manage";
 import { ChatLauncher } from "@/app/dashboard/chat/launcher";
@@ -115,7 +116,16 @@ export default async function DashboardLayout({
           would make that ancestor its containing block and pin the button to
           the middle of the page instead of the window. */}
       {chatAvailable && (
-        <ChatLauncher assistantName={chat.name} avatar={chat.avatar} />
+        <ChatLauncher
+          assistantName={chat.name}
+          avatar={chat.avatar}
+          // The Media Marker whitelist (AD-54), resolved HERE because the
+          // launcher is a client component and the set comes off the handbook
+          // on disk — same load the chat's prompt rides on, so it costs no
+          // second filesystem walk in production. Only when the launcher
+          // actually renders; the companion panel gets none, deliberately.
+          allowedMedia={allowedMediaMarkers()}
+        />
       )}
     </>
   );

@@ -94,7 +94,7 @@ common way an app reads as faulty when it is merely new.
 ## 2. Every action reports back
 
 The three mechanisms and when to use which are in `CLAUDE.md` § **UI**, rule 1.
-They are not repeated here. Two things that file cannot say from where it sits:
+They are not repeated here. Three things that file cannot say from where it sits:
 
 - **The place feedback goes missing is the page boundary.** The code that knows
   something worked ends by sending the person somewhere else, and the page they
@@ -107,6 +107,15 @@ They are not repeated here. Two things that file cannot say from where it sits:
   through — has to be readable in the app's *state* afterwards, not only in a
   message at the time. That is the whole reason the onboarding checklist ticks
   a step rather than the dashboard printing "thanks for your purchase".
+- **The message never travels in the URL — the purchase is the worked
+  example.** `<FlashToast>`'s query parameter carries a *reference* (an id),
+  never the sentence itself: a URL carrying the sentence is a URL anybody can
+  hand somebody else to make your app say whatever they typed. So
+  `app/optin/[orderId]/page.tsx` redirects to `/dashboard?purchase=<id>`, and
+  `app/dashboard/page.tsx` resolves that id through
+  `purchaseNoticeFor(memberId, id)` — scoped to whoever is signed in — before
+  naming the plan that was unlocked or the tokens that were credited. Copy
+  that shape for any message that has to survive a `redirect()`.
 
 ---
 

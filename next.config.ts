@@ -49,6 +49,13 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/api/chat": ["./content/knowledge/**/*"],
     "/dashboard/chat": ["./content/knowledge/**/*"],
+    // Same mechanism for the knowledge-media route's disk leg. The keys are
+    // picomatch route globs, so the dynamic segment's brackets and dots are
+    // escaped to match the route path literally (the form the Next docs show
+    // for dynamic routes).
+    "/api/knowledge-media/\\[\\.\\.\\.path\\]": [
+      "./content/knowledge-media/**/*",
+    ],
   },
 
   // ── No `images.remotePatterns`, deliberately ─────────────────────────────

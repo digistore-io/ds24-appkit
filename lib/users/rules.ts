@@ -324,3 +324,28 @@ export function normalizeEmail(input: unknown): string | null {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return null;
   return email;
 }
+
+/**
+ * Longest display name the app stores. A label beside an avatar, not a
+ * document — and, like the address above, refused cheaply on the raw input.
+ */
+export const MAX_DISPLAY_NAME_LENGTH = 120;
+
+/**
+ * Normalizes a member's own display name.
+ *
+ * `null` (or an empty string) is a VALID answer meaning "clear it" — the
+ * column is nullable and an account without a name renders fine everywhere.
+ * That is the difference from `checkKeyName` in `lib/api-keys/rules.ts`,
+ * where a blank would make a list unusable. Returns `{ ok: false }` only for
+ * input that is not a name at all: a non-string, or one past the cap.
+ */
+export function checkDisplayName(
+  value: unknown,
+): { ok: true; name: string | null } | { ok: false } {
+  if (value === null) return { ok: true, name: null };
+  if (typeof value !== "string") return { ok: false };
+  if (value.length > MAX_DISPLAY_NAME_LENGTH) return { ok: false };
+  const name = value.trim().replace(/\s+/g, " ");
+  return { ok: true, name: name === "" ? null : name };
+}

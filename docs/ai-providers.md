@@ -305,6 +305,11 @@ Four things, and each is in exactly one place.
 { "enabled": false }
 ```
 
+Read it through `isCompanionEnabled()` in `lib/ai/companion-switch.ts`, never
+by re-reading the JSON — and a malformed value counts as off, the same
+direction as the chat's switch and for the same reason: the failure mode of a
+feature that switches itself on is a bill.
+
 One field, and it stays one field. Which plan gates a companion, what it may
 take in and how much history it carries all belong to the **entry**, because a
 second companion needs different answers to all three.

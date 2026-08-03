@@ -20,38 +20,121 @@
 //
 // It runs on every streamed chunk, so it stays cheap: a few regexes over a
 // couple of hundred characters, no memoisation to get stale.
-import { Fragment } from "react";
+//
+// ── The Media Marker card ───────────────────────────────────────────────────
+// `allowedMedia` is the whole-marker whitelist derived from the loaded
+// handbook (AD-54) — `allowedMediaMarkers()` in `lib/ai/knowledge.ts`, handed
+// down as an RSC prop by the chat page and the dashboard layout. Absent or
+// empty it DENIES all markers, which is what makes a mount that forgot the
+// set fail safe: the companion panel passes nothing on purpose, and its
+// answers render no cards in v1. An accepted marker becomes a small labelled
+// LINK-card for every kind, image included — inline rendering in answers is
+// deliberately v2 (PRD §6.2) — pointing at the session-gated delivery route
+// from Story 18.2. The label is rendered as ONE text node, never
+// inline-parsed.
+import { Fragment, useMemo } from "react";
+import { useTranslations } from "next-intl";
+import { FileText, Film, Image as ImageIcon, Music } from "lucide-react";
 
 import { parseAnswer, type Inline } from "@/lib/ai/markdown";
+import { KNOWLEDGE_MEDIA_TYPES } from "@/lib/knowledge-media/rules.mjs";
 
-function runs(parts: Inline[]) {
-  return parts.map((part, index) => {
-    switch (part.kind) {
-      case "strong":
-        return (
-          <strong key={index} className="font-semibold">
-            {part.text}
-          </strong>
-        );
-      case "em":
-        return <em key={index}>{part.text}</em>;
-      case "code":
-        return (
-          <code
-            key={index}
-            className="bg-background/70 rounded px-1 py-0.5 font-mono text-[0.9em]"
-          >
-            {part.text}
-          </code>
-        );
-      default:
-        return <Fragment key={index}>{part.text}</Fragment>;
-    }
-  });
-}
+// The `.mjs` infers a closed object type; the index below is a grammar-valid
+// path's extension, guaranteed to be a key — same boundary move as the media
+// route makes (Story 18.2).
+const MEDIA_TYPES: Record<string, { contentType: string; kind: string }> =
+  KNOWLEDGE_MEDIA_TYPES;
 
-export function AnswerText({ text }: { text: string }) {
-  const blocks = parseAnswer(text);
+const KIND_ICONS: Record<string, typeof Film> = {
+  video: Film,
+  audio: Music,
+  image: ImageIcon,
+  document: FileText,
+};
+
+export function AnswerText({
+  text,
+  allowedMedia,
+}: {
+  text: string;
+  /**
+   * The complete Media Marker strings the handbook carries. Optional, and its
+   * absence denies — that is AD-54's fail-safe, not a default to "allow".
+   */
+  allowedMedia?: readonly string[];
+}) {
+  const t = useTranslations("answerMedia");
+
+  // The parser wants whole-string membership; the array crossed the RSC
+  // boundary because a Set does not serialise. Its reference is stable across
+  // client re-renders (it comes from the server tree), so this builds once
+  // per conversation, not once per streamed chunk.
+  const allowed = useMemo(
+    () => (allowedMedia ? new Set(allowedMedia) : undefined),
+    [allowedMedia],
+  );
+
+  const blocks = parseAnswer(text, { allowedMedia: allowed });
+
+  function runs(parts: Inline[]) {
+    return parts.map((part, index) => {
+      switch (part.kind) {
+        case "strong":
+          return (
+            <strong key={index} className="font-semibold">
+              {part.text}
+            </strong>
+          );
+        case "em":
+          return <em key={index}>{part.text}</em>;
+        case "code":
+          return (
+            <code
+              key={index}
+              className="bg-background/70 rounded px-1 py-0.5 font-mono text-[0.9em]"
+            >
+              {part.text}
+            </code>
+          );
+        case "media": {
+          // Only whitelisted markers reach this branch, so the extension is a
+          // grammar-guaranteed allow-map key. A LINK-card for every kind —
+          // the disk leg serves full-body with `no-store`, the bucket leg
+          // 307s to a signed URL; both are exactly what an <a> wants (AD-53).
+          const kind = MEDIA_TYPES[part.path.slice(part.path.lastIndexOf(".") + 1)].kind;
+          const Icon = KIND_ICONS[kind] ?? FileText;
+          return (
+            <a
+              key={index}
+              href={`/api/knowledge-media/${part.path}`}
+              target="_blank"
+              rel="noreferrer"
+              className="border-border bg-background/70 hover:bg-accent hover:text-accent-foreground my-1 inline-flex max-w-full items-center gap-2 rounded-md border px-3 py-2 align-middle no-underline"
+            >
+              <Icon aria-hidden className="text-muted-foreground size-4 shrink-0" />
+              <span className="min-w-0">
+                {/* The label as it stands in the handbook — one text node,
+                    never inline-parsed. `truncate` can cut it, so the whole
+                    label travels in `title`: without it a long label is a
+                    card the customer cannot read to the end and has no way of
+                    revealing. It is the developer's own text, never the
+                    model's, so putting it in an attribute adds no surface. */}
+                <span
+                  title={part.label}
+                  className="block truncate text-sm font-medium"
+                >
+                  {part.label}
+                </span>
+                <span className="text-muted-foreground block text-xs">{t(kind)}</span>
+              </span>
+            </a>
+          );
+        }
+        default:
+          return <Fragment key={index}>{part.text}</Fragment>;
+      }
+    });
+  }
 
   return (
     <div className="space-y-2">

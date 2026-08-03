@@ -153,6 +153,12 @@ const TASKS = {
     needs: ["env", "node_modules"],
     run: (args) => script("scripts/mcp/check.mjs", args),
   },
+  "api-check": {
+    group: "Tests & quality",
+    help: "Check the HTTP API (settings) — and with --live really call it once",
+    needs: ["env", "node_modules"],
+    run: (args) => script("scripts/api/check.mjs", args),
+  },
   "legal-check": {
     group: "Tests & quality",
     help: "What is still missing legally — placeholder pages, the AI notice, consent, evidence",
@@ -171,11 +177,20 @@ const TASKS = {
   },
   "kb-check": {
     group: "Tests & quality",
-    help: "Check the assistant's handbook (content/knowledge/) — format, size, cost per answer",
+    help: "Check the assistant's handbook (content/knowledge/) — format, size, media references, cost per answer",
     // No `needs`: it reads Markdown and prints numbers. It has to work in a
     // half-set-up project, because that is exactly when somebody is writing
     // the handbook for the first time.
     run: (args) => script("scripts/ai/kb-check.mjs", args),
+  },
+  "kb-media-sync": {
+    group: "Tests & quality",
+    help: "Copy .data/knowledge-media/ into the media store (dry run; --apply writes)",
+    // Only `env`: the MEDIA_* variables decide which store it fills. No
+    // `node_modules` — it is plain Node, and filling a store must work in a
+    // project that never ran an install.
+    needs: ["env"],
+    run: (args) => script("scripts/knowledge/kb-media-sync.mjs", args),
   },
   lint: {
     group: "Tests & quality",
@@ -391,6 +406,13 @@ const TASKS = {
     // An agent keeps using `update` / `update --apply`: the question needs a TTY,
     // and without one this refuses rather than applying on its own.
     run: (args) => script("scripts/dev/update.mjs", ["--confirm", ...args]),
+  },
+  "export-core": {
+    group: "Setup",
+    help: "Copy the shared core into a companion repo (plan; --apply writes; re-run to update)",
+    // No `needs`: it only reads files and must work in a half-set-up project.
+    // What it copies is config/core-export.json; the story is docs/mobile.md.
+    run: (args) => script("scripts/core/export.mjs", args),
   },
   "agent-setup": {
     group: "Setup",

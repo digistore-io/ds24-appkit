@@ -118,6 +118,13 @@ reader's, whichever that is — the language instruction is per request, the
 handbook is not. That is also why translating it would be wasted work: it would
 double the cached prefix for no gain.
 
+**Where the content comes from when there is more than you can type** — a
+recorded course, an ebook, two years of webinars — is its own layer: a
+knowledge corpus under `content/knowledge-sources/`, distilled once and
+written from. It never reaches the model at runtime; the handbook stays what
+she reads. The whole story — corpus, transcript ladder, media suggestions —
+is [`docs/knowledge.md`](knowledge.md).
+
 Check it any time:
 
 ```bash
@@ -230,6 +237,12 @@ database you already run — returns the matching passages with
 persona, so the persona stays cached and the looked-up part does not. The route,
 the UI and the storage never see a document and do not change.
 
+A third candidate exists once a knowledge corpus with a committed graph does
+([`docs/knowledge.md`](knowledge.md)): a retriever that reads
+`graphify-out/graph.json` — plain Node and `JSON.parse`, no Python at runtime,
+no embedding job, no migration. Same seam, same contract: retrieved passages
+arrive `cacheable: false` and the breakpoint moves back to the persona.
+
 Do it when the numbers say so, not before. A vector database is an embedding
 job, a chunking strategy, a migration and a second thing that can silently
 return the wrong paragraph — all of which is worth it for a large corpus and
@@ -298,6 +311,11 @@ sanitiser to keep current, and anything outside the subset (a table, a heading,
 a link) is shown to the customer literally. That is the safe direction, and the
 persona tells her so rather than pretending the window renders more.
 
+One extension: a media marker she repeats **verbatim from the handbook**
+renders as a small suggestion card — a video, a worksheet — and anything that
+is not an exact copy stays plain text. The markers, the files behind them and
+the two delivery legs are [`docs/knowledge.md`](knowledge.md).
+
 ## Where she appears
 
 Two places, one conversation:
@@ -339,6 +357,14 @@ the entry in that state and gets no diagnosis if they type the URL — the
 sentence names an environment variable, which is your infrastructure and not
 their business. `"enabled": false` hides it from everybody, including you:
 that is a decision, not a fault, and there is nothing to report.
+
+The rule generalises beyond the chat. "Switched off" and "not working" are
+different questions, and a `featureKey` in `NAVIGATION` that conflates them
+hides the broken feature *and* the page explaining it — an assistant with
+`"enabled": true` and a key for the wrong company would produce no button, no
+entry and no notice anywhere. Whoever adds the next optional feature to
+`NAVIGATION` decides this again: copy the shape of `chatNavVisible()`, do not
+reach for `isXEnabled()` alone.
 
 The panel loads the transcript when it is opened, once — not in the layout,
 which would put a database query in front of every page in the app for a panel

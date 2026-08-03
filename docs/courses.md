@@ -45,6 +45,11 @@ shape 3 unlocks exactly like shape 2 and says so, and every shape gates with
 the same one call. A vendor reads one section; so should the agent building
 for them.
 
+**And before interviewing the vendor about content: does this app have a
+knowledge corpus?** If `content/knowledge-sources/` exists, the vendor has
+already told it most of what the interview would ask — plan the course from
+it (see *Planning from a corpus*, at the end of this file).
+
 ---
 
 ## Shape 1 — the self-study course
@@ -414,3 +419,39 @@ one. An app selling a second course prefixes per product
 (`kurs-a-wehen-atmung`) — and extends shape 1's schema with a scoping column
 and a second gate key, which is a deliberate step, not a copy of the first
 course's tables.
+
+---
+
+## Planning from a corpus
+
+An app whose vendor went through the knowledge intake already carries the
+course's raw material: a corpus under `content/knowledge-sources/`, one folder
+per topic, distilled notes inside ([`docs/knowledge.md`](knowledge.md)). When
+it exists, plan from it instead of interviewing the vendor from zero — the
+corpus is the interview, already answered. Four derivations, in order:
+
+- **Subjects derive from topic slugs.** The corpus's topic slugs are the stem
+  the subject slugs above are built from: topic `wehen-atmung` → unit slug
+  `wehen-atmung`, or `kurs-a-wehen-atmung` when a second product forces the
+  prefix. Never invent a second vocabulary beside the corpus's — one string
+  flows from corpus through course to activities and companions, derived, not
+  duplicated.
+- **Structure is read from the topic folders.** Each topic folder is a module
+  candidate, its notes are the lesson candidates — and the `[[wikilinks]]`
+  between notes say what leans on what. Where the optional graph exists, ask
+  it for teaching order: `graphify path "<basics>" "<goal>"` answers "what has
+  to come before what" from the corpus's own links, which is exactly the
+  `position` column's question.
+- **Lesson media come from the corpus notes' `media:` references.** A note
+  that carries `media: wehen-atmung/atemuebung.mp4` has already placed that
+  file on one of the two delivery legs — which recording belongs to which
+  lesson is recorded, not remembered, so wiring a lesson's video starts from
+  that list rather than from a folder hunt. Mind the gate, though: knowledge
+  media are open to **every signed-in member** by design, so a video that only
+  buyers may see goes through the media store with `visibility: "entitled"`
+  ([`docs/visuals.md`](visuals.md)) — the corpus note then points at the
+  master file, not at the delivery.
+- **A lesson companion names its subject's handbook pages.** The companion's
+  instruction points at the handbook pages written for that topic — the same
+  distillation the chat answers from, so the course and the chat cannot tell a
+  learner two different stories.

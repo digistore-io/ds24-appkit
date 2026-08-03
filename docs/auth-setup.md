@@ -14,8 +14,13 @@ installation (see below) it is simply signed in. The branch is one pure
 function, `routeForSignIn` in `lib/auth/sign-in-route.ts`; the dialog around it
 is `app/login/{page,ui,actions}.tsx`.
 
-Two properties of that flow are decisions rather than accidents:
+Three properties of that flow are decisions rather than accidents:
 
+- **The password is asked for first, before demo mode is considered.** Inside
+  `routeForSignIn` the demo branch comes last, and leading with `if (demoLogin)`
+  would read better while silently making every password set on a demo machine
+  unusable. Demo mode is a property of the installation; a password is a thing
+  its owner set on themselves, and the owner's choice wins.
 - **It tells a stranger whether an address has a password.** A password field
   appearing is the answer, and anyone can type any address. What it never
   reveals is whether an *account* exists: an unknown address and a known one
@@ -155,7 +160,10 @@ table `verificationTokens` (Drizzle adapter).
 **Locally you do not have to do anything.** The very first account in a fresh
 app becomes `owner` by itself — sign in at `/login` with any address you like,
 and the admin area plus the "Users" entry in the navigation are there right
-away. The rule and its boundary live in `lib/users/bootstrap.ts`.
+away. The rule and its boundary live in `lib/users/bootstrap.ts`, wired into
+`auth.ts` and `lib/auth/dev-login.ts` — the role is assigned while the account
+comes into being, not afterwards, because the session is a JWT and carries the
+role from the moment of sign-in.
 
 **That bootstrap applies in DEV only, deliberately.** In STAGING and PROD the
 first person to sign in is not necessarily you — a freshly deployed instance
@@ -175,6 +183,96 @@ node scripts/users/create-user.mjs --email owner@example.com --role owner --appl
 
 Roles: `owner` = operator/admin, `member` = customer. Protect admin areas with
 `requireOwner()` (`lib/authz.ts`). Details: `scripts/users/README.md`.
+
+## Changing the email address
+
+The core is in the intro above: a Member changes their own address by proving
+they can read mail at the new one — a link sent there, and nothing moves until
+it is clicked. The rest of the machinery lives in `lib/email-change/`, and
+these are the details worth knowing before you touch it:
+
+- **One pending change per Member.** A new request replaces the old one and
+  kills its link — that is how a typo'd address is corrected, and why there is
+  no cancel button to build. Until a link is followed, the old address still
+  signs in, a password still works, and an abandoned request stays abandoned
+  for ever.
+- **Why the rate limits are three, not two.** The two mail counters (three an
+  hour, per account *and* per target address) exist because this is the one
+  action where a signed-in person chooses both that mail is sent and who it
+  goes to — and it is the operator's sender reputation that pays for leaving it
+  open. The third counter meters the *answer*: refusing an address as already
+  taken tells the requester an account exists there, and a refusal sends
+  nothing, so neither mail counter charges for it. Twenty an hour per account,
+  counted on every request that reaches the lookup. Without it the refusal is
+  an enumeration oracle a script can query for free — `security-gateway` found
+  exactly that after the feature first shipped, which is why it is written
+  down here.
+- **Confirming sets `emailVerified`**, where the Operator's `setUserEmail()`
+  clears it. Not an inconsistency to tidy away: there an address is asserted by
+  somebody else and has proved nothing; here following the link IS the proof.
+- **Confirming claims purchases** made under the new address, the same pass
+  that runs at first sign-in. A failed claim never fails the change.
+- **Nothing the Member owns moves with the address.** Attribution runs on
+  `memberId`, not on an address, so balance, ledger, grants, role and running
+  subscriptions are untouched by a change.
+- **The session keeps the old address until the next sign-in.** It is a JWT and
+  holds the state from sign-in time, so the sidebar shows the old address for a
+  while. The account page reads `users.email` from the database for exactly
+  this reason — being wrong there would be wrong on the page somebody opens to
+  check.
+
+The old address is told about the move, with no link — if the change was not
+the owner's doing, that mail is the only way they find out.
+
+## Passwords: the pieces
+
+If you touch the password feature, these are the files:
+
+| | |
+|---|---|
+| `lib/credentials/rules.ts` | pure rules — minimum length, no composition rules, and the sliding-window limit on failed attempts |
+| `lib/credentials/hash.ts` | scrypt from `node:crypto`. The **only** file that writes or reads `users.passwordHash` |
+| `lib/credentials/manage.ts` | the shell: set, remove, and the sign-in check. Acts only on the account whose id the caller read from the session |
+| `lib/auth/password-login.ts` | the Auth.js Credentials provider, id `"password"` |
+| `lib/email.ts` | `sendCredentialChangeEmail()` — the notice mail below |
+
+The password sign-in refuses blocked accounts like every other provider, and it
+is checked **twice** — in `verifyPasswordLogin()` and again in the `signIn`
+callback in `auth.ts`. That redundancy is deliberate; do not tidy it away.
+Rejected sign-ins of every kind land on `/login?error=AccessDenied` — the path
+`pages.error` in `auth.config.ts` configures — where a blocked account reads
+"Account blocked".
+
+The Operator's menu entry **send sign-in link** is the recovery path seen from
+the other side — it runs through `signIn()` from Auth.js, so the same token
+mechanism applies as with a normal sign-in.
+
+### The credential notice mail
+
+Setting, changing or removing a password mails the account address. It is the
+only defence against the case nothing else covers: somebody reaches an unlocked
+machine, opens the account page and sets a password on themselves — a
+credential that outlives the borrowed session, and without the notice the owner
+never finds out. Three rules about that mail, all load-bearing:
+
+- **It carries no link, and must not grow one.** Not a "wasn't me" button, not
+  a revoke link, not a sign-in link. A security notice that acts on a click is
+  a phishing template with your sender address on it; one that cannot act is
+  useless to forge, which is what makes it safe to send to an account that may
+  already be in the wrong hands. `lib/email.test.ts` asserts this.
+- **A failed send never undoes the change.** The password is already written
+  when the notice goes out, so `notify()` in `app/dashboard/account/actions.ts`
+  swallows every error into a log line. Telling the Member it failed would be a
+  lie that also loses their change; a machine with no mail transport configured
+  is a normal state here, not an error.
+- **The subject names which change it was.** It is what somebody reads in a
+  list of unopened mail, and "a password was created" is alarming to a person
+  who created none, where a generic "something changed" is not.
+
+This is the second mail the app sends, and the opposite shape from the first:
+`sendLoginEmail()` is nothing but a link, this one must contain none. That is
+why `lib/email.ts` composes a `Mail` and hands it to one transport, rather than
+every send function taking a `url`.
 
 ## "JWTSessionError: no matching decryption secret"
 

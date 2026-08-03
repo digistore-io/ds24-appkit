@@ -296,6 +296,43 @@ make that decision for you.
 
 ---
 
+## The Operator's support page
+
+`/dashboard/admin/users/<id>` is where support looks at one Member whole, and
+it deliberately reads a *different* list than your features do:
+`listGrantsFor()` returns every entitlement this account has ever held — live,
+paused, expired or over, each labelled by `grantState()`
+(`lib/entitlements/rules.ts`) and carrying the reason it ended. Using
+`entitlementsFor` there would be wrong: that one is the app's access answer and
+deliberately hides the very rows support is asked about.
+
+A manual grant handed out from that page is **permanent or bounded, and the
+Operator picks which**. No date means it runs until somebody revokes it. A date
+means access ends at the **end** of that day — `accessUntilFromDay()` stores
+the last millisecond of it in UTC, and nothing is scheduled: the term is simply
+compared against the clock on every read.
+
+The grant picker (`grantableProducts()`) offers `kind: "subscription"` and
+`kind: "one_time"` entries only. A token package cannot be handed out as a
+grant, because a balance is not an entitlement and `hasPlan()` would answer
+`false` for such a row for ever — a support case about missing tokens is a
+balance correction (`adjustTokens()`), not a grant.
+
+Revoking is terminal, and only `source: "manual"` rows can be revoked at all —
+purchased access ends by Digistore24 event, and the refusal lives in the
+`UPDATE` itself, not merely in the menu. Because ending is terminal, the remedy
+for a revocation made in error is a *new* manual grant; that is why two
+identical manual grants for the same Product Key are legal, and the per-key
+dedupe reports the key once regardless.
+
+One operational note: `node run.mjs smoke` cannot see this page — it skips
+`[id]` routes, and it is not signed in either. After changing anything here,
+open it by hand with a real Member id and run `node run.mjs errors`: the page
+renders dates and grant states, which is exactly the material that breaks
+without changing the status code.
+
+---
+
 ## Tokens are not entitlements
 
 Prepaid tokens are a **balance**, not access, and they live in
@@ -336,11 +373,21 @@ the account from the session (`requireActiveUser()`, which also turns away
 blocked accounts), so a `memberId` out of a `FormData` cannot drain another
 customer's balance. The underlying `consumeTokens({ memberId, … })` stays
 exported for the IPN and the Operator pages, where naming somebody else is the
-job — features do not call it. Full rules, including why an optional
-`memberId` parameter does not solve this: `CLAUDE.md` → **Charging tokens**.
+job — features do not call it. Charging on behalf of somebody else needs a
+function of its own, opening with `requireOwner()`, exactly as `adjustTokens`
+does. Full rules, including why an optional `memberId` parameter does not
+solve this: `CLAUDE.md` → **Charging tokens**.
 
 A shortfall throws rather than returning `false`, and writes nothing. Every
 booking lands in the ledger, so a balance is always explainable.
+
+The order is **check → work → charge**, gating on `hasSufficientBalance` before
+the expensive part starts. The gap between the check and the charge is real but
+bounded at one operation, and the row lock inside `consumeTokens` still stops a
+balance going negative under racing requests. Closing that gap properly would
+mean reserving tokens up front and settling afterwards — a reservation needs
+expiry and reconciliation of its own, and this template deliberately does not
+build one for a failure that costs at most one operation's worth of work.
 
 The two models combine well and are meant to: a subscription gates *whether*
 the feature exists for this customer, the balance limits *how much* they use it.

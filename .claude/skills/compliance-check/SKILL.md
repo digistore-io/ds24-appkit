@@ -127,6 +127,7 @@ Read from disk first, and say what you found rather than asking about it:
 | Is there a **companion** — anything that reads, judges or advises on what a customer produced? | `config/ai-companion.json` (`enabled`) **and** the entries in `lib/ai/companions.ts`. `node run.mjs legal-check` reports the switch; each entry's `load()` is the list of customer data that call sends, and it is what §8a and the policy paragraph are drafted from |
 | Which AI company receives data? | `node run.mjs ai-check` |
 | Is there tracking? | grep `app/`, `components/` for analytics — the template ships none |
+| Is there **ingested third-party material**? | `content/knowledge-sources/` — a rights question the Licence Gate at intake already governs (verbatim storage only for own or licensed content; third-party sources are distilled, source cited): [`docs/knowledge.md`](../../../docs/knowledge.md) |
 | What personal data is held? | `docs/data-protection.md` |
 | Is the MCP interface on? | `config/mcp.json` |
 | What is sold, and how? | `config/digistore-products.json` (`billingMode`) |
@@ -204,70 +205,28 @@ it in — that marker is what `legal-check` and the warning box on the page read
 
 ### The Impressum — § 5 DDG
 
-The TMG was replaced by the **DDG on 14 May 2024**. Anything still citing § 5
-TMG is citing a repealed act.
-
-Ask for: name and legal form, address (**no PO box**), email **and** a second
-fast contact route, register and number, VAT ID under § 27a UStG if held,
-supervisory authority for a regulated trade, authorised representatives. For
-journalistic-editorial content also a responsible person under § 18(2) MStV.
-
-**Do not invent placeholders and move on.** An Impressum with `[FIRMENNAME]` in
-it is worse than the shipped placeholder, because the shipped one announces
-itself and a half-filled one does not. If the user does not have an answer now,
-leave the placeholder in place and put it in the report.
+What to ask the user for, the repealed-TMG trap, and why a half-filled
+Impressum is worse than the shipped placeholder are in
+[`references/consumer-and-info-duties.md`](references/consumer-and-info-duties.md)
+→ *The Impressum* — read that section before drafting the page.
 
 ### The privacy policy — Art. 13 GDPR
 
 **Draft it from `docs/data-protection.md`, not from a checklist and not from a
-generator.** That file was read out of the code. A generic policy will miss what
-this app actually does, and the misses are not obvious:
-
-- **IP addresses are processed** — in memory, fifteen minutes, to stop password
-  guessing (§4). Nothing is stored, and processing without storing is still
-  processing. Legitimate interest in securing the service is the basis that fits.
-- **`ipn_events` holds the complete raw webhook body**, buyer data and all, for
-  60 days (§3).
-- **`email_changes` can hold a stranger's address** — a mistyped target — for up
-  to 24 hours (§2).
-- **Operator notes are personal data** (§3). The app never shows them to the
-  customer; that is tone, not an exemption.
-- **The AI company is the operator's choice**, not a fixed name (§5, §8).
-  `node run.mjs ai-check` says which one. Naming the wrong one is worse than
-  naming none.
-- **Nothing about the person is sent to the assistant** — no name, address,
-  balance or purchase (§8). Worth saying, because customers ask. ⚠️ **Only
-  where there is no companion.** With one switched on that sentence is false,
-  and it is false in a legal document — write the bullet below instead of this
-  one, or write both, scoped: *"the assistant is sent nothing about you; the
-  coach is sent what you submit to it"*.
-- **A companion is sent what the customer wrote**, plus the fields its entry
-  names (§8a) — and possibly to a **different company** than the assistant's,
-  because the two are separate tasks in `config/ai-models.json`.
-  `node run.mjs ai-check` names both. **An app with no companion gets no such
-  paragraph at all** — the shipped state is `"enabled": false`, and a policy
-  describing a feature the app does not have is as wrong as one that omits a
-  feature it does.
-- **Operator access to an account is recorded** and the customer may be told
-  (§12).
-
-If the app has grown since that file was written, **update it first**. A privacy
-policy is only as true as the list it was drafted from.
+generator** — that file was read out of the code. The list of things this app
+actually does that a generic policy misses — processed-but-not-stored IP
+addresses, the raw webhook bodies, the assistant/companion split and the rest —
+is in [`references/gdpr.md`](references/gdpr.md) → *The privacy policy*. Read
+that section in full before writing a word of the policy.
 
 ### AGB and Widerrufsbelehrung — only if you are the seller
 
-If Digistore24 resells, the purchase terms, the invoice, the VAT and the
-right-of-withdrawal notice at checkout are theirs. Do not create a second set;
-two sets of terms for one purchase is worse than one.
-
-**Terms of USE of the app are yours either way** — what the subscription covers,
-what happens on non-payment, what you may do with the account. None of that is
-in Digistore24's purchase terms.
-
-Where the user *is* the seller: for digital content the right of withdrawal
-lapses early only with express consent **and** an acknowledgement that it is
-thereby lost (§ 356(5) BGB), and the order button must be unambiguously labelled
-(§ 312j(3) BGB).
+Whether these are yours at all was settled by `scope` question 1. Who writes
+the purchase terms when Digistore24 resells, why terms of USE of the app are
+yours either way, and the § 356(5) / § 312j(3) BGB rules for the case where the
+user *is* the seller are in
+[`references/consumer-and-info-duties.md`](references/consumer-and-info-duties.md)
+→ *AGB and Widerrufsbelehrung*.
 
 ## 4 · `ai` — the EU AI Act
 
@@ -283,58 +242,12 @@ Check it, do not assume it:
 node run.mjs legal-check      # reports it directly
 ```
 
-The notice is one line per surface — `chat.disclaimer` and
-`companion.disclaimer` in both message files — rendered by
-`components/ai-disclosure.tsx` above the transcript, in every variant.
-`lib/ai/disclosure.test.ts` fails the build if either language stops naming it
-as an AI, and `legal-check` fails when a surface is switched **on** and its
-notice is missing, unreadable or no longer rendered.
-
-**The two are not the same conversation, and the report says which is which:**
-
-| | the assistant | a companion |
-|---|---|---|
-| the disclosure | above the transcript | above it too, and it has to say a model **reads what you write** — the interaction IS the customer handing over their work |
-| the policy paragraph | §8 — what they typed, nothing about them | §8a — what they **produced**, plus the fields the entry names |
-| the recipient | the company bound to the `chat` task | the company bound to the **`companion`** task — possibly a second one. `node run.mjs ai-check` names both, and a DPA and a third-country basis are needed per company |
-| the role | provider, on the reasoning below | the same reasoning, and it carries further: the vendor's own instruction, purpose and subject |
-| Art. 50(2) | a support answer is not published synthetic content | **in question** the moment it drafts something the customer publishes — `docs/compliance.md` §3.3, and the date was still moving |
-
-One surface that is invisible to every check above: a companion somebody
-hand-wrote instead of mounting `<CompanionPanel>`. `legal-check` looks for
-`<AiDisclosure surface="companion" />` in `components/companion-panel.tsx`, so a
-bespoke surface can carry its notice under the send button with everything
-green. Ask.
-
-**The rule is not "the chat carries a notice".** It is: anything in this app
-that talks to a person as a machine says so, at the latest at the first
-interaction, clearly. If the user has built a second AI surface — a generator, a
-form assistant, an email writer — it needs its own, and that is a finding.
-
-Do **not** lean on the "obvious to a reasonable person" exception for an
-assistant with a human name and a face. That is the case the exception was
-written to exclude.
-
-### The role — provider or deployer?
-
-`docs/compliance.md` §3.2 has the reasoning. The short version for this
-template: an assistant with a name you chose, a persona in `lib/ai/prompt.ts`, a
-handbook in `content/knowledge/` and a purpose you defined is **a system you
-offer**, not somebody else's system you happen to use. Assume **provider** until
-an advisor says otherwise — it is the larger duty set, and assuming the smaller
-one is the expensive mistake.
-
-### Art. 4 — AI literacy. In force since 2 February 2025
-
-Documented measures, proportionate to the role. No prescribed curriculum. For a
-solo operator this is short — but short is not absent, and the document is the
-point. Write `docs/compliance/ki-kompetenz.md` (check 7).
-
-### Risk class
-
-Nothing this template ships is high-risk. If the answer to `scope` question 6
-was yes, say so in the report in its own paragraph: the deadline is
-2 December 2027 and the obligations are a different order of magnitude.
+Everything behind that command — where the notice lives and which tests guard
+it, why the assistant and a companion are **not the same conversation**, the
+bespoke surface `legal-check` cannot see, the provider-or-deployer question,
+Art. 4 literacy and the risk class — is in
+[`references/ai-act-and-tdddg.md`](references/ai-act-and-tdddg.md). Read it
+before reporting anything for this check.
 
 ## 5 · `consent` — § 25 TDDDG and marketing
 
@@ -343,142 +256,35 @@ it.** This app sets three cookies — session, language, theme — all strictly
 necessary or set by the user's own click, and ships no analytics, no pixel, no
 advertising SDK.
 
-```bash
-grep -ril "gtag\|googletagmanager\|plausible\|posthog\|matomo\|mixpanel\|segment\|fbq\|hotjar\|clarity" app components lib package.json
-```
-
-**Then the one that is not an analytics tag and catches people out — an embedded
-video:**
-
-```bash
-grep -rn "youtube.com\|youtube-nocookie.com\|youtu.be\|player.vimeo.com" app components
-```
-
-**A hit is not automatically a finding — look at what is around it.** An embed
-built to the recipe renders exactly this URL, and reporting a correctly gated
-video as a defect is how a check loses its authority. What makes it a finding is
-an `<iframe>` that is rendered unconditionally: no click, no state, no
-`hasConsent()` in front of it.
-
-An unconditional `<iframe>` pointing at a video host contacts that host the moment the page
-loads — before anybody has agreed to anything — and it sets identifiers on the
-visitor's device. That is § 25 TDDDG with no exception for "it is only an
-embed", and it is trivial to verify from the outside, which is why it gets
-found. `youtube-nocookie.com` reduces what is set and does **not** remove the
-contact, so it is not the fix.
-
-The fix is a gate: a still image of your own and a button, and the iframe comes
-into existence only after the click. The recipe is in
-[`docs/visuals.md`](../../../docs/visuals.md) → *A video from YouTube or Vimeo*,
-and the skill that builds it is **`visuals`**. **Self-hosting the video removes
-the question entirely** — a file in the app's own bucket contacts nobody and
-needs no consent at all, which is worth naming before somebody writes a banner
-for it.
-
-Severity: ❌ **HIGH** on a page a signed-out visitor can reach; ⚠️ MEDIUM behind
-the sign-in, where a contract-performance argument exists for some of it but not
-for the identifiers.
-
-**If both greps come back empty, the finding is: no consent banner is needed,
-and adding one would be a defect.** Say it in those words. Under § 25 TDDDG a banner
-where nothing touches the device asks for permission the app neither needs nor
-uses, and it trains people to click past the one that will later matter. This is
-the single most common thing a generator gets wrong, and the user has probably
-been told the opposite.
-
-**A purchase needs no consent either.** It runs on Art. 6(1)(b) — performance of
-a contract. The thank-you page deliberately prompts for nothing.
-
-**Where something genuinely does need consent** — an analytics tag, a marketing
-mail (§ 7 UWG), a transfer beyond what the product requires:
-
-1. Declare the purpose in `config/consent.json` (`key`, `textVersion`).
-2. Write `consent.<key>.title` and `.body` in **both** message files.
-   `i18n/messages.test.ts` checks it; `legal-check` reports it.
-3. Ask with `<ConsentDialog>` and record with `recordConsent()`.
-4. Gate the thing itself on `hasConsent(memberId, key)` — in front of the tag,
-   not in front of the button that triggers it.
-
-Three properties of that machinery are load-bearing and worth explaining to the
-user rather than just using:
-
-- **Refusing is as easy as agreeing.** Two equal buttons, no pre-ticked box, no
-  grey decline link. Art. 7(1) and (4) ask whether consent was freely given.
-- **A refusal is recorded** and stops the asking. Re-asking somebody who
-  declined is what turns a dialog into pressure.
-- **`textVersion` is the load-bearing field.** Change the wording, bump the
-  version, and everyone who agreed to the old sentence correctly counts as
-  unasked again. That is inconvenient and it is the honest answer.
-
-Never build a second consent store beside `lib/consent/`.
+How to disprove it — the two greps (analytics tags, and the embedded video
+that catches people out), how to judge a hit, the exact wording of the "no
+consent banner needed" finding, and the four-step consent machinery with its
+three load-bearing properties for anything that genuinely does need consent —
+is in [`references/ai-act-and-tdddg.md`](references/ai-act-and-tdddg.md) →
+*§ 25 TDDDG*. Run this check from that section.
 
 ## 6 · `rights` — what a person may demand
 
 Mostly verification: this template implements them. Check each, and report the
 one that is genuinely open.
 
-| Right | Art. | Where | Verify by |
-|---|---|---|---|
-| Information | 15 | member's own download; `node run.mjs data-export --email …` | run the command |
-| — and it covers learning performance | 15 | `activity_results` in BOTH exports (`docs/data-protection.md` §8b) | where `lib/learning/` exists (0.9.0+): the export carries an `activityResults` section. Older clone: not applicable, not a finding |
-| Rectification | 16 | `/dashboard/account`, and the Operator's user page | open the page |
-| Erasure | 17 | account deletion, both self-service and Operator | read the dialog text |
-| Restriction | 18 | blocking the account | — |
-| Portability | 20 | the same JSON | run the command |
-| Objection | 21 | only bites once something runs on legitimate interest | — |
-| No automated decision | 22 | this app makes none | `docs/data-protection.md` §14 |
-
-**A companion's turns need nothing extra here, and that is worth saying rather
-than assuming.** They are rows in `chat_messages` under a `conversation_id`, not
-a table of their own — so they are already in **both** exports and already go
-with the account on the cascade that was there before. Verify it the same way as
-everything else in this table: `node run.mjs data-export --email …` and
-`npm run test -- lib/privacy/export.test.ts`. The parity guard is what would
-catch a *separate* table reaching one export and not the other, which is the
-failure a second table would have introduced.
-
-**The two exports must not drift.** The member's own download omits the raw
-webhook bodies (they can carry a third party's data and nobody is in between to
-redact them, Art. 15(4)); everything else is identical, and
-`lib/privacy/export.test.ts` fails the build if one grows a table the other
-lacks. If the user has added a table, that test is what catches it — run it.
-
-**The deletion carve-out has to be in the privacy policy, in plain words.**
-Orders and `ai_usage` survive with the member link removed, because § 147 AO and
-§ 257 HGB require them and Art. 17(3)(b) exempts exactly that. "We delete
-everything" is a promise the app does not keep and did not need to make.
-
-**The genuinely open question** (`docs/data-protection.md` §6): nothing deletes
-an order once its retention period has actually run out. Correct in year one,
-wrong by year eleven. Put it in the report as a decision the user has to make,
-not as a bug.
-
-**One month** to answer (Art. 12(3)), extendable by two with reasons.
+The full verification table — which right, which article, where it lives in
+this template and the command or test that proves it — plus the export-drift
+guard, the deletion carve-out that must be in the privacy policy, the genuinely
+open retention question and the one-month answer deadline are in
+[`references/gdpr.md`](references/gdpr.md) → *Data-subject rights*. Work
+through that table item by item; do not verify from memory.
 
 ## 7 · `evidence` — Art. 5(2), accountability
 
 Being compliant is not enough; you have to be able to **show** it. Seven
 documents, into `docs/compliance/`, **derived from the code rather than from a
-template** — that is what makes them worth having and what a template cannot do:
-
-| File | What | Derive from |
-|---|---|---|
-| `verarbeitungsverzeichnis.md` | record of processing (Art. 30) | `docs/data-protection.md` + `config/ai-models.json` + the mail and host setup |
-| `tom.md` | technical and organisational measures (Art. 32) | the real ones: scrypt hashes, SHA-512 IPN signature, `lib/rate-limit.ts`, `requireOwner()`, `readOnly` as the MCP boundary, no IP storage |
-| `loeschkonzept.md` | deletion concept | the windows in `lib/cron/jobs.ts`; the proof is `node run.mjs cron --list` |
-| `avv-register.md` | processor agreements (Art. 28) | recipients from `docs/data-protection.md` §5, with the AI company actually in use |
-| `ki-register.md` | AI systems, role, risk class, Art. 50 measures | check 4 — **one row per surface**: the assistant and any companion are two systems, possibly on two companies |
-| `ki-kompetenz.md` | AI literacy measures (Art. 4) | ask the user what they did |
-| `datenpanne.md` | breach procedure (Art. 33/34) | write it now, not during one |
-
-Two things to get right:
-
-- **The record of processing is not optional for a SaaS.** The Art. 30(5)
-  exemption falls away as soon as processing is regular, which it is by
-  definition here.
-- **`datenpanne.md` has a clock in it: 72 hours** to the supervisory authority.
-  A procedure written during an incident is a procedure written badly. Name who
-  decides, who they call, and what gets written down.
+template** — that is what makes them worth having and what a template cannot
+do. Which seven, what goes into each and what to derive it from — plus the two
+that get got wrong (the Art. 30(5) exemption that never applies to a SaaS, and
+the 72-hour clock inside `datenpanne.md`) — are in
+[`references/gdpr.md`](references/gdpr.md) → *The evidence pack*. Write them
+from that section.
 
 `node run.mjs legal-check` lists which of the seven are missing.
 
@@ -488,19 +294,11 @@ Five minutes, no building. Answer each with *reaches you / does not reach you
 yet / and here is what changes it*, using the `scope` answers.
 `docs/compliance.md` §6 has the detail.
 
-- **BFSG / accessibility** — in force since 28 June 2025. § 3(3) BFSG exempts
-  micro-enterprises **offering services**, and a SaaS is a service: under 10
-  people **and** ≤ €2m turnover means out of scope. **Say what happens when they
-  cross it**, because that is the point of mentioning it a year early: the whole
-  customer-facing interface measured against WCAG 2.1 AA is a project, not a
-  checkbox.
-- **DSA** — the contact point for users **and** for authorities reaches every
-  intermediary including micro-enterprises; the contact route may not be a
-  chatbot alone. Transparency reports only from 50 people **and** €10m.
-- **Data Act** — applicable since 12 September 2025. The part that reaches a
-  SaaS is switching and data portability for business customers.
-- **NIS2** — sectoral and size-gated; normally outside. If they sell into
-  critical infrastructure, say so and stop.
+The four regimes to answer for — BFSG with its micro-enterprise exemption and
+what crossing it means, the DSA contact points that reach even a
+micro-enterprise, the Data Act's reach into a SaaS, and where NIS2 stops — are
+in [`references/consumer-and-info-duties.md`](references/consumer-and-info-duties.md)
+→ *The map beyond*.
 
 ## The report
 

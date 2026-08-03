@@ -39,7 +39,9 @@ import { after } from "next/server";
 import { isLimited, record } from "@/lib/rate-limit";
 import { hasPlan } from "@/lib/entitlements/manage";
 import { APP_NAME } from "@/lib/app";
-import { authenticate } from "@/lib/mcp/keys";
+import { bearerFrom, callerKey, originAllowed } from "@/lib/api-keys/http";
+import { authenticate } from "@/lib/api-keys/keys";
+import { mayRun } from "@/lib/api-keys/rules";
 import { isMcpEnabled, mcpConfig } from "@/lib/mcp/config";
 import { spendForKey } from "@/lib/mcp/spend";
 import { TokenError } from "@/lib/tokens/rules";
@@ -65,7 +67,6 @@ import {
   AUTH_FAIL_LIMIT,
   CALL_LIMIT,
   MCP_RATE_BUCKET,
-  mayRun,
 } from "@/lib/mcp/rules";
 import { findTool, toolsFor, type ToolContext } from "@/lib/mcp/tools";
 
@@ -104,51 +105,9 @@ function unauthorized(): Response {
   );
 }
 
-/**
- * Where a browser is allowed to call this from.
- *
- * The spec makes this check a MUST, and the attack it stops is DNS rebinding: a
- * page on the open internet resolving a name to 127.0.0.1 and then talking to
- * an MCP server on the visitor's own machine. A real MCP client sends no
- * `Origin` at all, so an absent header is fine — a PRESENT and foreign one is
- * what gets refused.
- */
-function originAllowed(origin: string | null): boolean {
-  if (!origin) return true;
-
-  let host: string;
-  try {
-    host = new URL(origin).hostname;
-  } catch {
-    return false;
-  }
-
-  if (host === "localhost" || host === "127.0.0.1" || host === "[::1]") return true;
-
-  const configured = process.env.APP_URL?.trim();
-  if (!configured) return false;
-  try {
-    return new URL(configured).hostname === host;
-  } catch {
-    return false;
-  }
-}
-
-/** The caller's origin for the failed-auth counter. Behind a proxy, the real one. */
-function callerKey(request: Request): string {
-  const forwarded = request.headers.get("x-forwarded-for");
-  // The left-most entry is the client; everything after it was added by a hop.
-  return forwarded?.split(",")[0]?.trim() || "unknown";
-}
-
-function bearerFrom(request: Request): string | null {
-  const header = request.headers.get("authorization");
-  if (!header) return null;
-  const [scheme, ...rest] = header.trim().split(/\s+/);
-  if (scheme.toLowerCase() !== "bearer") return null;
-  const value = rest.join("");
-  return value === "" ? null : value;
-}
+// The origin check (a spec MUST here — it stops DNS rebinding), the caller
+// key and the bearer extraction live in `lib/api-keys/http.ts`, shared with
+// the HTTP API's guard: the same three questions in front of both surfaces.
 
 // ── GET / DELETE ────────────────────────────────────────────────────────────
 
@@ -220,7 +179,7 @@ export async function POST(request: Request): Promise<Response> {
     return unauthorized();
   }
 
-  const auth = await authenticate(bearer);
+  const auth = await authenticate(bearer, "mcp");
   if (!auth.ok) {
     record(AUTH_FAIL_BUCKET, caller, AUTH_FAIL_LIMIT);
     // Precise in the log, vague to the caller — see `unauthorized()`.

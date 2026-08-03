@@ -126,6 +126,31 @@ retrieveApiKey(token = request_token)          ← authenticated with the DEVELO
 
 Reference: [How to generate an API key interactively](https://dev.digistore24.com/hc/en-us/articles/32486158815121-How-to-generate-an-API-key-interactively).
 
+### Localhost URLs travel through the redirect
+
+That https-only rule holds for **every** URL the API is handed — thank-you and
+opt-in pages just as much as `return_url`. Handing Digistore24 the address the
+app actually runs on locally ends the call on the spot (*"Please only use
+secure URLs with https://"*). So every such URL travels as a redirect address
+that leads back to your machine:
+
+```
+http://localhost:3000/optin/[ORDER_ID]
+  → https://ds24-appkit.com/redir/?port=3000&path=/optin/[ORDER_ID]
+```
+
+That happens by itself — in the scripts (`scripts/ds24/_public-url.mjs`) and in
+the checkout at runtime (`lib/digistore/public-url.ts`). The two are twins;
+change one, change the other. Never hand a raw localhost URL to the Digistore24
+API, and do not "fix" a rejection by inventing an https address that nothing
+answers on — the call would succeed and every visitor would land nowhere.
+
+The IPN endpoint is the one place the redirect cannot serve: Digistore24 calls
+that URL *itself*, so `/redir/` would land on the Digistore24 server's own
+localhost. The IPN needs a genuinely public URL — locally that is the Quick
+Tunnel (`docs/environments.md`) — and `ipnSetup` enforces it by fetching the
+address and insisting on HTTP 200, refusing even a 301/302 (next section).
+
 ### The IPN
 
 `app/api/ipn/route.ts` does three things and nothing else: verify the SHA512
@@ -265,8 +290,10 @@ not live there**.
 The API discards `data[amount]`, so `priceCents`, `currency` and
 `billingInterval` travel with each `createBuyUrl` call as `payment_plan[…]`.
 There is a `createPaymentPlan` API and this template deliberately does not use
-it — a stored plan puts the price in a second place and cannot do free trials,
-upgrades, vouchers or per-link affiliate commissions. **One price, one place.**
+it — a stored plan puts the price in a second place that drifts, and a stored
+plan is fixed: free trials (`test_interval`), upgrades and downgrades
+(`upgrade_order_id`), vouchers and per-link affiliate commissions all only work
+when the plan travels with the checkout call. **One price, one place.**
 Details: `docs/digistore-createbuyurl.md`, `docs/digistore-billing-modes.md`.
 
 ---
@@ -289,6 +316,14 @@ step-by-step guide including the local-tunnel and thank-you-page details. The
 only step that cannot be automated is the vendor's single click in the browser.
 All three commands are shape-A commands: they assume one key in the `.env` and
 one IPN connection.
+
+Approval is a **go-live step**: request it only once the product description
+and the app are mature. Before that only **test purchases** are possible — and
+they prove the whole chain, because the template processes them exactly like
+live ones (`api_mode` above). In DEV that is automatic: every checkout link
+carries the DS24 test-payment parameter by itself (`lib/digistore/testpay.ts`;
+inspect/rotate with `node run.mjs ds24-testpay`). Outside DEV the vendor sets the
+[test-purchase cookie](https://help.digistore24.com/hc/de/articles/23901169396241).
 
 ### Which marketplace a product is submitted to
 

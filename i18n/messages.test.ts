@@ -10,7 +10,7 @@ import { CREDENTIAL_ERROR_CODES } from "@/lib/credentials/rules";
 import { EMAIL_CHANGE_ERROR_CODES } from "@/lib/email-change/rules";
 import { CHAT_ERROR_CODES } from "@/lib/ai/rules";
 import { COMPANION_ERROR_CODES } from "@/lib/ai/companion-rules";
-import { MCP_ERROR_CODES } from "@/lib/mcp/rules";
+import { API_KEY_ERROR_CODES } from "@/lib/api-keys/rules";
 import { PROVIDER_ERROR_CODES } from "@/lib/ai/providers/types";
 import { CONSENT_ERROR_CODES } from "@/lib/consent/rules";
 import { MEDIA_ERROR_CODES } from "@/lib/media/rules";
@@ -112,7 +112,7 @@ const ERROR_CODE_UNIONS: Record<string, readonly string[]> = {
   "lib/email-change/rules.ts": EMAIL_CHANGE_ERROR_CODES,
   "lib/ai/rules.ts": CHAT_ERROR_CODES,
   "lib/ai/companion-rules.ts": COMPANION_ERROR_CODES,
-  "lib/mcp/rules.ts": MCP_ERROR_CODES,
+  "lib/api-keys/rules.ts": API_KEY_ERROR_CODES,
   "lib/ai/providers/types.ts": PROVIDER_ERROR_CODES,
   "lib/consent/rules.ts": CONSENT_ERROR_CODES,
   "lib/media/rules.ts": MEDIA_ERROR_CODES,

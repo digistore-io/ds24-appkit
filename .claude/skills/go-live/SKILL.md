@@ -182,6 +182,18 @@ Once, before selling:
   the launch is not finished. Production runs into errors that never showed up
   locally (missing env values, migrations that were never applied).
 - Test the sign-in (Google/e-mail).
+- **Knowledge media, if this app has any on the bucket leg.** No
+  `.data/knowledge-media/` folder and no `media:` entries in
+  `content/knowledge/` means nothing to do here — one sentence, walk on.
+  Otherwise the production store has to be filled, or every media suggestion
+  in the assistant's answers 404s on the live app while every local gate stays
+  green. `kb-media-sync` copies into whichever store the environment's
+  `MEDIA_*` variables name, so run it **with the production store values set**
+  — the same ones `setup-hosting` (step 6b) stored as secrets at the host:
+  `node run.mjs kb-media-sync --apply`, then `node run.mjs kb-check` under the
+  same configuration. **`kb-check` green against the production store is the
+  exit condition** — an unreachable store is a failure to fix, never a skip.
+  The reference is [`docs/knowledge.md`](../../../docs/knowledge.md).
 - **Purchase flow:** trigger "test connection" in Digistore24 (IPN `connection_test`
   → 200) and play through a real/test purchase → the order shows up, access is
   unlocked.

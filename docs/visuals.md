@@ -178,7 +178,11 @@ Two of those are worth saying out loud.
 
 **The type comes from the first bytes.** A `Content-Type` in an upload is
 written by whoever sent it. Believing it means an app that accepts `image/png`
-accepts anything at all, as long as the sender says `image/png`.
+accepts anything at all, as long as the sender says `image/png`. The same
+stance holds on the way out: `next.config.ts` sets
+`X-Content-Type-Options: nosniff`, so a wrong answer about what a file is does
+not get rescued by the browser guessing — the app's own sniffing is the one
+answer that counts.
 
 **Who may upload what depends on the role.** `config/media.json` → `mayUpload`.
 A member uploads pictures and PDFs; archives are the operator's. A customer who

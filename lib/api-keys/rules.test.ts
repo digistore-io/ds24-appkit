@@ -4,7 +4,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  KEY_PREFIX,
+  AUDIENCES,
+  KEY_PREFIXES,
   LIFETIMES_DAYS,
   MAX_NAME_LENGTH,
   PREFIX_LENGTH,
@@ -20,44 +21,70 @@ import {
 } from "./rules";
 
 /** A syntactically valid key — 43 base64url characters after the marker. */
-const VALID = KEY_PREFIX + "a".repeat(43);
+const VALID_MCP = KEY_PREFIXES.mcp + "a".repeat(43);
+const VALID_API = KEY_PREFIXES.api + "a".repeat(43);
 
 describe("looksLikeKey", () => {
-  it("accepts a key of the shape this app issues", () => {
-    expect(looksLikeKey(VALID)).toBe(true);
-    expect(looksLikeKey(KEY_PREFIX + "aA0_-".padEnd(43, "z"))).toBe(true);
+  it("accepts a key of the shape this app issues, for its own audience", () => {
+    expect(looksLikeKey(VALID_MCP, "mcp")).toBe(true);
+    expect(looksLikeKey(VALID_API, "api")).toBe(true);
+    expect(looksLikeKey(KEY_PREFIXES.mcp + "aA0_-".padEnd(43, "z"), "mcp")).toBe(true);
+  });
+
+  it("refuses a key across the audience line — the whole point of the prefixes", () => {
+    // An MCP key pasted into a mobile app must fail before any query, and an
+    // API key in an AI client likewise: a credential never widens by being
+    // sent somewhere else.
+    expect(looksLikeKey(VALID_MCP, "api")).toBe(false);
+    expect(looksLikeKey(VALID_API, "mcp")).toBe(false);
   });
 
   it("rejects anything without the marker", () => {
-    expect(looksLikeKey("a".repeat(43))).toBe(false);
-    expect(looksLikeKey("Bearer " + VALID)).toBe(false);
+    expect(looksLikeKey("a".repeat(43), "mcp")).toBe(false);
+    expect(looksLikeKey("Bearer " + VALID_MCP, "mcp")).toBe(false);
     // Somebody else's credential in the header must cost a regex, not a query.
-    expect(looksLikeKey("ghp_0123456789abcdef")).toBe(false);
-    expect(looksLikeKey("")).toBe(false);
+    expect(looksLikeKey("ghp_0123456789abcdef", "mcp")).toBe(false);
+    expect(looksLikeKey("", "api")).toBe(false);
   });
 
   it("rejects the wrong secret length", () => {
-    expect(looksLikeKey(KEY_PREFIX + "a".repeat(42))).toBe(false);
-    expect(looksLikeKey(KEY_PREFIX + "a".repeat(44))).toBe(false);
+    for (const audience of AUDIENCES) {
+      expect(looksLikeKey(KEY_PREFIXES[audience] + "a".repeat(42), audience)).toBe(false);
+      expect(looksLikeKey(KEY_PREFIXES[audience] + "a".repeat(44), audience)).toBe(false);
+    }
   });
 
   it("rejects characters that are not base64url", () => {
     // `+` and `/` would break the copy-paste into a URL or an env var that
     // base64url exists to survive — so a key containing them is not ours.
-    expect(looksLikeKey(KEY_PREFIX + "+".repeat(43))).toBe(false);
-    expect(looksLikeKey(KEY_PREFIX + "=".repeat(43))).toBe(false);
-    expect(looksLikeKey(KEY_PREFIX + "a".repeat(42) + " ")).toBe(false);
+    expect(looksLikeKey(KEY_PREFIXES.mcp + "+".repeat(43), "mcp")).toBe(false);
+    expect(looksLikeKey(KEY_PREFIXES.mcp + "=".repeat(43), "mcp")).toBe(false);
+    expect(looksLikeKey(KEY_PREFIXES.mcp + "a".repeat(42) + " ", "mcp")).toBe(false);
+  });
+});
+
+describe("KEY_PREFIXES", () => {
+  it("keeps both markers the same length — PREFIX_LENGTH serves both", () => {
+    // `prefixOf` slices a fixed length; a marker of a different length would
+    // show more or less of one audience's keys than the other's.
+    const lengths = new Set(Object.values(KEY_PREFIXES).map((p) => p.length));
+    expect(lengths.size).toBe(1);
+  });
+
+  it("keeps the markers distinguishable", () => {
+    expect(KEY_PREFIXES.mcp).not.toBe(KEY_PREFIXES.api);
   });
 });
 
 describe("prefixOf", () => {
   it("shows the marker plus four characters and nothing more", () => {
-    const prefix = prefixOf(VALID);
-    expect(prefix).toHaveLength(PREFIX_LENGTH);
-    expect(prefix.startsWith(KEY_PREFIX)).toBe(true);
-    // The whole point: what the account page renders cannot be the key.
-    expect(VALID.startsWith(prefix)).toBe(true);
-    expect(prefix).not.toBe(VALID);
+    for (const key of [VALID_MCP, VALID_API]) {
+      const prefix = prefixOf(key);
+      expect(prefix).toHaveLength(PREFIX_LENGTH);
+      // The whole point: what the account page renders cannot be the key.
+      expect(key.startsWith(prefix)).toBe(true);
+      expect(prefix).not.toBe(key);
+    }
   });
 
   it("does not throw on a short value", () => {
@@ -66,7 +93,7 @@ describe("prefixOf", () => {
 });
 
 describe("mayRun", () => {
-  it("lets a read key run read-only tools only", () => {
+  it("lets a read key run read-only operations only", () => {
     expect(mayRun("read", true)).toBe(true);
     expect(mayRun("read", false)).toBe(false);
   });

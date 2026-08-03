@@ -96,6 +96,12 @@ So account deletion in this app cascades to sessions, chat transcripts, MCP
 keys, grants and impersonation records, and deliberately leaves `orders` and
 `ai_usage` standing with their member link set to `null`.
 
+A running subscription does not stop the deletion either: the dialog **warns
+and does not block**. Refusing erasure because it is inconvenient is the
+violation — and billing that continues at Digistore24 with no account behind
+it is exactly what the warning exists for, which is why that one loud sentence
+stays in the dialog.
+
 Say that in your privacy policy in plain words. "We delete everything" is a
 promise you cannot keep and did not need to make.
 
@@ -225,7 +231,10 @@ portrait and a warm tone is precisely the case where it is not obvious.
 In this app the notice is one line per surface — `chat.disclaimer` and
 `companion.disclaimer` in `messages/de.json` and `messages/en.json` — rendered
 by `components/ai-disclosure.tsx` at the top of each, above the transcript, in
-every variant. `lib/ai/disclosure.test.ts` fails the build if either language
+every variant. It mounts unconditionally: a notice rendered only "once there
+are messages" is one the first interaction never sees, and the first
+interaction is precisely when Art. 50(1) demands it.
+`lib/ai/disclosure.test.ts` fails the build if either language
 stops naming it as an AI, because the realistic way it disappears is not
 deletion but a friendlier rewrite, and `node run.mjs legal-check` reports a
 surface that is switched on and has no notice.
@@ -258,7 +267,10 @@ interest, and deepfakes, must disclose it.
 
 **Whatever AI feature you add next, this applies to it too.** The rule is not
 "the chat carries a notice"; it is "anything in this app that talks to a person
-as a machine says so".
+as a machine says so" — a rule about a *list* of surfaces, and the list is
+`DISCLOSURE_SURFACES` in `lib/ai/disclosure.mjs`. Register the new surface
+there: adding it to that registry is what makes the test and `legal-check`
+notice when its notice goes missing.
 
 **Both surfaces are the same conversation about roles.** §3.2's reasoning —
 assume provider until an advisor tells you otherwise — applies at least as

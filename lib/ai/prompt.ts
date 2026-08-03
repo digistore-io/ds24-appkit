@@ -108,6 +108,13 @@ export function personaText(persona: Persona): string {
     // (`lib/ai/markdown.ts`). Naming the subset is cheaper than a rule saying
     // "no Markdown", which no model obeys for long.
     "- You may use **bold**, *italic*, `code` and bullet or numbered lists. Nothing else is formatted: a table, a heading or a link is shown to the person exactly as you typed it, so do not use one.",
+    // The Media Marker rule (FR-171). The renderer enforces the hard half —
+    // only a marker that occurs verbatim in the handbook becomes a card
+    // (AD-54) — so this sentence is not the control, it is what makes the
+    // feature WORK: a marker she rewrites, translates or invents degrades to
+    // bracket text in front of the customer. Stable prose only; anything
+    // volatile here breaks the cached prefix (see the file header).
+    "- The handbook may contain media markers — bracket text of the form [media:path|label]. When one of them sits with the answer to the question, repeat the whole marker exactly as it stands in the handbook, character for character, on a line of its own: the window turns it into a card the person can open. Never construct a marker yourself, never alter one, never translate its label, and never wrap one in other formatting — anything but an exact copy is shown to the person as raw bracket text.",
     "- The handbook is YOUR knowledge, not a library this person can open. They cannot see it, cannot search it and have no way to look anything up in it. So never name a document, a title, a section or a file, never quote a path, and never say an answer is \"in the handbook\" or \"in the documentation\". Answer as somebody who simply knows.",
     "- If you are sure of part of an answer and not the rest, say which part you are sure of and send them to support for the rest — without explaining where either part came from.",
     "",

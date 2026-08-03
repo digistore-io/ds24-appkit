@@ -23,13 +23,44 @@
 // chat and no sanitiser to keep up to date. Being pure is also why the parser
 // lives in `lib/` — it is unit-tested, where the component could not be
 // (vitest runs with `environment: "node"` and this repo has no DOM).
+//
+// ── The one exception to "no links": the Media Marker ──────────────────────
+// `[media:<path>|<label>]` is the chat's first model-steerable link surface,
+// and the control on it is mechanical, not a prompt wish (AD-54): a marker is
+// accepted only when the COMPLETE marker string occurs verbatim in the
+// allowed-set the caller passes — and that set is derived from the loaded
+// handbook (`markersIn()` over the docs' bodies). So the label is always the
+// developer's, the path can only ever be one the handbook already points at,
+// and a model-invented `[media:invented/file.mp4|Klick hier]` degrades to
+// harmless plain text. An absent or empty set denies ALL markers — a mount
+// that forgot to pass one fails safe.
+import { MEDIA_MARKER_PATTERN } from "@/lib/knowledge-media/rules.mjs";
 
 /** A run of text inside one line. */
 export type Inline =
   | { kind: "text"; text: string }
   | { kind: "strong"; text: string }
   | { kind: "em"; text: string }
-  | { kind: "code"; text: string };
+  | { kind: "code"; text: string }
+  /**
+   * A whitelisted Media Marker. `path` is the grammar-valid media path (the
+   * renderer's target is `/api/knowledge-media/<path>`), `label` is the
+   * developer-authored label — rendered as ONE text node, never inline-parsed:
+   * parsing it would re-open the nesting surface this subset deliberately
+   * lacks.
+   */
+  | { kind: "media"; path: string; label: string };
+
+/** What `parseAnswer` needs beyond the text. */
+export interface ParseOptions {
+  /**
+   * The complete marker strings the handbook carries — `markersIn()` over the
+   * loaded docs' bodies (`allowedMediaMarkers()` in `lib/ai/knowledge.ts`).
+   * Membership is whole-string and verbatim; absent or empty denies all
+   * markers (AD-54).
+   */
+  allowedMedia?: ReadonlySet<string>;
+}
 
 /** A paragraph keeps its soft line breaks; `lines` is one entry per line. */
 export type Block =
@@ -51,16 +82,43 @@ export type Block =
  * Nothing spans a line: the parser feeds one line at a time, so an unclosed
  * `**` stays literal instead of swallowing the rest of the answer. That is
  * also what makes the half-streamed state readable — mid-stream the closing
- * stars have not arrived yet.
+ * stars have not arrived yet. The Media Marker inherits the same property for
+ * free: its pattern requires the closing `]`, so a half-streamed marker is
+ * literal text until the bracket arrives — no buffering, no "pending" state.
+ *
+ * The marker alternative is COMPOSED from the `rules.mjs` export, never
+ * re-written — that is what makes "the parser and `markersIn()` accept the
+ * same strings" true by construction (AD-56), and the agreement test in
+ * `markdown.test.ts` pins it. It sits AFTER the code span on purpose:
+ * `` `[media:a/b.mp4|x]` `` is somebody quoting a marker, and the leading
+ * backtick must keep winning. Built once at module level — this runs on every
+ * streamed chunk.
+ *
+ * ⚠️ Capture groups are POSITIONAL: `parseInline` destructures
+ * `[whole, code, strong, em, mediaPath, mediaLabel]`. The marker alternative
+ * is LAST, so its two groups (path, label — see `MEDIA_MARKER_PATTERN`) land
+ * at 4 and 5 without shifting the first three. A new alternative goes after
+ * it, or the destructure moves.
  */
-const INLINE = /`([^`\n]+)`|\*\*(\S|\S[^*\n]*\S)\*\*|\*(\S|\S[^*\n]*\S)\*/g;
+const INLINE = new RegExp(
+  [
+    "`([^`\\n]+)`",
+    "\\*\\*(\\S|\\S[^*\\n]*\\S)\\*\\*",
+    "\\*(\\S|\\S[^*\\n]*\\S)\\*",
+    MEDIA_MARKER_PATTERN,
+  ].join("|"),
+  "g",
+);
 
 const BULLET = /^ {0,3}[-*•] +(.*)$/;
 const ORDERED = /^ {0,3}(\d{1,3})[.)] +(.*)$/;
 const HEADING = /^ {0,3}#{1,6} +(.*)$/;
 
 /** One line of text, split into its marked-up runs. Exported for the tests. */
-export function parseInline(line: string): Inline[] {
+export function parseInline(
+  line: string,
+  allowedMedia?: ReadonlySet<string>,
+): Inline[] {
   const parts: Inline[] = [];
   let plain = 0;
 
@@ -70,7 +128,22 @@ export function parseInline(line: string): Inline[] {
 
   INLINE.lastIndex = 0;
   for (let match = INLINE.exec(line); match; match = INLINE.exec(line)) {
-    const [whole, code, strong, em] = match;
+    const [whole, code, strong, em, mediaPath, mediaLabel] = match;
+    if (mediaPath !== undefined) {
+      // The whitelist is whole-string and verbatim: `whole` IS the complete
+      // marker as it appeared in the answer, and only its exact occurrence in
+      // the handbook-derived set makes it a card. A refused marker is not
+      // flushed and `plain` does not move — the whole bracket text stays part
+      // of the surrounding plain-text run, unparsed inside too, which is the
+      // safe direction (AC 6). `?.has` makes the absent set the same refusal
+      // as the empty one.
+      if (allowedMedia?.has(whole)) {
+        flush(match.index);
+        parts.push({ kind: "media", path: mediaPath, label: mediaLabel });
+        plain = match.index + whole.length;
+      }
+      continue;
+    }
     flush(match.index);
     if (code !== undefined) parts.push({ kind: "code", text: code });
     else if (strong !== undefined) parts.push({ kind: "strong", text: strong });
@@ -91,7 +164,8 @@ export function parseInline(line: string): Inline[] {
  * `*Übersicht*` is emphasis — the difference is the space, and it is the one
  * ambiguity in this subset.
  */
-export function parseAnswer(text: string): Block[] {
+export function parseAnswer(text: string, options?: ParseOptions): Block[] {
+  const allowedMedia = options?.allowedMedia;
   const blocks: Block[] = [];
   let paragraph: Inline[][] = [];
   let list: { ordered: boolean; start: number; items: Inline[][] } | null = null;
@@ -123,7 +197,7 @@ export function parseAnswer(text: string): Block[] {
       // A bullet list and a numbered list are two blocks even when they touch:
       // an <ul> whose items are numbered would number them twice.
       if (list && list.ordered !== wantsOrdered) closeList();
-      const item = parseInline(bullet ? bullet[1] : ordered![2]);
+      const item = parseInline(bullet ? bullet[1] : ordered![2], allowedMedia);
       if (!list) {
         list = {
           ordered: wantsOrdered,
@@ -140,7 +214,11 @@ export function parseAnswer(text: string): Block[] {
     const heading = HEADING.exec(line);
     // She is told to be brief, so a heading should not appear at all. If one
     // does, it becomes a bold line — the hashes must not reach the customer.
-    paragraph.push(heading ? [{ kind: "strong", text: heading[1] }] : parseInline(line));
+    paragraph.push(
+      heading
+        ? [{ kind: "strong", text: heading[1] }]
+        : parseInline(line, allowedMedia),
+    );
   }
 
   closeParagraph();

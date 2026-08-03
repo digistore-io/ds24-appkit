@@ -122,151 +122,14 @@ Plus everything the user has built themselves — their own pages under
 `app/dashboard/`, their own tables in `db/`, their own actions. That is where
 new holes come from; the template's own code has been through this before.
 
-### Protection is opt-in, and that is the trap
-
-Only the paths in `proxy.ts`'s `matcher` are guarded — today `/dashboard/:path*`
-— and `auth.config.ts` returns true for everything else. **A route that is in
-neither list is public by accident, not by design.**
-
-Public on purpose, and this list is exhaustive: the home page, `/login`,
-`/plans`, `/optin/*`, `/account/confirm-email`, the legal pages
-(`/impressum`, `/datenschutz`, and `/agb` / `/widerruf` where they exist),
-`/api/ipn`, `/api/mcp`, `/api/healthz`, `/api/readyz`, `/api/cron`.
-
-The legal pages are public **because they have to be** — § 5 DDG wants the
-Impressum easily reachable, and a privacy policy behind a sign-in cannot be read
-by the person deciding whether to sign in. Do not "fix" them into the matcher.
-
-So: list every route in `app/`, subtract the matcher, subtract that list. What
-is left is a finding — **HIGH**, and **CRITICAL** if it renders customer data.
-When a route is public on purpose, it goes into the list above in the same
-change, or the next audit reads it as an accident.
-
-`/account/confirm-email` is authenticated by its single-use token, not by a
-session, because the mail carrying it is read on whichever device holds the
-inbox. Putting it behind the matcher breaks the feature for exactly the person
-it exists for. Leave it.
-
-### IDOR — reaching another member's data
-
-Every query on a customer-owned table needs an ownership condition. The column
-is **`memberId`** — on `orders`, `grants`, `subscriptions`, `tokenAccounts`,
-`chatMessages`, `mcpKeys`, `impersonations`. `userId` exists only on the Auth.js
-`accounts` and `sessions` tables and is **not** an ownership column; grepping
-for it finds nothing and proves nothing.
-
-Read every server action and every route handler and ask one question: *does
-this query say whose row it is?* A `where eq(orders.id, id)` with an id from the
-form and no `memberId` is a **CRITICAL**.
-
-**A server action is an HTTP endpoint.** The button only rendering for a
-signed-in member is cosmetics; anybody can POST to the action directly. So every
-action re-checks `auth()` itself — `app/plans/actions.ts` is the pattern to
-copy. An action that trusts the page that rendered it is a **HIGH**.
-
-**Admin actions need `requireOwner()`** (`lib/authz.ts`), inside the action, not
-in the page. Everything under `app/dashboard/admin/` is in scope.
-
-### Entitlement, not billing tables
-
-What a member may use is answered by `hasPlan(memberId, productKey)` from
-`lib/entitlements/manage.ts`. A hand-rolled query over `orders` or
-`subscriptions` is a finding — **HIGH**, and not a stylistic one: those tables
-answer a different question, and a cancelled subscription that still has paid
-time left reads as "blocked" there. See `docs/entitlements.md`.
-
-No cached access booleans either — not a flag on the user row, not a claim in
-the session. Entitlement is derived per request; a stored yes survives the
-chargeback that should have revoked it.
-
-### The MCP server, if it is on
-
-Check `config/mcp.json` → `"enabled"`. It ships off; if it is on, go through
-`lib/mcp/tools.ts` tool by tool. It has no session, so nothing above applies to
-it automatically. See `docs/mcp.md`.
-
-- **No tool takes a member, user or account id as an argument.** The account is
-  `ctx.memberId`, proven by the key. Arguments are written by a model reading
-  text somebody else may have authored — an id among them is an IDOR with a
-  language model holding the pen. **CRITICAL.** `lib/mcp/tools.test.ts` checks
-  the obvious spellings; read the schemas yourself for the ones it cannot guess.
-- **`readOnly: true` is a lie on anything that writes, charges, mails or calls a
-  paid API.** It is the boundary a `read`-scope key is measured against, so a
-  wrongly-flagged tool is a read-only key that can spend somebody's balance.
-  **HIGH.**
-- **Every argument is re-validated in the handler.** `inputSchema` is a hint to
-  a model, not a check — treat `args` exactly like a `FormData`. **HIGH.**
-- **No operator capability is exposed.** No tool blocks a user, adjusts a
-  balance, grants a plan, deletes a record, sends mail or places an order.
-  Anything `requireOwner()` guards belongs nowhere in that file. **CRITICAL.**
-- **No tool returns a secret** — no API key, no `passwordHash`, no other
-  member's data. **CRITICAL.**
-
-### Signing in as a user, if it is on
-
-Check `config/impersonation.json`. This feature deliberately rewrites the
-subject of a signed-in session, so it **will** look like an auth bypass on first
-reading. It is a legitimate, bounded support feature — the description is in
-`guardrails`. What you are auditing is whether it is still bounded. Each of
-these is a finding:
-
-- **The `jwt` callback believes the update payload.** `/api/auth/session` takes
-  a POST from any signed-in user and its body reaches that callback.
-  `lib/impersonation/session.ts` must look the record up by id and rewrite the
-  session only when `row.operatorId === token.sub`. A `token.sub =` fed from
-  anything in the payload is a full account takeover — any member becomes any
-  other, including an owner. **CRITICAL.**
-- **The record is written after the session changes**, or not at all. The row
-  *is* the authorisation, not a log line. Reordering it removes the check.
-  **CRITICAL.**
-- **An owner can be impersonated.** `canImpersonate()` must refuse
-  `target.role === "owner"` in the rule, not merely by hiding the menu entry.
-  **HIGH.**
-- **The exit action calls `requireOwner()`.** This one is inverted: during an
-  impersonation the session's role *is* the member's, so an owner check there
-  locks the operator inside a customer's account. Its absence is correct.
-- **The switch fails open.** A malformed `config/impersonation.json` must count
-  as off. **HIGH.**
-- **The banner is conditional on a route.** It belongs in the root layout, on
-  every page including the public ones. **MEDIUM.**
-- **Automatic top-up is not suppressed** during an impersonation
-  (`lib/tokens/spend.ts`) — a support click would charge a customer's card.
-  **HIGH.**
-
-`lib/impersonation/guard.test.ts` asserts several of these against the source
-text. If it has been deleted or weakened, that is the finding.
-
-### Input, output, and the four fingerprints
-
-- **Validate every input.** Server actions and route handlers take
-  `FormData`/JSON from the network. Required fields, types, limits — `zod` is
-  already a dependency. Missing validation on anything that reaches the database
-  is **HIGH**.
-- **Drizzle only.** Queries go through Drizzle (parameterized). A template
-  literal inside `sql\`\`` carrying a user value is SQL injection — **CRITICAL**.
-  `db/sql-cast.test.ts` guards part of this.
-- **No `dangerouslySetInnerHTML`.** The assistant's answers are markdown, and
-  `lib/ai/markdown.ts` parses them into React elements precisely so that no HTML
-  is ever interpreted — the comment at the top of that file says so. If anyone
-  has "improved" it with a markdown library plus `dangerouslySetInnerHTML`, that
-  is **CRITICAL**: the text comes from a language model that read the
-  customer's own handbook and the customer's own messages, and prompt injection
-  into a DOM sink is the whole attack. Same for any place foreign text is
-  rendered — buyer names, product titles, chat content.
-- **Compare secrets in constant time.** Any token, API key, HMAC or signature
-  compared with `===`, `!==` or `strcmp` is a timing side channel — the value
-  becomes guessable byte by byte. The template does this correctly in
-  `lib/digistore/ipn.ts`, `lib/mcp/keys.ts` and `lib/credentials/hash.ts`
-  (`crypto.timingSafeEqual`, after a length check). A new comparison that does
-  not is **HIGH**.
-- **Random that is not random.** `Math.random()` or `Date.now()` as the source
-  of a token, key, password or invite code is guessable. `randomBytes` /
-  `randomUUID` from `node:crypto`. **HIGH.**
-- **Do not log secrets or personal data.** Tokens, passwords, API keys, buyer
-  addresses in `console.log` — **MEDIUM**, **HIGH** if it is a live credential.
-- **Never pass server-side values into client components.** A `"use client"`
-  component receiving an env value as a prop ships it to the browser.
-  **CRITICAL** if it is a secret.
+The recipes for this check are in **`references/check-code.md`** — which
+routes are public on purpose and which by accident, IDOR and the `memberId`
+ownership column, why entitlement is answered by `hasPlan(memberId,
+productKey)` and never by a billing table, the MCP tool audit, the
+impersonation audit, and the
+input/output fingerprints (SQL injection, XSS, timing-safe comparison, weak
+randomness, secrets shipped to the browser). Read that file in full while
+running this check; it carries the severity for every finding.
 
 ## 3 · `pay` — the money
 
@@ -297,60 +160,12 @@ value is in git and has not been rotated.** Not the file — the value. A local
 `.env` full of live keys that was never committed is the setup working as
 designed, and reporting it as CRITICAL teaches the user to ignore you.
 
-**Run the tools you have.** `gitleaks detect --source . --verbose` if it is on
-the machine — the template ships a `.gitleaks.toml` for it. Otherwise work from
-`git grep` and the checks below; the discipline does not depend on the tool.
-
-**Skip these without further checking** — they are not secrets:
-
-- Anything containing `_test_`, `_sandbox_`, `test-`, `sandbox-` — sandbox keys
-  move no money.
-- Publishable and public keys: `pk_live_*`, `pk_test_*`, `-----BEGIN PUBLIC KEY-----`,
-  `ssh-rsa`/`ssh-ed25519`, any `*.pub`.
-- **`BUILT_IN_DEVELOPER_KEY` in `scripts/ds24/connect-api-key.mjs`.** A
-  Digistore24 developer key carries no account permissions — it only identifies
-  the application to `requestApiKey`, like an OAuth client ID. The key that
-  carries permissions only comes into being when the merchant grants access. Do
-  not remove it, do not obscure it; the scanner markers on that line are part of
-  it. A scanner *will* raise this. It is not a finding.
-- The placeholder values in `.env.example`.
-
-**Do check** `sk_live_*`, `-----BEGIN … PRIVATE KEY-----`, and any secret sitting
-in a `NEXT_PUBLIC_*` variable — that prefix ships the value to every browser, so
-a real key there is **CRITICAL** whatever else is true.
-
-**For everything left, verify the value:**
-
-```bash
-git grep '<distinctive tail of the value>'                    # in the tree now?
-git log -p --all -S '<distinctive tail of the value>' -- <file>   # ever in history?
-```
-
-Search a distinctive tail, not the whole key. Then:
-
-| In the tree now | In history | Rotated | Verdict |
-|---|---|---|---|
-| yes | — | — | 🚨 **CRITICAL** — it is in the repo right now |
-| no | yes | no / unknown | ❌ **HIGH** — it was exposed and still works. Rotate it. |
-| no | yes | yes | **no finding** — the old value is dead. Cleaning history is hygiene, offer it. |
-| no | no | — | **no finding** — this is what correct looks like |
-
-When rotation is unclear, **ask** — one sentence: "was this key rotated at the
-provider after it was committed?" Do not guess CRITICAL.
-
-Also check, regardless of tools:
-
-- `.env` is in `.gitignore` and `git log --all -- .env` is empty.
-- Every new variable is in `.env.example`, with a placeholder and never a value.
-- The Digistore24 credentials live in the environment and are read through
-  `lib/digistore/settings.ts` — not in the database, not in the code. There is
-  deliberately **no UI for entering keys**, and adding one is a finding: it is
-  attack surface for a problem that does not exist.
-- Nothing secret in `messages/de.json` / `messages/en.json` — they are bundled.
-
-**The fix, when it is real:** rotate at the provider first, then remove from the
-code, then `.gitignore`, then clean the history (`git filter-repo`, BFG). In that
-order. Cleaning history first leaves a live key out there.
+How to run it is in **`references/checks-secrets-and-deps.md`** — the tools,
+the skip list (sandbox keys, publishable keys, the shipped developer key a
+scanner *will* raise and that is not a finding), the two verification commands
+and the verdict table, the checks that apply regardless of tools, and the fix
+order (rotate at the provider first, clean the history last). Read it before
+reporting anything as a leaked secret, and before fixing one.
 
 ## 5 · `deps` — the packages
 
@@ -359,97 +174,34 @@ npm audit --omit=dev --audit-level=high
 ```
 
 Dev-only vulnerabilities do not ship and rarely deserve a launch delay — say so
-rather than counting them. For the ones that do ship:
+rather than counting them.
 
-- Fix by update. `npm audit fix` for the easy half; a pinned major for the rest.
-- After any update: `node run.mjs test`. An update that breaks the build is not
-  a fix.
-- A transitive dependency with no fixed version goes in `overrides` in
-  `package.json` — the template already uses that mechanism. **Two packages are
-  excluded from it**, see below.
-- Framework versions current and patched: Next.js and `next-auth` above all.
-  A Next.js version behind a security release is **HIGH** on its own.
-
-Severity comes from npm, but judge it against this app: a ReDoS in a package
-that only ever parses your own config is not the same as one in the request
-path. Say which it is.
-
-**One set of findings is already known, and it is not yours to fix.** A plain
-`npm audit` on this template reports nine high findings in the eslint chain
-(`brace-expansion`, GHSA-mh99-v99m-4gvg). Report them as **known, dev-only,
-accepted** — with `npm audit --omit=dev` clean as the evidence — and move on.
-Do not spend the check re-deriving them, and above all do not fix them:
-
-- **`overrides: { "minimatch": "^10" }` takes the count to zero and breaks the
-  linter.** minimatch 10's CommonJS build is not callable, and three
-  `eslint-config-next` plugins call it. This app's own `npm run lint` stays
-  green, so the damage is invisible here and lands on whoever enables one of
-  those rules later. `scripts/deps.test.ts` fails on it.
-- **`eslint@10`** (what `npm audit fix --force` proposes) reaches 6 of the 9 and
-  adds three `ERESOLVE` conflicts.
-
-The full reasoning, with the measurements, is in `scripts/deps.test.ts` and in
-`CLAUDE.md` → **What the first install prints**. A finding you decide to accept
-goes in the report with that decision written next to it — an accepted finding
-with no reason recorded is one the next run raises again.
+How to fix the ones that do ship — updates, `overrides`, framework versions —
+and the nine known dev-only eslint findings that are **not yours to fix** (two
+obvious fixes are refused, with the measurements behind the refusal) are in
+**`references/checks-secrets-and-deps.md`**. Read it before touching
+`package.json` over an audit finding.
 
 ## 6 · `api` — the endpoints that answer without a session
 
 Needs the app running — `node run.mjs start`, then work against
 `http://localhost:3000`. Seven route handlers exist; go through them.
 
-| Route | What it must do |
-|---|---|
-| `/api/ipn` | 403 on an invalid signature, always. Send it a payload with a broken `sha_sign` and watch. |
-| `/api/mcp` | 401 without a bearer key, 401 on a wrong one, scope enforced on write tools. |
-| `/api/chat` | signed-in only, and rate-limited or token-metered — it costs money per call |
-| `/api/cron` | secret-guarded (`docs/cron.md`); an open cron endpoint is a free job runner |
-| `/api/healthz` `/api/readyz` | public on purpose, and must leak nothing — no versions, no env, no DB error text |
-| `/api/auth/*` | Auth.js. Do not modify; do check that nothing was |
-
-Then the questions that apply to all of them, and to every server action:
-
-- **Another member's id in the request** — does it come back with data?
-  (**CRITICAL** if yes.) Try it: two accounts, one id, one session.
-- **A method nobody thought about.** `DELETE` on a route that only implemented
-  `GET` — Next.js returns 405 by itself, but a handler exported by accident does
-  not. **HIGH.**
-- **What comes back that should not.** `passwordHash`, an email that belongs to
-  someone else, an internal id, a stack trace, a raw database error. Over-fetching
-  is the quiet one: returning the whole row when the page shows a name.
-  **MEDIUM**, **HIGH** with personal data.
-- **Rate limits where they are missing.** `lib/rate-limit.ts` covers sign-in and
-  address-change mails. Anything else a stranger can trigger repeatedly and that
-  costs money or sends mail needs one too — chat above all. **MEDIUM**, and note
-  the documented limitation: the limiter is per process, so several instances
-  multiply every limit.
-- **Error responses in production** say what went wrong, not where. A stack
-  trace in a 500 body is **MEDIUM**.
+What each route must do, and the questions that apply to all of them and to
+every server action — another member's id in the request, a method nobody
+thought about, what comes back that should not, missing rate limits, error
+responses that say too much — are in
+**`references/checks-api-host-verdicts.md`**. Work through that file with the
+app running.
 
 ## 7 · `host` — configuration and the live environment
 
 Before the first deploy most of this is not yet answerable — say so and move on
 rather than inventing findings.
 
-- **Security headers.** `next.config.ts` sets `Referrer-Policy`,
-  `X-Content-Type-Options`, `X-Frame-Options` and HSTS on every response. Check
-  they are still there and actually arriving (`curl -sI`). There is deliberately
-  **no CSP** — Next.js emits inline scripts, so a useful policy needs per-request
-  nonces, and a `unsafe-inline` policy pasted in to look green is not protection.
-  Its absence is a documented decision, not a finding.
-- **HTTPS everywhere**, `APP_URL` on `https://`, valid certificate. All four
-  hosts in `docs/DEPLOY.md` do this for you; verify rather than assume.
-- **Secrets live in the host's secret store**, not in a committed file, not in
-  the build image. `AUTH_SECRET` is different in production than locally.
-- **`APP_ENV`** is `production` on the live instance. `lib/env-guard.ts` refuses
-  to start without a mail transport there — that refusal is a feature.
-- **The database is not on the public internet** without a password and TLS, and
-  the deploy runs migrations before the new version serves traffic
-  (`docs/DEPLOY.md` → Migrations).
-- **`/api/cron`'s secret is set** at the host, not left at its default.
-- **Backups exist** and somebody has restored one at least once. Untested
-  backups are **MEDIUM** the day before they are needed and CRITICAL the day
-  after.
+The checklist is in **`references/checks-api-host-verdicts.md`** — security
+headers (and why there is deliberately no CSP), HTTPS, secrets in the host's
+secret store, `APP_ENV`, the database, the cron secret and backups.
 
 ## 8 · `verdicts` — is the solution where the customer can read it?
 
@@ -458,16 +210,9 @@ failure this section exists for is invisible to every other check: a judged
 element whose answers reach the browser renders, returns 200 and stays green
 everywhere — and is worthless.
 
-1. **Read every entry's `load()`** and the client components under its
-   panel: do the expected answers, the split, the correct options appear in
-   anything the browser receives — including checkpoint verdicts and the
-   resume `state`? (`state` ships to the client on the next load.)
-2. **Search the built bundle.** `node run.mjs build`, then grep `.next/` for
-   a known answer string of each element. 🚨 CRITICAL if found, naming the
-   file and what a buyer does with it.
-3. **The gates as registry fields.** `requiresPlan` present where the
-   element is paid; `maxAttempts` where it judges; grading logic imported by
-   any `"use client"` file is the same finding as 1.
+The three steps — reading every entry's `load()` and its client components,
+searching the built bundle for a known answer string, and the gates as
+registry fields — are in **`references/checks-api-host-verdicts.md`**.
 
 The rule behind all three is `guardrails` → *A verdict is never reached in
 the browser*; the deeper audit (keyboard included) is the skill

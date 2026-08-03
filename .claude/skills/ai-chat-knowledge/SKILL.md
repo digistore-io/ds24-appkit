@@ -1,6 +1,7 @@
 ---
 name: ai-chat-knowledge
 description: Builds the knowledge base for the app's in-app AI assistant — interviews the user about the questions their customers actually ask, then writes the handbook under content/knowledge/ in the required format (onboarding, reference, howto, glossary). Use this when the user wants the AI chat, mentions an assistant/support bot, or when the chat is switched on but answers "I do not know". Also the place to switch the chat on and give her a name.
+requires: 0.10.0
 ---
 <!-- Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA — SPDX-License-Identifier: MIT -->
 
@@ -21,7 +22,11 @@ producing the thing with them. That is a different feature with the opposite dat
 rule, and it is the skill **`ai-companion`**, with
 [`docs/ai-in-product.md`](../../../docs/ai-in-product.md) behind it.
 
-Full reference — format, caching, cost, privacy: **`docs/ai-chat.md`**.
+Full reference — format, caching, cost, privacy: **`docs/ai-chat.md`**. Where
+existing material — a course, an ebook, recorded webinars — should feed the
+handbook, [`docs/knowledge.md`](../../../docs/knowledge.md) is the reference
+for the corpus it gets distilled into, and Step 2b below is where this skill
+reads it.
 
 ## Step 1 — Is the chat wanted here at all?
 
@@ -68,6 +73,9 @@ installation actually needs.
 
 ## Step 2 — Interview: what do people actually ask?
 
+**If `content/knowledge-sources/` exists, read it first — that is Step 2b —
+and interview only around what it does not answer.**
+
 Use `AskUserQuestion`, one theme at a time, and summarize back after each. Do
 not invent the answers — a handbook you made up is exactly the failure this
 skill exists to prevent.
@@ -87,6 +95,47 @@ skill exists to prevent.
 
 If the user has documentation, a FAQ page or a help centre already, read it
 first and interview around the gaps instead of asking them to repeat it.
+
+## Step 2b — A corpus exists: write from it, ask around it
+
+This step gates itself: no `content/knowledge-sources/`, no step — the
+interview above is the whole path, exactly as before. And if there is no
+corpus but there IS a pile of existing material — a course already taught, an
+ebook, years of webinar recordings — hand over to **`knowledge-intake`**
+first: it distills that material into the corpus, and it ends by sending you
+back here.
+
+With a corpus on disk, the notes become the source and the interview becomes
+the follow-up:
+
+- **Read the notes, topic by topic.** One folder per topic, one distilled
+  note per source; the format and every frontmatter key are defined in
+  [`docs/knowledge.md`](../../../docs/knowledge.md) → *The corpus* — read
+  that, do not guess. The notes are the user's knowledge in their own
+  recorded words: write the handbook pages FROM them — their wording, their
+  emphasis, their examples — instead of asking the user to repeat what they
+  already put there.
+- **A note with `status: needs-review` does not exist.** You MUST treat it
+  exactly as if the file were not on disk — nothing unverified ever reaches a
+  customer answer. Only the user flips that status: they read the note,
+  correct it, and set `status: distilled` themselves — the flip IS their
+  review, and it is never yours to make. If a needs-review note covers
+  something the handbook needs, name it and ask them to review it now; do not
+  write around the barrier.
+- **Interview only around the gaps.** Run Step 2's five themes against what
+  the notes already answer and ask about the rest: the questions customers
+  ask that no note covers, the edges near money and support, the words. A
+  question the corpus answers is a question you do not ask.
+- **Compress — the corpus is unbounded, the handbook is curated.** The corpus
+  may hold two years of webinars; the handbook is sent whole with every
+  answer, so its size is the feature's running cost. The corpus's breadth is
+  input, never a target: select for what customers actually ask — Step 2's
+  themes are the selection lens — and `node run.mjs kb-check` is the hard
+  wall: it prints what one answer costs at this size and refuses a handbook
+  past its budget. A ballooning handbook is failure, not progress.
+- **Notes can carry files as well as knowledge.** Where a topic's notes have
+  a `media:` entry, the handbook page written from them can offer the file
+  itself — the rules are in Step 3, beside the other writing rules.
 
 ## Step 3 — Write the files
 
@@ -135,6 +184,50 @@ What separates a handbook she answers well from one she does not:
 - **No `# ` in the body** — the title comes from the frontmatter. Start at `## `.
 - **One language, yours.** She answers in the reader's language regardless.
 
+**When a page offers a file.** Where the topic's corpus notes carry a
+`media:` entry (Step 2b), the page written from them can hand the file itself
+to the customer — as a suggestion card in the chat (the chat only; a
+companion renders no markers). Four rules:
+
+- **Frontmatter and body both carry the path.** The page's frontmatter gets
+  `media:` with the path(s), comma-separated — the same dialect as the corpus
+  note — and the body gets the marker at the exact spot the suggestion
+  belongs, never appended as a footer:
+
+  ```markdown
+  ---
+  section: howto
+  title: The breathing exercise
+  summary: The 4-7-8 pattern, step by step, with the practice video.
+  updated: 2026-08-03
+  media: wehen-atmung/atemuebung.mp4
+  ---
+
+  ## When the waves come faster
+
+  Switch to the 4-7-8 pattern …
+  [media:wehen-atmung/atemuebung.mp4|The breathing exercise as a video (4 min)]
+  ```
+
+  `node run.mjs kb-check` cross-checks the two per page — a path in the
+  frontmatter with no marker in the body, or the other way round, is a red
+  gate.
+- **The label is the user's words, in the app's language.** No `|`, `]` or
+  line break inside it, and no spaces around the `|` — the same check refuses
+  what the grammar refuses.
+- **The whole marker must occur verbatim, and that is the security model.**
+  The renderer whitelists complete markers exactly as they stand in the
+  handbook: she may repeat what is written here, and she can never construct
+  a link of her own. So the label you write IS the only label she can ever
+  show — a vague label is permanently vague, and changing one is a handbook
+  edit followed by `node run.mjs kb-check`, never a prompt tweak.
+- **Only media every signed-in member may see.** Delivery is session-gated,
+  not plan-gated: whoever is signed in can open the file, whatever the chat's
+  own `requiresPlan` says. Paid material belongs in the media store behind
+  `hasPlan()` (`docs/visuals.md`), never behind a marker. And a source whose
+  corpus note has no `media:` entry — the Licence Gate said no, or the user
+  chose not to deliver the file — gets no marker and stays unsuggested.
+
 The template ships six example files. Read one before you write, then **replace
 them** — they describe the template, not the user's product.
 
@@ -167,6 +260,12 @@ Open `/dashboard/chat` and ask:
    `content/knowledge/` is never served — so "you will find that in *Getting
    started*" is a broken link written out in words. If she cites, the persona in
    `lib/ai/prompt.ts` was changed; put the rule back.
+   Where the handbook carries media markers, make this first question one
+   whose answer should offer the file: the suggestion card must appear where
+   the marker stands — the card is her handing over what you wrote, not a
+   citation. A marker showing as literal text in square brackets means what
+   she repeated differs from the handbook — compare character for character
+   and run `node run.mjs kb-check`.
 2. Something a customer would ask that you did **not** write down → she must say
    she does not know. If she invents an answer instead, the handbook is
    contradicting itself somewhere; find it.

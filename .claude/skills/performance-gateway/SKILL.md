@@ -84,7 +84,8 @@ pretending the number is clean.
 | ⚠️ | **MEDIUM** | Measurable, tolerable today, worse with more data or more users. |
 | ℹ️ | **LOW** | Worth doing when convenient. |
 
-The thresholds per check are in each section. They are the boundary, not a
+The thresholds per check are in each check's reference file, linked from its
+section below. They are the boundary, not a
 target: an endpoint at 190 ms is not "fine", it is "not a finding".
 
 **The format of a finding — the same as in `security-gateway`:**
@@ -122,34 +123,10 @@ Then: one report, one summary, one offer to fix.
 One user, no contention. This is the baseline everything else is measured
 against.
 
-```bash
-npx autocannon -c 1 -d 5 http://localhost:3100/
-npx autocannon -c 1 -d 5 http://localhost:3100/plans
-npx autocannon -c 1 -d 5 http://localhost:3100/api/healthz
-```
-
-Signed-in pages need a session cookie. Sign in with a real account, take the
-`authjs.session-token` cookie from the browser, and pass it:
-
-```bash
-npx autocannon -c 1 -d 5 -H "cookie: authjs.session-token=<value>" \
-  http://localhost:3100/dashboard
-```
-
-Measure the routes that matter: the home page, `/plans`, `/dashboard`,
-`/dashboard/billing`, whatever the user built themselves, and `/api/healthz` as
-the floor — it does almost nothing, so it tells you what the framework costs
-before your code does anything at all.
-
-| Metric | ℹ️ LOW | ⚠️ MEDIUM | ❌ HIGH | 🚨 CRITICAL |
-|---|---|---|---|---|
-| p95, API route | > 200 ms | > 500 ms | > 1 s | > 3 s |
-| p95, page | > 500 ms | > 1 s | > 2.5 s | > 5 s |
-| p95 minus p50 | > 200 ms | > 500 ms | > 1 s | > 3 s |
-
-The third row is the one people forget. A route whose p50 is 80 ms and whose p95
-is 1.4 s is not a fast route with noise — something intermittent is happening,
-usually a cache miss or a connection wait, and it will get worse under load.
+The recipe — the autocannon commands per route, the session cookie for
+signed-in pages, which routes to measure, and the p95 thresholds per severity
+(including the p95-minus-p50 row people forget) — is in
+**`references/checks-server.md`**; read that section before running this check.
 
 For anything over threshold, find out where the time goes before optimising:
 a slow database query (→ `db`), a call to an external API (an AI provider,
@@ -158,251 +135,50 @@ that could be done once, or an oversized payload. Say which, with evidence.
 
 ## 3 · `db` — the usual culprit
 
-### The connection pool
-
-`db/index.ts` builds one pool per process, `DB_POOL_MAX`, default 10.
-
-- **One permanently running server** (all four hosts in `docs/DEPLOY.md`):
-  10–20 is right. **`DB_POOL_MAX=1` is a CRITICAL** — every request queues
-  behind every other and the app is serialised.
-- **Several instances or serverless:** connections multiply (instances × pool)
-  and Postgres' `max_connections` is the wall. Keep the pool small and put a
-  pooler in front (PgBouncer, Neon or Supabase pooling). A pool of 20 on 5
-  instances against a 100-connection database is **HIGH**: it works until it
-  suddenly does not.
-- **One client per process.** A `postgres()` call inside a request handler or a
-  module that gets re-imported per request is **CRITICAL** — connections are
-  created and never returned.
-
-Check what the database itself thinks:
-
-```sql
-SELECT count(*), state FROM pg_stat_activity GROUP BY state;
-SHOW max_connections;
-```
-
-Run SQL by writing a throwaway script into `.dev/` (it is gitignored, and the
-template already uses it for exactly this) and running it with `node` — that
-works on all three operating systems, `psql` does not:
-
-```js
-// .dev/q.mjs
-import postgres from "postgres";
-const sql = postgres(process.env.DATABASE_URL, { max: 1 });
-console.log(await sql`SELECT count(*), state FROM pg_stat_activity GROUP BY state`);
-await sql.end();
-```
-
-### Indexes
-
-Postgres does **not** index foreign keys automatically. The template's own
-tables are indexed already — `orders_member`, `grants_member`,
-`grants_member_product`, `subscriptions_member`, `chat_messages_member`,
-`token_ledger_account_created`, `mcp_keys_member`, the `ai_usage_*` set. So the
-gap is almost always in **the tables the user added themselves**.
-
-For every table in `db/` that is not part of the template: every column used in
-a `where` or an `order by` on a page the customer sees needs an index — the
-`memberId` column above all. Missing index on an owner column is **HIGH**; it
-looks fine at 100 rows and dies at 100,000.
-
-Find it rather than guessing:
-
-```sql
-SELECT relname, seq_scan, idx_scan, n_live_tup
-FROM pg_stat_user_tables
-WHERE seq_scan > idx_scan AND n_live_tup > 500
-ORDER BY seq_scan DESC;
-```
-
-Then confirm with the actual query:
-
-```sql
-EXPLAIN (ANALYZE, BUFFERS) SELECT ...;
-```
-
-A `Seq Scan` on a table with real rows, a `Rows Removed by Filter` in the
-thousands, or a sort with no index behind it — each one is the finding, with the
-plan as evidence.
-
-After adding an index: `node run.mjs db-generate`, review the generated file in
-`drizzle/`, then `node run.mjs db-migrate`. Never hand-edit a migration that has
-run.
-
-### N+1
-
-The pattern that scales with the customer's success. Read every page and action
-that renders a list and look for a query inside the loop — or, more honestly,
-count the queries: set `DEBUG` logging on postgres.js, or log in the Drizzle
-client, load the page once, and count.
-
-Drizzle's answer is `with` (relations) or an explicit join. Missing it is
-**MEDIUM** for a list that cannot grow and **HIGH** for one that grows per
-customer — orders, invoices, ledger entries, chat messages.
-
-| Queries for one page view | Verdict |
-|---|---|
-| ≤ 5 | fine |
-| 6–20 | ⚠️ MEDIUM |
-| 21–50 | ❌ HIGH |
-| > 50 | 🚨 CRITICAL |
-
-### The rest
-
-- **Select what you show.** `select()` with no columns fetches every column,
-  including ones no page renders. **LOW**, unless the table has a big text
-  column in it — then MEDIUM.
-- **Paginate lists that grow.** Orders, ledger entries, chat history, IPN
-  events. A page that loads everything is **HIGH** the moment somebody uses the
-  app a lot.
-- **Do not regenerate what is cached.** Checkout URLs live in `buy_url_cache`
-  (`lib/digistore/buyUrl.ts`) and cost an API round trip to Digistore24 when
-  they miss. Building one per request is **HIGH** — it makes `/plans` as slow as
-  a third party's API and as reliable.
-- **Prune what only grows.** `ipn_events` and `ai_usage` are append-only.
-  `node run.mjs db-prune-ipn` and `db-prune-ai` exist; on a live app they belong
-  in the cron (`docs/cron.md`).
+The full recipe for this check is in **`references/checks-database.md`** — the
+connection pool and its CRITICAL misconfigurations, finding missing indexes on
+the tables the user added (`pg_stat_user_tables`, `EXPLAIN ANALYZE`), counting
+queries to catch N+1 with its per-page thresholds, and the smaller habits:
+column selection, pagination, the checkout-URL cache, pruning the append-only
+tables. Read it in full when you run this check.
 
 ## 4 · `load` — ~100 parallel users
 
 The proof. Against the production build, on the routes a real visitor hits.
 
-```bash
-npx autocannon -c 100 -d 20 http://localhost:3100/
-npx autocannon -c 100 -d 20 http://localhost:3100/plans
-npx autocannon -c 100 -d 20 http://localhost:3100/api/healthz
-```
-
-`-c 100 -d 20` is 100 open connections for 20 seconds. Compare each result with
-the same route's single-user number from `response`: the gap *is* the finding.
-
-**Do not load-test `/api/ipn`.** It writes orders and grants. If you want to
-know it holds, test it with invalid signatures — the rejection path is the
-expensive one anyway, and it changes nothing.
-
-**Do not load-test `/api/chat`** against a real provider unless you mean to pay
-for it. Say so rather than quietly skipping it.
-
-| Metric at `-c 100` | ℹ️ LOW | ⚠️ MEDIUM | ❌ HIGH | 🚨 CRITICAL |
-|---|---|---|---|---|
-| errors / timeouts | any | > 0.1 % | > 1 % | > 5 % |
-| p95 latency | > 500 ms | > 1 s | > 3 s | > 10 s |
-| p99 latency | > 1 s | > 2 s | > 5 s | > 15 s |
-| p95 vs. single user | 3× | 5× | 10× | 25× |
-
-**The target for the first version: zero errors, zero timeouts, p95 in the
-three-digit milliseconds on dynamic pages.** Anything else is a finding, not a
-result.
-
-When it breaks: the pool first (a p95 that is a clean multiple of the single-user
-time is queueing, near enough always the pool or the database), then indexes,
-then the instance size. Fix one thing, measure again. Two changes at once and
-you have learned nothing.
+The recipe — the autocannon commands, the thresholds at `-c 100`, the target
+for the first version, and what to fix first when it breaks — is in
+**`references/checks-server.md`**; read that section before firing the load.
+It also names the two routes that must never be load-tested (`/api/ipn`, and
+`/api/chat` against a real provider).
 
 ## 5 · `memory` — does it grow and never fall
 
 Leaks are invisible in a five-minute test and fatal in a week. Measure during or
 right after the load test, when the process has actually done work.
 
-**Server:**
-
-```bash
-node --heap-prof node_modules/next/dist/bin/next start -p 3100
-# put load on it, stop it, open the .heapprofile in Chrome DevTools
-```
-
-Cheaper and usually enough: watch RSS across a load run and see whether it comes
-back down after the load stops.
-
-What actually leaks in an app this shape:
-
-- A `setInterval` with no `clearInterval` — cron helpers, polling.
-- A `Map` used as a cache with no eviction. `lib/rate-limit.ts` holds timestamps
-  per key in memory by design and is bounded by its window — that is fine and
-  documented. A new unbounded one is not.
-- Event listeners added per request.
-- A large object captured in a module-level closure.
-
-| Server heap growth | ℹ️ LOW | ⚠️ MEDIUM | ❌ HIGH | 🚨 CRITICAL |
-|---|---|---|---|---|
-| after load, not released | > 10 MB | > 50 MB | > 200 MB | > 500 MB |
-
-**Browser:** the dashboard is a long-lived client session, so it can leak too.
-Open it, take a heap snapshot in DevTools, navigate between dashboard pages ten
-to twenty times, snapshot again. Growth that never comes back is the finding —
-detached DOM nodes and listeners that survive a route change, usually a
-`useEffect` with no cleanup.
-
-| Browser heap after 10 navigations | ℹ️ LOW | ⚠️ MEDIUM | ❌ HIGH | 🚨 CRITICAL |
-|---|---|---|---|---|
-| growth | > 5 MB | > 20 MB | > 50 MB | > 100 MB |
+The recipe — how to measure the server heap (`--heap-prof`, or simply RSS
+across a load run), what actually leaks in an app this shape, the browser-heap
+procedure via DevTools snapshots, and the growth thresholds for both — is in
+**`references/checks-server.md`**; read that section when you run this check.
 
 ## 6 · `cpu` — hot functions and a blocked event loop
 
 Only worth running when `response` or `load` pointed here — a route that is slow
 with the CPU idle is waiting on something, not computing.
 
-```bash
-node --cpu-prof --cpu-prof-dir=.dev node_modules/next/dist/bin/next start -p 3100
-# put load on it, stop it, open the .cpuprofile in Chrome DevTools
-```
-
-Node is single-threaded per process: anything synchronous blocks **every**
-request, not just its own. So the findings that matter are the blocking ones.
-
-- **Synchronous I/O in a request path** — `readFileSync`, `execSync`. The
-  assistant's handbook is read from `content/knowledge/` (`lib/ai/knowledge.ts`);
-  reading it per request rather than once is **HIGH**.
-- **Crypto in the request path.** `scrypt` in `lib/credentials/hash.ts` is
-  deliberately expensive — that is the point of a password hash, and it is
-  correctly the async form. A synchronous variant is **CRITICAL** under load.
-- **JSON work on large payloads** on every request — cache it or narrow it.
-- **A regex that backtracks.** Also a security finding (ReDoS); mention it in
-  both reports.
-
-| | ℹ️ LOW | ⚠️ MEDIUM | ❌ HIGH | 🚨 CRITICAL |
-|---|---|---|---|---|
-| one function, share of CPU | > 10 % | > 25 % | > 50 % | > 75 % |
-| synchronous block | > 10 ms | > 50 ms | > 200 ms | > 1 s |
+The recipe — the `--cpu-prof` command, the blocking patterns that matter here
+(synchronous I/O, sync crypto, JSON work on large payloads, a backtracking
+regex) and the thresholds — is in **`references/checks-server.md`**; read that
+section when you run this check.
 
 ## 7 · `frontend` — what the visitor actually waits for
 
-Against the production build, or the deployed URL:
-
-```bash
-npx lighthouse http://localhost:3100/ --only-categories=performance \
-  --chrome-flags="--headless" --output=json --output-path=.dev/lh-home.json
-```
-
-Needs a Chrome on the machine. If there is none, say so and measure what you can
-(bundle size, `response`) rather than reporting nothing.
-
-Measure the home page and `/plans` — those are the pages a stranger sees, and
-the ones where a slow load costs a sale. The dashboard matters less; it is
-behind a login and its visitors are already customers.
-
-| Metric | ℹ️ LOW | ⚠️ MEDIUM | ❌ HIGH | 🚨 CRITICAL |
-|---|---|---|---|---|
-| Lighthouse performance | < 90 | < 75 | < 55 | < 35 |
-| LCP | > 2.5 s | > 4 s | > 6 s | > 10 s |
-| INP | > 200 ms | > 500 ms | > 800 ms | > 1 s |
-| CLS | > 0.1 | > 0.25 | > 0.5 | > 1 |
-| first-load JS, gzipped | > 200 kB | > 400 kB | > 800 kB | > 1.5 MB |
-
-`npm run build` prints the first-load JS per route; read it rather than guessing.
-
-What is usually behind it here:
-
-- **`"use client"` where it is not needed.** Every client component and
-  everything it imports ships to the browser. A page that could be a server
-  component and is not is the single biggest bundle win in a Next.js app.
-- **Images without `next/image`**, or without width and height — the second one
-  is what CLS is made of.
-- **A heavy import for a small job** — a whole date or icon library for one
-  call. Check what `npm run build` attributes to each route.
-- **Fonts.** `geist` is loaded through `next/font`, which handles this. A
-  hand-rolled `@font-face` without `font-display: swap` is a finding.
-- **Work on every render** that could be done once, or on the server.
+The full recipe for this check is in **`references/checks-frontend.md`** — the
+Lighthouse command, what to measure when there is no Chrome, which pages count
+and why, the thresholds for Lighthouse score, Core Web Vitals and first-load
+JS, and what is usually behind a bad number in this template. Read it in full
+when you run this check.
 
 ## 8 · `fix` — fixing what was found
 

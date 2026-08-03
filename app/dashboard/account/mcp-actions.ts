@@ -24,9 +24,9 @@ import { unstable_rethrow } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
 import { requireActiveUser } from "@/lib/authz";
+import { createKey, revokeKey } from "@/lib/api-keys/keys";
+import { ApiKeyError, checkKeyName, isLifetime, isScope } from "@/lib/api-keys/rules";
 import { isMcpEnabled } from "@/lib/mcp/config";
-import { createKey, revokeKey } from "@/lib/mcp/keys";
-import { McpError, checkKeyName, isLifetime, isScope } from "@/lib/mcp/rules";
 
 const PAGE = "/dashboard/account";
 
@@ -51,7 +51,7 @@ async function toState(error: unknown): Promise<McpActionState> {
   // legitimate redirect into "unknown error".
   unstable_rethrow(error);
   const t = await getTranslations("errors");
-  if (error instanceof McpError) return { ...EMPTY, error: t(error.code) };
+  if (error instanceof ApiKeyError) return { ...EMPTY, error: t(error.code) };
 
   console.error("[mcp] unexpected error:", error);
   return { ...EMPTY, error: t("unknown") };
@@ -71,10 +71,10 @@ export async function createKeyAction(
 ): Promise<McpActionState> {
   try {
     const session = await requireActiveUser();
-    if (!isMcpEnabled()) throw new McpError("mcpDisabled");
+    if (!isMcpEnabled()) throw new ApiKeyError("mcpDisabled");
 
     const checked = checkKeyName(formData.get("name"));
-    if (!checked.ok) throw new McpError(checked.code);
+    if (!checked.ok) throw new ApiKeyError(checked.code);
 
     // Both come from a <select>, and neither is trusted because of that. An
     // unrecognised value falls back to the SAFER option — `read`, and an
@@ -93,6 +93,7 @@ export async function createKeyAction(
       name: checked.name,
       scope,
       lifetimeDays,
+      audience: "mcp",
     });
 
     revalidatePath(PAGE);

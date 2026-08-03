@@ -9,11 +9,14 @@ import {
   KNOWLEDGE_MAX_CHARS,
   KNOWLEDGE_SECTIONS,
   VALIDATED_SECTIONS,
+  allowedMediaMarkers,
   comparePaths,
   estimateTokens,
   parseDoc,
   parseFrontmatter,
   readKnowledgeFrom,
+  type KnowledgeBase,
+  type KnowledgeDoc,
 } from "./knowledge";
 
 const KNOWLEDGE = fileURLToPath(new URL("../../content/knowledge", import.meta.url));
@@ -207,6 +210,80 @@ describe("the handbook this template ships", () => {
   it("loads in the same order every time", () => {
     const again = readKnowledgeFrom(KNOWLEDGE);
     expect(again.docs.map((d) => d.path)).toEqual(base.docs.map((d) => d.path));
+  });
+});
+
+describe("allowedMediaMarkers", () => {
+  // The renderer's whitelist (AD-54): whole marker strings out of the loaded
+  // docs' BODIES, and out of nothing else. Every case here goes through
+  // `parseDoc` — the same validation `readKnowledgeFrom` applies — so "a doc
+  // that failed validation contributes nothing" is tested the way it is true
+  // in production: the doc never reaches `docs` in the first place.
+
+  const MARKER = "[media:erste-schritte/rundgang.mp4|Der Rundgang]";
+
+  function validated(path: string, body: string): KnowledgeDoc {
+    const { doc: parsed, problems } = parseDoc(
+      path,
+      doc("section: howto\ntitle: T\nsummary: S", body),
+    );
+    expect(problems).toEqual([]);
+    if (!parsed) throw new Error(`fixture doc ${path} failed validation`);
+    return parsed;
+  }
+
+  function baseOf(docs: KnowledgeDoc[]): KnowledgeBase {
+    return { docs, problems: [], chars: 0 };
+  }
+
+  it("collects the markers a handbook body carries, deduplicated", () => {
+    const base = baseOf([
+      validated("howto/a.md", `Los geht es.\n\n${MARKER}\n\nUnd nochmal: ${MARKER}`),
+      validated("howto/b.md", `Anders: [media:preise/liste.pdf|Die Preisliste]`),
+    ]);
+    expect(allowedMediaMarkers(base)).toEqual([
+      MARKER,
+      "[media:preise/liste.pdf|Die Preisliste]",
+    ]);
+  });
+
+  it("collects nothing from a handbook without markers", () => {
+    const base = baseOf([validated("howto/a.md", "Nur Prosa, keine Marker.")]);
+    expect(allowedMediaMarkers(base)).toEqual([]);
+  });
+
+  it("ignores a malformed marker — it is not a marker at all", () => {
+    const base = baseOf([
+      validated(
+        "howto/a.md",
+        "Kaputt: [media:Falsch/Datei.mp4|x] und [media:a/b.exe|x] und [media:a/b.mp4| x]",
+      ),
+    ]);
+    expect(allowedMediaMarkers(base)).toEqual([]);
+  });
+
+  it("gets nothing from a doc that failed validation — it never reaches docs", () => {
+    // The honest set: what the model never saw it cannot legitimately repeat.
+    // A doc without a section is refused by `parseDoc`, so by construction it
+    // cannot contribute — asserted here so the construction stays load-bearing.
+    const { doc: refused } = parseDoc("howto/broken.md", doc("title: T\nsummary: S", MARKER));
+    expect(refused).toBeNull();
+  });
+
+  it("does not read frontmatter — a media: entry is no render licence", () => {
+    // Frontmatter `media:` lists are Story 18.4's cross-check. Only what the
+    // model actually sees (the body) can license a card.
+    const { doc: parsed, problems } = parseDoc(
+      "howto/a.md",
+      `---\nsection: howto\ntitle: T\nsummary: S\nmedia: ${MARKER}\n---\n\nNur Prosa.\n`,
+    );
+    expect(problems).toEqual([]);
+    if (!parsed) throw new Error("fixture doc failed validation");
+    expect(allowedMediaMarkers(baseOf([parsed]))).toEqual([]);
+  });
+
+  it("answers the deny-all default for an empty handbook", () => {
+    expect(allowedMediaMarkers(baseOf([]))).toEqual([]);
   });
 });
 

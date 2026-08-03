@@ -113,7 +113,9 @@ describe("no provider key outside the provider layer", () => {
 });
 
 describe("the assistant is not an exception", () => {
-  const route = readFileSync(join(ROOT, "app", "api", "chat", "route.ts"), "utf8");
+  // The pipeline both chat doors share — the web route and /api/v1/chat are
+  // thin authenticators around it, so THIS is where a provider name would leak.
+  const route = readFileSync(join(ROOT, "lib", "ai", "chat-endpoint.ts"), "utf8");
 
   it("names no provider", () => {
     // The point of the migration: the one feature that shipped with a model

@@ -16,6 +16,7 @@ import {
 } from "@/lib/ai/chat-config";
 import { isOwner } from "@/lib/roles";
 import { listConversation } from "@/lib/ai/conversation";
+import { allowedMediaMarkers } from "@/lib/ai/knowledge";
 import { ChatWindow } from "./ui";
 
 // The assistant.
@@ -112,6 +113,11 @@ export default async function ChatPage() {
           role: turn.role,
           content: turn.content,
         }))}
+        // The Media Marker whitelist (AD-54), derived on the server from the
+        // same handbook load the prompt rides on. Passing it to the browser
+        // leaks nothing: the handbook is her knowledge for every signed-in
+        // member, and the delivery route re-guards every fetch.
+        allowedMedia={allowedMediaMarkers()}
       />
     </>
   );

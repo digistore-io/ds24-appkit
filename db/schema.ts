@@ -120,10 +120,11 @@ export * from "./schema-email-changes";
 // member, unlike the billing records. See schema-chat.ts.
 export * from "./schema-chat";
 
-// --- MCP server ---------------------------------------------------------------
-// `mcp_keys` — the credentials a Member issues to reach this app from an AI
-// client. Hashed, never readable back. See schema-mcp.ts.
-export * from "./schema-mcp";
+// --- API & MCP keys -----------------------------------------------------------
+// `api_keys` — the credentials a Member issues to reach this app from a
+// program: an AI client (audience `mcp`) or their own app calling `/api/v1`
+// (audience `api`). Hashed, never readable back. See schema-api-keys.ts.
+export * from "./schema-api-keys";
 
 // --- AI usage -----------------------------------------------------------------
 // `ai_usage` — one row per model call: task, provider, model, tokens, outcome.

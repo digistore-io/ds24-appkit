@@ -34,9 +34,16 @@ import { ChatWindow, type ChatMessage } from "./ui";
 export function ChatLauncher({
   assistantName,
   avatar,
+  allowedMedia,
 }: {
   assistantName: string;
   avatar: string;
+  /**
+   * The Media Marker whitelist for her answers — resolved in the layout
+   * (this file is `"use client"` and cannot read the handbook itself) and
+   * handed through to `ChatWindow` untouched. Absent it denies (AD-54).
+   */
+  allowedMedia?: readonly string[];
 }) {
   const t = useTranslations("chat");
   const pathname = usePathname();
@@ -127,6 +134,7 @@ export function ChatLauncher({
                 assistantName={assistantName}
                 avatar={avatar}
                 initial={history}
+                allowedMedia={allowedMedia}
               />
             )}
           </div>

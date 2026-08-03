@@ -37,6 +37,7 @@ import {
   markdownFilesIn,
   renderedChars,
 } from "./knowledge-files.mjs";
+import { markersIn } from "@/lib/knowledge-media/rules.mjs";
 
 /** Where the handbook lives, relative to the project root. */
 export const KNOWLEDGE_DIR = join("content", "knowledge");
@@ -226,4 +227,35 @@ export function loadKnowledge(): KnowledgeBase {
 /** Test seam — drops the memoized handbook. */
 export function resetKnowledgeCache(): void {
   cached = null;
+}
+
+/**
+ * Every Media Marker the loaded handbook carries — the renderer's allowed-set
+ * (AD-54).
+ *
+ * Derived from the docs' BODIES and nothing else: a doc that failed validation
+ * is not in `docs`, so it licenses nothing — the honest set, because what the
+ * model never saw it cannot legitimately repeat. Frontmatter `media:` entries
+ * are Story 18.4's cross-check, not a render licence, so they deliberately do
+ * not feed this.
+ *
+ * Derived PER CALL from whatever `loadKnowledge()` answers, with no cache of
+ * its own: the handbook's cache discipline (memoized in production, re-read
+ * otherwise, absence never cached) carries over for free, and a second cache
+ * would be a second thing that can disagree with the handbook it came from.
+ * The work is one regex pass over a few dozen pages — cheap next to the
+ * request that needs it.
+ *
+ * A `string[]` and not a `Set` because the set crosses the RSC boundary twice
+ * (page → ChatWindow, layout → ChatLauncher → ChatWindow) and an array is
+ * unambiguous to serialise; the client builds its lookup shape itself.
+ * Deduplicated, in handbook order — deterministic on every machine because
+ * `docs` is sorted by `comparePaths`.
+ */
+export function allowedMediaMarkers(base: KnowledgeBase = loadKnowledge()): string[] {
+  const markers = new Set<string>();
+  for (const doc of base.docs) {
+    for (const marker of markersIn(doc.body)) markers.add(marker);
+  }
+  return [...markers];
 }
