@@ -251,3 +251,53 @@ Three of the four hook mechanisms are young, and two of them have open bugs
 where the hook silently stops firing. That is what `node run.mjs greet` is for:
 it prints the same greeting on demand. If no greeting appeared, run it —
 silence is never the same as "fine".
+
+## Chrome calls the sign-in link a "Dangerous site"
+
+The symptom: somebody clicks the link in the sign-in mail and Chrome answers
+with a full-page red interstitial — *"Dangerous site — attackers on this site
+may trick you…"* — before the app is ever reached. Firefox and Safari show
+their own versions of the same page.
+
+**This is not an error in the app, and nothing in the code triggered it.** The
+domain is on Google's **Safe Browsing** blocklist, a reputation verdict about
+the domain itself that every major browser consults. The app behind it can be
+flawless; the interstitial comes up all the same, in front of every page and
+every sign-in link, for every visitor.
+
+Why a freshly launched SAAS app earns that verdict is worth spelling out,
+because each ingredient looks harmless alone:
+
+- **The domain is brand new.** No history is itself a risk signal — phishing
+  domains are hours old, so young domains start with negative trust.
+- **It serves a sign-in form and mails out token links.** That is exactly what
+  a credential-phishing site does. The classifiers cannot read intent, only
+  shape — and the shape matches until reputation says otherwise.
+- **The sender domain does not match the link domain.** A mail from
+  `demo@somewhere-else.com` whose button points at `your-domain.de` is the
+  single strongest phishing heuristic there is. Recipients hit "report
+  phishing", filters agree, and those reports feed the same lists Chrome
+  reads. The sender rule in [`docs/auth-setup.md`](auth-setup.md) → *What the
+  mails look like* exists to keep this ingredient out entirely.
+
+**Getting off the list** is a review request, and only the domain owner can
+file it:
+
+1. Verify the domain in **Google Search Console** (DNS record or file upload —
+   the skill `go-live` walks through it).
+2. *Security issues* names what Google believes it saw — usually "Deceptive
+   pages" for this pattern. If the panel is empty, check the verdict at
+   Google's Safe Browsing status page
+   (`transparencyreport.google.com/safe-browsing/search?url=your-domain.de`).
+3. **Request a review** from that panel, in one or two sentences: what the
+   product is, that sign-in links are sent only to addresses that asked for
+   them. Reviews of false positives typically clear in one to three days.
+
+**Preventing it** is cheaper than clearing it, and it is three lines of
+go-live discipline: the sender address lives on the app's own domain and is
+DKIM/SPF-verified there; the Impressum and privacy policy are filled in before
+the first stranger gets a mail (`node run.mjs legal-check` — a placeholder
+Impressum on a live domain reads exactly like a throwaway phishing site); and
+the domain is verified in Search Console **at** launch, not after the flag,
+because Search Console is also where Google would tell you about the flag —
+without it the first person to learn of the interstitial is a customer.

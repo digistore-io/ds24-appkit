@@ -25,10 +25,13 @@
 // ── Delivery shape ─────────────────────────────────────────────────────────
 // On the cloud driver: `307` to a signed address, the bytes never pass
 // through the app. On the local driver (DEV): stream, because nothing else
-// can serve them.
+// can serve them. One exception on every driver: subtitle text
+// (`servedThroughApp()`) streams from here, because a `<track>` fetch is
+// CORS-restricted and will not follow the redirect to the bucket — the
+// reasoning lives on the predicate in `rules.ts`.
 import { isMediaEnabled } from "@/lib/media/config";
 import { findMedia, mayAccess, type Viewer } from "@/lib/media/manage";
-import { safeFilename, extensionFor } from "@/lib/media/rules";
+import { safeFilename, extensionFor, servedThroughApp } from "@/lib/media/rules";
 import { mediaStore, mediaStoreProblems } from "@/lib/media/store";
 import { signedUrlSeconds } from "@/lib/media/url";
 
@@ -75,14 +78,18 @@ export async function deliverMedia(args: {
 
   // The cloud driver: send them to the bucket. The signature carries the
   // filename and the media type, so neither can be edited onto the URL by
-  // whoever receives it.
-  const signed = store.signedUrl(row.storageKey, {
-    expiresSeconds: signedUrlSeconds(row.kind),
-    contentType: row.mime,
-    downloadFilename: args.download
-      ? safeFilename(row.filename ?? "", extensionFor(row.mime))
-      : undefined,
-  });
+  // whoever receives it. Subtitle text skips this branch on purpose — a
+  // `<track>` cannot follow a cross-origin redirect — and falls through to
+  // the streaming below, which both drivers implement.
+  const signed = servedThroughApp(row.mime)
+    ? null
+    : store.signedUrl(row.storageKey, {
+        expiresSeconds: signedUrlSeconds(row.kind),
+        contentType: row.mime,
+        downloadFilename: args.download
+          ? safeFilename(row.filename ?? "", extensionFor(row.mime))
+          : undefined,
+      });
   if (signed) {
     return new Response(null, {
       status: 307,
@@ -90,7 +97,8 @@ export async function deliverMedia(args: {
     });
   }
 
-  // The local driver: there is nothing else that can serve it.
+  // The local driver — and, on every driver, subtitle text: nothing else
+  // may serve it.
   const bytes = await store.getBytes(row.storageKey);
   if (!bytes) {
     // The row says there is a file and there is not. Worth a log line: it means

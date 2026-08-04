@@ -92,6 +92,14 @@ export const courseUnits = pgTable(
       .references(() => media.id, { onDelete: "set null" }),
     worksheetMediaId: text("worksheet_media_id")
       .references(() => media.id, { onDelete: "set null" }),
+    // The video's subtitle sidecar (a `text/vtt` media row) — rendered as a
+    // track that is OFF until the viewer switches it on; the production story
+    // is docs/content-production.md → Subtitles. One column because a unit's
+    // video is in one language (scripts are one-per-language); a video that
+    // needs SEVERAL subtitle languages is the extension, as a child table
+    // (unitSlug, srclang, mediaId), not more nullable columns here.
+    subtitleMediaId: text("subtitle_media_id")
+      .references(() => media.id, { onDelete: "set null" }),
     // A unit without a video still needs somewhere for its content.
     body: text("body"),
   },
@@ -126,10 +134,11 @@ A course area OUTSIDE `/dashboard` needs the three edits `CLAUDE.md` →
   component**: the shipped checklist is wired to onboarding copy and hides
   itself once everything is done — right for onboarding, wrong for a course
   overview.
-- `/dashboard/course/[unit]` — the video (`components/ui/media-player.tsx`),
-  the worksheet (`components/ui/media-download.tsx`), and what comes next.
-  Dynamic pages are skipped by `node run.mjs smoke` — open one by hand with a
-  real slug before calling it done.
+- `/dashboard/course/[unit]` — the video (`components/ui/media-player.tsx`,
+  with the unit's subtitle track passed via `tracks` when `subtitleMediaId`
+  is set), the worksheet (`components/ui/media-download.tsx`), and what comes
+  next. Dynamic pages are skipped by `node run.mjs smoke` — open one by hand
+  with a real slug before calling it done.
 
 **The access rule** — one gate for the whole course, quoted into
 `docs/app.md` as code, never as prose:
@@ -196,6 +205,7 @@ export const programWeeks = pgTable("program_weeks", {
   // Days after PURCHASE until this week opens: 0, 7, 14, …
   releaseAfterDays: integer("release_after_days").notNull(),
   videoMediaId: text("video_media_id"),
+  subtitleMediaId: text("subtitle_media_id"),   // as in course_units above
 });
 ```
 

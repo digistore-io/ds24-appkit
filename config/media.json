@@ -33,11 +33,12 @@
       "signedUrlSeconds": 21600
     },
     "file": {
-      "_comment": "The PDF or the archive a buyer paid for. Set its visibility to \"entitled\" and name the plan, and hasPlan() decides who may fetch it — the same call that gates every other paid thing in this app.",
+      "_comment": "The PDF or the archive a buyer paid for. Set its visibility to \"entitled\" and name the plan, and hasPlan() decides who may fetch it — the same call that gates every other paid thing in this app. text/vtt is the subtitle sidecar of a course video; unlike everything else here it is served through the app, never via a bucket address, because a <track> fetch cannot cross origins — docs/visuals.md explains.",
       "maxBytes": 52428800,
       "mimeTypes": [
         "application/pdf",
-        "application/zip"
+        "application/zip",
+        "text/vtt"
       ],
       "signedUrlSeconds": 300
     }
@@ -60,7 +61,8 @@
       "audio/ogg",
       "audio/wav",
       "application/pdf",
-      "application/zip"
+      "application/zip",
+      "text/vtt"
     ]
   },
   "maxUploadsPerHour": 30

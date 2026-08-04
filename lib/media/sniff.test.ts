@@ -91,6 +91,16 @@ describe("sniffMime", () => {
     expect(sniffMime(bytes(0xff, 0x00, 0x00))).toBeNull();
   });
 
+  it("recognises a WebVTT subtitle, with and without a byte-order mark", () => {
+    // The spec requires the literal WEBVTT up front; editors on Windows write
+    // a UTF-8 BOM in front of it, and three invisible bytes are no reason to
+    // refuse a valid subtitle file.
+    expect(sniffMime(bytes("WEBVTT\n\n00:00"))).toBe("text/vtt");
+    expect(sniffMime(bytes(0xef, 0xbb, 0xbf, "WEBVTT"))).toBe("text/vtt");
+    // Text that merely mentions it is not a subtitle file.
+    expect(sniffMime(bytes("A WEBVTT file"))).toBeNull();
+  });
+
   it("recognises documents and archives, empty ones included", () => {
     expect(sniffMime(bytes("%PDF-1.7"))).toBe("application/pdf");
     expect(sniffMime(bytes(0x50, 0x4b, 0x03, 0x04))).toBe("application/zip");
@@ -166,6 +176,14 @@ describe("agreedMime", () => {
     // under a text type.
     expect(agreedMime(bytes("PK", 0x03, 0x04), "text/plain")).toBeNull();
     expect(agreedMime(bytes(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a), "text/plain")).toBeNull();
+  });
+
+  it("accepts text/plain for the one readable file that IS plain text", () => {
+    // A .vtt genuinely is plain text and the Windows registry says so. The
+    // ALIASES entry admits the claim for WEBVTT-signed bytes and nothing else
+    // — the two assertions above are what keep this from reopening the door.
+    expect(agreedMime(bytes("WEBVTT\n\n00:00"), "text/plain")).toBe("text/vtt");
+    expect(agreedMime(bytes("WEBVTT\n\n00:00"), "text/vtt")).toBe("text/vtt");
   });
 
   it("survives a Content-Type that names something on Object.prototype", () => {

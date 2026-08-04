@@ -137,6 +137,12 @@ const SIGNATURES: readonly Signature[] = [
 
   // ── files ────────────────────────────────────────────────────────────────
   { mime: "application/pdf", offset: 0, magic: ascii("%PDF-") },
+  // A WebVTT subtitle file is required by its spec to open with the literal
+  // `WEBVTT` — optionally behind a UTF-8 byte-order mark, which editors on
+  // Windows really do write. Both spellings are here so a valid file is not
+  // refused for the three invisible bytes in front of it.
+  { mime: "text/vtt", offset: 0, magic: ascii("WEBVTT") },
+  { mime: "text/vtt", offset: 0, magic: [0xef, 0xbb, 0xbf, ...ascii("WEBVTT")] },
   // Three ZIP signatures: a normal archive, an empty one, and a spanned one.
   // An empty archive is the one that surprises people — it has no local file
   // header at all, so the central-directory-end signature is what identifies it.
@@ -215,6 +221,12 @@ const ALIASES: Record<string, string[]> = Object.assign(Object.create(null), {
   "audio/mp3": ["audio/mpeg"],
   "audio/x-wav": ["audio/wav"],
   "audio/wave": ["audio/wav"],
+  // The Windows registry has no entry for `.vtt` on many machines and answers
+  // `text/plain` on the ones where an editor claimed the extension — and a VTT
+  // genuinely IS plain text. The bytes still decide: only a file that opens
+  // with `WEBVTT` sniffs as `text/vtt`, so this alias cannot smuggle anything
+  // else in under a text claim (see the `text/plain` note below).
+  "text/plain": ["text/vtt"],
   // `video/quicktime` is deliberately NOT aliased to `video/mp4`. A `.mov` is a
   // different format, and recording it as an MP4 stores something no player
   // will open — with `X-Content-Type-Options: nosniff` making the wrong answer
@@ -235,9 +247,11 @@ const UNKNOWING_TYPES = new Set([
 ]);
 // `text/plain` is NOT one of them, though it looks like it belongs. It is what
 // the registry answers for `.txt`, `.csv` and `.md` — a positive claim about a
-// readable file, not a shrug — and none of those sniff as anything, so they are
-// refused by the table either way. Listing it here bought nothing and cost the
+// readable file, not a shrug. Listing it here bought nothing and cost the
 // mismatch signal: ZIP bytes offered as `text/plain` were accepted as a ZIP.
+// The one readable file this app accepts, a WebVTT subtitle, is handled the
+// narrow way instead: an ALIASES entry above, which admits `text/plain` for
+// `text/vtt` bytes and for nothing else.
 
 export function agreedMime(bytes: Uint8Array, claimed: string | null): string | null {
   const actual = sniffMime(bytes);

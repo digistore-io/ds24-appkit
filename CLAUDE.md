@@ -129,7 +129,7 @@ frontmatter, so nothing is lost by the brevity:
 - **`mcp-server`** — *(optional)* let customers connect Claude to the app: choose the tools, switch MCP on.
 - **`mobile-companion`** — *(optional)* a mobile app on the same backend: switch the API on, export the shared core, ship it via Expo/EAS; needs template 0.11.0 ([`docs/mobile.md`](docs/mobile.md)).
 - **`visuals`** — *(optional)* what the customer SEES: images, video, files behind a purchase ([`docs/visuals.md`](docs/visuals.md)).
-- **`content-production`** — *(optional)* produce the media a course still lacks: lesson scripts in one tool-neutral format, video tools recommended and set up on request ([`docs/content-production.md`](docs/content-production.md)).
+- **`content-production`** — *(optional)* produce the media a course still lacks: lesson scripts in one tool-neutral format, video tools recommended and set up on request, voiceover and subtitles included; needs template 0.12.0 ([`docs/content-production.md`](docs/content-production.md)).
 - **`ai-companion`** — *(optional)* the app works alongside its customer rather than only delivering ([`docs/ai-in-product.md`](docs/ai-in-product.md)).
 - **`learning-activities`** — *(optional)* what a course's customer DOES, judged on the server; needs template 0.9.0 ([`docs/learning.md`](docs/learning.md)).
 - **`user-onboarding`** — *(optional, but read its first item once)* the END USER's first session, designed on purpose ([`docs/onboarding.md`](docs/onboarding.md)).
@@ -1159,7 +1159,10 @@ place, `lib/media/`. It has its own guide: **[`docs/visuals.md`](docs/visuals.md
   the server component **while it renders** — `mayAccess()` — which then mints
   an address that expires. `mediaUrlFor()` **grants nothing** — it is the step
   after `mayAccess()` said yes, and calling it without that check is how a
-  private file becomes public.
+  private file becomes public. One exception, and it is kilobytes: subtitle
+  text (`text/vtt`) streams from the app on every driver, because a `<track>`
+  cannot follow a cross-origin redirect and would fail silently
+  (`servedThroughApp()` in `lib/media/rules.ts` carries the reasoning).
 - **Selling a file is a visibility and a Product Key**, not a feature:
   `visibility: "entitled"` plus `requiresPlan`, and `hasPlan()` decides. The
   key is validated when it is written, because `hasPlan()` **throws** on an

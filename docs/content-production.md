@@ -154,13 +154,126 @@ vendor decides, never a default.
 ### Voiceover and audio
 
 An explainer needs a voice, and there are two: the vendor records the SAY lines
-(a phone in a quiet room beats no video shipped), or a TTS service generates
-them. TTS is deliberately an open tool choice — quality and pricing shift too
-fast to freeze a recommendation here; research the current options with the
-vendor when the need is real, and note that HeyGen and the service tools bring
-their own voices anyway. The app's own AI layer (`docs/ai-providers.md`) has no
-TTS task, and none should be invented for production tooling — production runs
-beside the app, not through `runTask()`.
+(a phone in a quiet room beats no video shipped), or a TTS tool generates them.
+An explainer with neither is a silent film with captions — legitimate as a
+deliberate style, but never as the accidental result of nobody deciding.
+The menu below was researched and priced on **2026-08-04** and rots like every
+price in this file; say the current figure out loud before anything is spent.
+HeyGen and Descript bring their own voices, so the talking-head paths need none
+of this. And one boundary stands whatever is picked: the app's own AI layer
+(`docs/ai-providers.md`) has no TTS task, and none should be invented for
+production tooling — production runs beside the app, not through `runTask()`.
+
+**edge-tts — the recommended free path.** A Python command-line tool
+([PyPI, v7.2.8 as of March 2026](https://pypi.org/project/edge-tts/)) that uses
+Microsoft Edge's online neural voices: no account, no API key, no cost, and the
+quality is real neural TTS in all four languages this template plans for. The
+caveat is said to the vendor before it is relied on: **it speaks to an
+unofficial endpoint — it works today and can break or change without notice.**
+One call per scene produces the audio AND word-timed subtitles together:
+
+```bash
+edge-tts --voice de-DE-KatjaNeural \
+  --text "Wenn die erste Wehe kommt, entscheidet nicht die Kraft, sondern der Atem." \
+  --write-media scene-1.mp3 --write-subtitles scene-1.srt
+```
+
+Good starting voices, one female/male pair per language (the full list is
+`edge-tts --list-voices`, several hundred entries):
+
+| Language | Female | Male |
+|---|---|---|
+| German | `de-DE-KatjaNeural` | `de-DE-ConradNeural` |
+| English | `en-US-JennyNeural` | `en-US-GuyNeural` |
+| French | `fr-FR-DeniseNeural` | `fr-FR-HenriNeural` |
+| Spanish | `es-ES-ElviraNeural` | `es-ES-AlvaroNeural` |
+
+The `Multilingual` voices (for example `de-DE-SeraphinaMultilingualNeural`)
+speak all of these languages with one voice — the right pick when a course
+ships in several languages and should sound like one narrator. Installing needs
+Python ≥ 3.10 and no root anywhere: `pipx install edge-tts` or `uvx edge-tts`
+where those exist (they handle the PATH), otherwise `pip install --user
+edge-tts` — all three hold on Linux, macOS and Windows Git Bash alike.
+
+**Piper — the offline path.** `pip install piper-tts`; voices are free ONNX
+downloads from [huggingface.co/rhasspy/piper-voices](https://huggingface.co/rhasspy/piper-voices)
+(`de_DE-thorsten-medium`, `en_US-lessac-medium`, `fr_FR-siwis-medium`,
+`es_ES-davefx-medium`, and more per language). Everything runs on the vendor's
+machine — no network after the model download, no endpoint that can vanish.
+The honest quality line: audibly below the cloud-neural voices; right for
+drafts, for machines that must stay offline, and wrong for a flagship course
+narration. It emits no word timestamps, so subtitles derive from the script
+instead (next section).
+
+**OpenAI TTS — paid, on an official contract.** `gpt-4o-mini-tts` costs about
+**$0.015 per minute of audio** ($0.60/1M input tokens + $12/1M audio tokens);
+~13 voices, and each of them speaks all four languages. Needs `OPENAI_API_KEY`
+— the *API keys for production services* section below applies, and note the
+overlap deliberately: the app's AI layer may already hold this key, but a TTS
+render is production tooling billed to the same account, not an app feature.
+
+**ElevenLabs — paid, the quality ceiling.** The best perceived voices of the
+four, Multilingual v2/v3 at **$0.10 per 1,000 characters** via API. **The $5
+per month Starter tier (≈30 minutes) is the minimum with a commercial licence —
+the free tier is NOT licensed for monetized content**, and a course behind a
+paywall is exactly that. `ELEVENLABS_API_KEY`, same key pattern as above.
+
+**Rendering the voice INTO the video.** With Remotion the audio track is part
+of the composition, not an editing step afterwards: put the per-scene files
+into `content-studio/public/`, mount each with `<Audio>` from
+`@remotion/media` via `staticFile()`, and derive every scene's
+`durationInFrames` from its audio file's measured length
+(`getAudioDurationInSeconds`) — the pacing then follows the narration by
+construction instead of by eye. One `npx remotion render` produces the MP4
+**with** its sound; Remotion v4 bundles its own ffmpeg, so nothing has to be
+installed for the mux (checked 2026-08-04).
+
+### Subtitles — text becomes a track, off by default
+
+The moment a video carries a voice track, the script's channels change meaning.
+**SAY is spoken now — so it must not also be burned into the picture.** It
+becomes a subtitle track instead: a WebVTT sidecar the viewer can switch on in
+the player's own CC menu, and that stays OFF until they do. **TEXT keeps its
+job** — the short on-screen emphasis (`4 · 7 · 8`) is a designed part of the
+picture, not a transcript, and stays rendered into the video exactly as before.
+A video without any audio track keeps working the old way; this section only
+applies where a voice exists.
+
+Getting the cues:
+
+- **edge-tts writes them** — `--write-subtitles scene-1.srt` per scene, with
+  real word timings. Scenes are rendered one file each, so shift every scene's
+  cues by that scene's start offset before joining them, then convert the
+  result to VTT (an SRT-to-VTT conversion is a header line and comma-to-dot
+  timestamps — a dozen lines of script, no tool needed).
+- **Tools without timestamps** (Piper, a recorded voiceover): one cue per SAY
+  line, spread across its scene's measured audio duration. Coarser than word
+  timing and entirely serviceable for narration.
+
+Delivery — this is the one place where a subtitle is NOT "just another file":
+
+1. The `.vtt` goes into the media store as `text/vtt` (it lives under the
+   `file` kind, `config/media.json`), with the same `visibility: "entitled"`
+   and `requiresPlan` as its video — the transcript of a paid lesson is paid
+   content.
+2. **Its address comes from `mediaUrlFor()` like every other file — and for
+   `text/vtt` that answer is deliberately the app's own route, never a bucket
+   URL.** A `<track>` fetch is CORS-restricted, unlike the video's `src`, and
+   cannot follow a redirect to a foreign host; a bucket address in a track
+   fails *silently* — the video plays, the CC menu stays empty, nothing logs.
+   The app streams these few kilobytes itself (`lib/media/deliver.ts`).
+3. The course page hands it to the player as a track:
+   `<MediaPlayer … tracks={[{ src, srclang: "de", label: "Deutsch" }]} />`
+   (`components/ui/media-player.tsx`). The component never renders a `default`
+   attribute — that IS the off-by-default contract. The unit's schema column
+   is `subtitleMediaId` ([`docs/courses.md`](courses.md)).
+4. The label ("Deutsch", "English") is data like a product name, not an i18n
+   message — it names the track's own language and does not translate.
+
+One asymmetry to keep straight: the script's `language:` is a **production**
+property. A course produced in de/en/fr/es does not add French or Spanish to
+the app's `LOCALES` (`i18n/config.ts`) — the app UI's languages and the
+languages of the media it delivers are independent decisions.
 
 ### Worksheets, images, covers
 
@@ -197,12 +310,17 @@ A produced file follows the same road as any other media
    the first frame (the same rule `kb-media-sync` enforces for knowledge
    media). Remotion's default output is fine; camera exports often are not.
 2. **Into the media store** with `visibility: "entitled"` plus the course's
-   `requiresPlan` — buying the course IS buying the videos. Mind the per-kind
-   upload ceiling in `config/media.json`; a file above it needs the path
-   `docs/visuals.md` describes.
+   `requiresPlan` — buying the course IS buying the videos. The subtitle
+   `.vtt` travels the same way, with the same visibility and plan as its
+   video. Mind the per-kind upload ceiling in `config/media.json`; a file
+   above it needs the path `docs/visuals.md` describes.
 3. **Wire the unit**: the media row's id into `videoMediaId` (worksheets:
-   `worksheetMediaId`), then `node run.mjs smoke` and `node run.mjs errors`,
-   and open one unit by hand — dynamic pages are skipped by `smoke`.
+   `worksheetMediaId`, subtitles: `subtitleMediaId`), then `node run.mjs smoke`
+   and `node run.mjs errors`, and open one unit by hand — dynamic pages are
+   skipped by `smoke`. Where a subtitle track was wired, switch it ON in the
+   player's CC menu once: an empty CC menu on a page that should have one is
+   the silent failure named under *Subtitles* above, and no automated check
+   sees it.
 4. **Close the loop in the script**: `status: produced`,
    `produced-media: <topic>/<file>.mp4`. A script that says `produced` while
    the unit shows nothing is the drift this line exists to catch.

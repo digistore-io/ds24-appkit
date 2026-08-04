@@ -216,10 +216,27 @@ const EXTENSIONS: Record<string, string> = {
   "audio/wav": "wav",
   "application/pdf": "pdf",
   "application/zip": "zip",
+  "text/vtt": "vtt",
 };
 
 export function extensionFor(mime: string): string {
   return EXTENSIONS[mime.trim().toLowerCase()] ?? "bin";
+}
+
+/**
+ * Media types whose bytes are served BY THIS APP, never via a bucket address.
+ *
+ * The exception exists for subtitle text, and the reason is a browser rule,
+ * not a preference: a `<track>` fetch is CORS-restricted where `<video src>`
+ * is not, and it will not follow a redirect to a foreign host. A subtitle
+ * pointed at a signed bucket URL fails SILENTLY — the video plays, the CC
+ * menu is empty, and nothing anywhere logs why. Streaming through the app
+ * costs nothing that matters here: a VTT is kilobytes, issues no range
+ * requests, and is fetched once per view — none of the reasons the
+ * bytes-stay-in-the-bucket rule exists (docs/visuals.md) apply to it.
+ */
+export function servedThroughApp(mime: string): boolean {
+  return mime.trim().toLowerCase() === "text/vtt";
 }
 
 /**

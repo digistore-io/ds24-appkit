@@ -24,6 +24,17 @@ does it really sell once it is up.
   app aborts at startup (`lib/env-guard.ts`), because the development login does
   not exist there and nobody could sign in. `node run.mjs mail-setup` if it is
   missing. This is the single most common reason a first deploy fails.
+- **The sender address lives on the app's own domain, and the mails carry the
+  app's name.** A sign-in mail whose links point at `your-domain.de` but whose
+  From is some other domain is the exact shape of a phishing mail — recipients
+  report it, and enough reports put the domain on Google's Safe Browsing list
+  (a red "Dangerous site" page in front of every sign-in link; recovery:
+  [`docs/troubleshooting.md`](../../../docs/troubleshooting.md) → *Chrome
+  calls the sign-in link a "Dangerous site"*). So: sender = an address on the
+  app's domain, verified at the provider (Postmark sender signature / DKIM,
+  SPF), and `NEXT_PUBLIC_APP_NAME` set **at the host** — the mails read it
+  too, and without it they open with a generic "Sign in" instead of the
+  product's name.
 - **Somewhere for files to live — *if the app takes files*.** On a host a local
   disk is not storage: the next deploy takes every uploaded file with it, and
   with two instances a customer's picture is present about half the time — a
@@ -181,7 +192,20 @@ Once, before selling:
   `node scripts/dev/smoke.mjs --url https://YOUR-DOMAIN`. No 5xx — otherwise
   the launch is not finished. Production runs into errors that never showed up
   locally (missing env values, migrations that were never applied).
-- Test the sign-in (Google/e-mail).
+- Test the sign-in (Google/e-mail). **Look at the mail itself, not only the
+  landing**: does it name the product, does the button work, do the footer's
+  legal links point at the live domain? A generic "Sign in" mail means
+  `NEXT_PUBLIC_APP_NAME` is missing at the host; a footer without links means
+  `APP_URL` is.
+- **Domain reputation:** verify the domain in **Google Search Console** now,
+  not when something goes wrong — it is where Google reports a Safe-Browsing
+  flag, and the only place a review can be requested. Then check the current
+  verdict once:
+  `https://transparencyreport.google.com/safe-browsing/search?url=YOUR-DOMAIN`.
+  A fresh domain that starts life mailing sign-in links is exactly the pattern
+  the blocklist watches for; if it ever flags, the recovery path is
+  [`docs/troubleshooting.md`](../../../docs/troubleshooting.md) → *Chrome
+  calls the sign-in link a "Dangerous site"*.
 - **Knowledge media, if this app has any on the bucket leg.** No
   `.data/knowledge-media/` folder and no `media:` entries in
   `content/knowledge/` means nothing to do here — one sentence, walk on.

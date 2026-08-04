@@ -5,11 +5,13 @@ import { describe, expect, it } from "vitest";
 
 import {
   MEDIA_KINDS,
+  extensionFor,
   formatBytes,
   kindForMime,
   needsAlt,
   refuseUpload,
   safeFilename,
+  servedThroughApp,
   storageKey,
   type MediaRules,
 } from "./rules";
@@ -163,6 +165,24 @@ describe("safeFilename", () => {
 
   it("bounds the length", () => {
     expect(safeFilename("a".repeat(500), "pdf").length).toBeLessThanOrEqual(120);
+  });
+});
+
+describe("servedThroughApp", () => {
+  it("is true for subtitle text and nothing else", () => {
+    // The one delivery exception: a <track> fetch is CORS-restricted and
+    // cannot follow a redirect to the bucket, so VTT bytes come from the app.
+    expect(servedThroughApp("text/vtt")).toBe(true);
+    expect(servedThroughApp(" TEXT/VTT ")).toBe(true);
+    for (const mime of ["video/mp4", "audio/mpeg", "application/pdf", "image/png", "text/plain"]) {
+      expect(servedThroughApp(mime), mime).toBe(false);
+    }
+  });
+});
+
+describe("extensionFor", () => {
+  it("labels a subtitle sidecar as .vtt", () => {
+    expect(extensionFor("text/vtt")).toBe("vtt");
   });
 });
 

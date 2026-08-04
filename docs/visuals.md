@@ -104,6 +104,15 @@ answering `307` with a signed address serves downloads and breaks every
 `<Image>`. Moving the check to render time is what lets the bucket serve the
 bytes.
 
+**One deliberate exception: subtitle text (`text/vtt`) is served by the app
+itself, on every driver.** A `<track>` fetch is CORS-restricted where the
+video's own `src` is not, and it cannot follow a redirect to a foreign host —
+a subtitle pointed at a bucket address fails *silently*: the video plays, the
+CC menu stays empty, nothing logs. `mediaUrlFor()` answers the app's own route
+for these rows and `lib/media/deliver.ts` streams them; none of the reasons
+above apply to a few kilobytes fetched once per view. Production and wiring:
+[`docs/content-production.md`](content-production.md) → *Subtitles*.
+
 ```tsx
 import { findMedia, mayAccess } from "@/lib/media/manage";
 import { mediaUrlFor } from "@/lib/media/url";
@@ -563,7 +572,7 @@ it says nothing about where somebody was standing.
 |---|---|
 | an image | `<Figure>` — `alt` is required **by the type**, so a missing one is a compile error rather than a finding somebody has to go looking for |
 | a decorative image | `<Figure decorative>` — no `alt`, hidden from screen readers |
-| video or audio | `<MediaPlayer kind="video" label="…">` |
+| video or audio | `<MediaPlayer kind="video" label="…">` — a course video's subtitles ride along as `tracks={[{ src, srclang, label }]}`, present but off until the viewer switches them on |
 | a file to download | `<MediaDownload>` — name, type and size, because a 40 MB file on a phone is a decision and not a click |
 
 `decorative` is the right answer for a divider or a texture and the wrong answer

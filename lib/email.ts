@@ -9,16 +9,35 @@
 // then does not show it). nodemailer is loaded at runtime only (the SMTP path)
 // — never import it in auth.config.ts (that config is shared with proxy.ts and
 // has to stay free of Node-only dependencies).
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+
 import type { Provider } from "next-auth/providers";
 import {
   hasPostmarkConfig,
   hasSmtpConfig,
   hasEmailConfig,
 } from "@/lib/env-guard";
+import { availableLegalPages } from "@/lib/legal/pages";
+import type { Locale } from "@/i18n/config";
 
-/** Product name for the email (optional). */
+/**
+ * Product name for the email.
+ *
+ * Falls back to `NEXT_PUBLIC_APP_NAME` — the variable the interface reads —
+ * because that is the one a deploy actually sets. The two used to be separate,
+ * and the measured result was a production app whose sidebar knew its name
+ * while its sign-in mail said only "Sign in": whoever configures the host sets
+ * the name once, for the interface, and nobody remembers the mails have their
+ * own variable. `APP_NAME` stays as the override for the rare app whose mails
+ * should say something else.
+ */
 function appName(): string {
-  return process.env.APP_NAME?.trim() || "";
+  return (
+    process.env.APP_NAME?.trim() ||
+    process.env.NEXT_PUBLIC_APP_NAME?.trim() ||
+    ""
+  );
 }
 
 // The detection lives in lib/env-guard.ts (pure env checks, without the
@@ -56,11 +75,14 @@ export function emailFrom(): string {
 interface MailTexts {
   locale: string;
   subject: string;
+  salutation: string;
   heading: string;
   body: string;
   cta: string;
   fallback: string;
   intro: string;
+  /** "Didn't ask for this? Ignoring it is safe." — the sign-in mail only. */
+  note?: string;
 }
 
 async function mailTexts(): Promise<MailTexts> {
@@ -70,11 +92,13 @@ async function mailTexts(): Promise<MailTexts> {
   return {
     locale: await getLocale(),
     subject: name ? t("subjectForApp", { app: name }) : t("subject"),
+    salutation: t("salutation"),
     heading: name ? t("headingForApp", { app: name }) : t("heading"),
     body: t("body"),
     cta: t("cta"),
     fallback: t("fallback"),
     intro: t("textBody"),
+    note: t("loginIgnore"),
   };
 }
 
@@ -87,19 +111,225 @@ function escapeHtml(value: string): string {
     .replace(/"/g, "&quot;");
 }
 
-function htmlBody(url: string, texts: MailTexts): string {
-  const href = escapeHtml(url);
-  return `<!doctype html><html lang="${texts.locale}"><body style="font-family:system-ui,Segoe UI,sans-serif;background:#f5f5fa;padding:24px">
-  <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:12px;padding:32px;border:1px solid #eee">
-    <h1 style="font-size:20px;margin:0 0 8px">${escapeHtml(texts.heading)}</h1>
-    <p style="color:#555;margin:0 0 24px">${escapeHtml(texts.body)}</p>
-    <a href="${href}" style="display:inline-block;background:#4f46e5;color:#fff;text-decoration:none;padding:12px 20px;border-radius:8px;font-weight:600">${escapeHtml(texts.cta)}</a>
-    <p style="color:#999;font-size:12px;margin:24px 0 0">${escapeHtml(texts.fallback)}<br>${href}</p>
+// --- The mails wear the app's colour ------------------------------------------
+//
+// The button in every mail uses the accent the app's own buttons use:
+// `--primary` from `app/globals.css`, read once per process and cached. A
+// recolour — by hand or through the `design` skill — reaches the mails without
+// anybody remembering that they exist. Mail clients render inline styles only
+// and the older ones do not understand `hsl()`, so the value is converted to
+// hex here; a format this parser cannot read (`oklch(…)`, a `var(…)` chain)
+// falls back to the shipped indigo rather than shipping a broken style.
+export const DEFAULT_ACCENT = "#4f46e5";
+
+/** The `--primary` value of a stylesheet as hex, or null when unreadable. */
+export function accentFromCss(css: string): string | null {
+  const match = css.match(/--primary:\s*([^;]+);/);
+  if (!match) return null;
+  const value = match[1].trim();
+
+  const hex = value.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+  if (hex) {
+    const digits = hex[1].toLowerCase();
+    return `#${digits.length === 3 ? [...digits].map((d) => d + d).join("") : digits}`;
+  }
+
+  const rgb = value.match(/^rgb\(\s*(\d+)\s*[,\s]\s*(\d+)\s*[,\s]\s*(\d+)\s*\)$/i);
+  if (rgb) return rgbToHex(Number(rgb[1]), Number(rgb[2]), Number(rgb[3]));
+
+  const hsl = value.match(
+    /^hsl\(\s*([\d.]+)(?:deg)?\s*[,\s]\s*([\d.]+)%\s*[,\s]\s*([\d.]+)%\s*\)$/i,
+  );
+  if (hsl) return hslToHex(Number(hsl[1]), Number(hsl[2]), Number(hsl[3]));
+
+  return null;
+}
+
+function rgbToHex(r: number, g: number, b: number): string {
+  const channel = (n: number) =>
+    Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, "0");
+  return `#${channel(r)}${channel(g)}${channel(b)}`;
+}
+
+function hslToHex(h: number, s: number, l: number): string {
+  const sat = s / 100;
+  const light = l / 100;
+  const c = (1 - Math.abs(2 * light - 1)) * sat;
+  const sector = (((h % 360) + 360) % 360) / 60;
+  const x = c * (1 - Math.abs((sector % 2) - 1));
+  const [r, g, b] =
+    sector < 1 ? [c, x, 0]
+    : sector < 2 ? [x, c, 0]
+    : sector < 3 ? [0, c, x]
+    : sector < 4 ? [0, x, c]
+    : sector < 5 ? [x, 0, c]
+    : [c, 0, x];
+  const m = light - c / 2;
+  return rgbToHex((r + m) * 255, (g + m) * 255, (b + m) * 255);
+}
+
+let cachedAccent: string | null = null;
+
+async function emailAccent(): Promise<string> {
+  if (cachedAccent) return cachedAccent;
+  try {
+    const css = await readFile(
+      path.join(process.cwd(), "app", "globals.css"),
+      "utf8",
+    );
+    cachedAccent = accentFromCss(css) ?? DEFAULT_ACCENT;
+  } catch {
+    cachedAccent = DEFAULT_ACCENT;
+  }
+  return cachedAccent;
+}
+
+// --- One layout for every mail ------------------------------------------------
+//
+// Every mail this app sends is the same page: the app's name, a greeting, a
+// heading, a short body, at most one button, and a footer that says who sent it
+// and where its legal pages live. One renderer keeps them identical — and keeps
+// the credential notice inside the same look WITHOUT ever growing a link: its
+// layout simply has no `cta` and empty `footerLinks`, and lib/email.test.ts
+// holds it there.
+
+export interface MailLink {
+  label: string;
+  url: string;
+}
+
+export interface MailLayout {
+  locale: string;
+  /** "" renders no app line above the card. */
+  app: string;
+  salutation?: string;
+  heading: string;
+  /** The card's body, one string per paragraph. */
+  paragraphs: string[];
+  /** The one action. Mails that must not carry a link omit it. */
+  cta?: { label: string; url: string };
+  /** Under the button: "if the button does not work, copy this link". */
+  fallbackLabel?: string;
+  /** The text version's wording in place of button + fallback. */
+  textIntro?: string;
+  /** Small print inside the card ("didn't ask for this? ignoring is safe"). */
+  note?: string;
+  /** Footer sentence naming the sender. Carries no URL. */
+  footerLine?: string;
+  /** Impressum, Datenschutz, … — MUST stay empty on the credential notice. */
+  footerLinks: MailLink[];
+  /** Button colour — the app's `--primary` (see `emailAccent`). */
+  accent?: string;
+}
+
+export function renderMailHtml(layout: MailLayout): string {
+  const accent = layout.accent || DEFAULT_ACCENT;
+
+  const card: string[] = [];
+  if (layout.salutation) {
+    card.push(
+      `<p style="color:#333;margin:0 0 16px">${escapeHtml(layout.salutation)}</p>`,
+    );
+  }
+  card.push(
+    `<h1 style="font-size:20px;margin:0 0 8px;color:#111">${escapeHtml(layout.heading)}</h1>`,
+  );
+  for (const paragraph of layout.paragraphs) {
+    card.push(
+      `<p style="color:#555;margin:0 0 16px">${escapeHtml(paragraph)}</p>`,
+    );
+  }
+  if (layout.cta) {
+    card.push(
+      `<p style="margin:24px 0"><a href="${escapeHtml(layout.cta.url)}" style="display:inline-block;background:${accent};color:#fff;text-decoration:none;padding:12px 20px;border-radius:8px;font-weight:600">${escapeHtml(layout.cta.label)}</a></p>`,
+    );
+  }
+  if (layout.note) {
+    card.push(
+      `<p style="color:#777;font-size:13px;margin:16px 0 0">${escapeHtml(layout.note)}</p>`,
+    );
+  }
+  if (layout.cta && layout.fallbackLabel) {
+    card.push(
+      `<p style="color:#999;font-size:12px;margin:24px 0 0;border-top:1px solid #eee;padding-top:16px;word-break:break-all">${escapeHtml(layout.fallbackLabel)}<br>${escapeHtml(layout.cta.url)}</p>`,
+    );
+  }
+
+  const footer: string[] = [];
+  if (layout.footerLine) {
+    footer.push(`<p style="margin:0 0 4px">${escapeHtml(layout.footerLine)}</p>`);
+  }
+  if (layout.footerLinks.length) {
+    footer.push(
+      `<p style="margin:0">${layout.footerLinks
+        .map(
+          (link) =>
+            `<a href="${escapeHtml(link.url)}" style="color:#8a8a94">${escapeHtml(link.label)}</a>`,
+        )
+        .join(" &middot; ")}</p>`,
+    );
+  }
+
+  return `<!doctype html><html lang="${escapeHtml(layout.locale)}"><body style="margin:0;font-family:system-ui,Segoe UI,sans-serif;background:#f5f5fa;padding:24px">
+  <div style="max-width:480px;margin:0 auto">
+    ${layout.app ? `<p style="text-align:center;font-size:15px;font-weight:700;color:#111;margin:0 0 16px">${escapeHtml(layout.app)}</p>` : ""}
+    <div style="background:#fff;border-radius:12px;padding:32px;border:1px solid #eee">
+    ${card.join("\n    ")}
+    </div>
+    ${footer.length ? `<div style="text-align:center;color:#8a8a94;font-size:12px;padding:16px 8px">${footer.join("\n    ")}</div>` : ""}
   </div></body></html>`;
 }
 
-function textBody(url: string, texts: MailTexts): string {
-  return `${texts.heading}\n\n${texts.intro}\n${url}\n`;
+export function renderMailText(layout: MailLayout): string {
+  const lines: string[] = [];
+  if (layout.app) lines.push(layout.app, "");
+  if (layout.salutation) lines.push(layout.salutation, "");
+  lines.push(layout.heading, "");
+  if (layout.cta) {
+    lines.push(layout.textIntro || layout.cta.label, layout.cta.url);
+  } else {
+    lines.push(...layout.paragraphs);
+  }
+  if (layout.note) lines.push("", layout.note);
+  const footer: string[] = [];
+  if (layout.footerLine) footer.push(layout.footerLine);
+  for (const link of layout.footerLinks) footer.push(`${link.label}: ${link.url}`);
+  if (footer.length) lines.push("", "--", ...footer);
+  return `${lines.join("\n")}\n`;
+}
+
+/**
+ * The footer's legal links: exactly the pages this app actually serves.
+ *
+ * Read at send time via `availableLegalPages` — an app that has not written its
+ * AGB yet must not mail a link to a 404, and one that got them this morning
+ * should not need a second list to register them in. The links need an absolute
+ * base, so without a usable `APP_URL` (or with a non-HTTP one) there are none —
+ * the mail is complete without them.
+ */
+async function legalFooterLinks(locale: string): Promise<MailLink[]> {
+  const base = process.env.APP_URL?.trim();
+  if (!base || !/^https?:\/\//i.test(base)) return [];
+  const { getTranslations } = await import("next-intl/server");
+  const t = await getTranslations("legal");
+  const slugs = await availableLegalPages(locale as Locale);
+  return slugs.map((slug) => ({
+    label: t(`${slug}.title`),
+    url: new URL(`/${slug}`, base).toString(),
+  }));
+}
+
+/** The footer both link-carrying mails share: sender line + legal links. */
+async function mailFooter(
+  locale: string,
+): Promise<{ line?: string; links: MailLink[] }> {
+  const name = appName();
+  const { getTranslations } = await import("next-intl/server");
+  const t = await getTranslations("email");
+  return {
+    line: name ? t("footerSentBy", { app: name }) : undefined,
+    links: await legalFooterLinks(locale),
+  };
 }
 
 /**
@@ -165,14 +395,34 @@ async function deliver(mail: Mail): Promise<void> {
   throw new Error("No email transport configured (Postmark or SMTP).");
 }
 
+/** The sign-in mail's layout, assembled from finished texts. */
+async function linkMailLayout(url: string, texts: MailTexts): Promise<MailLayout> {
+  const footer = await mailFooter(texts.locale);
+  return {
+    locale: texts.locale,
+    app: appName(),
+    salutation: texts.salutation,
+    heading: texts.heading,
+    paragraphs: [texts.body],
+    cta: { label: texts.cta, url },
+    fallbackLabel: texts.fallback,
+    textIntro: texts.intro,
+    note: texts.note,
+    footerLine: footer.line,
+    footerLinks: footer.links,
+    accent: await emailAccent(),
+  };
+}
+
 /** Sends the magic link to the destination address. Throws on failure. */
 export async function sendLoginEmail(to: string, url: string): Promise<void> {
   const texts = await mailTexts();
+  const layout = await linkMailLayout(url, texts);
   return deliver({
     to,
     subject: texts.subject,
-    text: textBody(url, texts),
-    html: htmlBody(url, texts),
+    text: renderMailText(layout),
+    html: renderMailHtml(layout),
   });
 }
 
@@ -230,6 +480,9 @@ export interface CredentialTexts {
   what: string;
   when: string;
   notYou: string;
+  /** Optional branding — the notice renders complete without either. */
+  app?: string;
+  salutation?: string;
 }
 
 async function credentialTexts(
@@ -263,6 +516,8 @@ async function credentialTexts(
   return {
     locale: await getLocale(),
     subject: name ? t("credentialSubjectApp", { subject, app: name }) : subject,
+    app: name || undefined,
+    salutation: t("salutation"),
     heading: t("credentialHeading"),
     // `emailChanged` is the one that carries a value — the address the account
     // moved to. next-intl requires every placeholder a message declares, so the
@@ -285,16 +540,19 @@ export function credentialBodies(texts: CredentialTexts): {
   html: string;
   text: string;
 } {
-  const html = `<!doctype html><html lang="${texts.locale}"><body style="font-family:system-ui,Segoe UI,sans-serif;background:#f5f5fa;padding:24px">
-  <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:12px;padding:32px;border:1px solid #eee">
-    <h1 style="font-size:20px;margin:0 0 8px">${escapeHtml(texts.heading)}</h1>
-    <p style="color:#333;margin:0 0 8px">${escapeHtml(texts.what)}</p>
-    <p style="color:#555;margin:0 0 24px">${escapeHtml(texts.when)}</p>
-    <p style="color:#999;font-size:12px;margin:0">${escapeHtml(texts.notYou)}</p>
-  </div></body></html>`;
-
-  const text = `${texts.heading}\n\n${texts.what}\n${texts.when}\n\n${texts.notYou}\n`;
-  return { html, text };
+  // Same look as every other mail, minus everything clickable: no `cta`, and
+  // `footerLinks` deliberately empty — even the Impressum stays out, because
+  // the test above this function forbids any URL at all, and it is right to.
+  const layout: MailLayout = {
+    locale: texts.locale,
+    app: texts.app ?? "",
+    salutation: texts.salutation,
+    heading: texts.heading,
+    paragraphs: [texts.what, texts.when],
+    note: texts.notYou,
+    footerLinks: [],
+  };
+  return { html: renderMailHtml(layout), text: renderMailText(layout) };
 }
 
 /**
@@ -342,18 +600,21 @@ export async function sendEmailChangeConfirmation(
     subject: name
       ? t("confirmEmailSubjectForApp", { app: name })
       : t("confirmEmailSubject"),
+    salutation: t("salutation"),
     heading: t("confirmEmailHeading"),
     body: t("confirmEmailBody", { email: to }),
     cta: t("confirmEmailCta"),
     fallback: t("fallback"),
     intro: t("confirmEmailText", { email: to }),
+    // No extra "didn't ask for this?" line — confirmEmailBody already says it.
   };
 
+  const layout = await linkMailLayout(url, texts);
   return deliver({
     to,
     subject: texts.subject,
-    text: textBody(url, texts),
-    html: htmlBody(url, texts),
+    text: renderMailText(layout),
+    html: renderMailHtml(layout),
   });
 }
 

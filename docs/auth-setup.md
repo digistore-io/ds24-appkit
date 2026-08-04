@@ -89,7 +89,7 @@ All values go into the `.env` (template: `.env.example`). Always set the basics:
 AUTH_SECRET=        # filled in locally by `node run.mjs start`
 AUTH_TRUST_HOST=true
 APP_URL=https://your-domain.de
-# APP_NAME=My App      # optional, appears in the sign-in mail
+# APP_NAME=My App      # optional override; the mails fall back to NEXT_PUBLIC_APP_NAME
 ```
 
 ## Mail delivery — option A: Postmark (recommended, simple)
@@ -120,6 +120,42 @@ SMTP_FROM=login@your-domain.de
 ```
 
 If **neither Postmark nor SMTP** is set, email sign-in is not offered.
+
+## What the mails look like — and the sender rule that keeps them credible
+
+Every mail this app sends renders through **one layout** (`lib/email.ts`): the
+app's name above the card, a greeting, a short body, one button in the app's
+own accent colour — `--primary` from `app/globals.css`, read at send time and
+converted to hex, so a recolour reaches the mails by itself — a *"didn't ask
+for this? ignoring it is safe"* line, and a footer naming the sender and
+linking the legal pages the app actually serves (Impressum and
+Datenschutzerklärung from the start, AGB and Widerrufsbelehrung once
+`compliance-check` has created them; `availableLegalPages()` decides, so a
+link to a 404 cannot happen). A plain-text version with the same content
+travels alongside for clients that prefer it.
+
+Two values feed the branding, and both are deploy-time environment:
+
+- **The name** comes from `NEXT_PUBLIC_APP_NAME` — the same variable the
+  interface reads — with `APP_NAME` as an override for mails that should say
+  something else. Set neither and the mails are generic ("Your sign-in link"
+  instead of "Your sign-in link for Fangfertig"); that is the single most
+  common branding gap on a first deploy, because the interface looks finished
+  while the mails do not.
+- **The legal links** need `APP_URL` — without it the footer simply has none.
+
+The one deliberate exception is the credential-change notice (below): same
+look, **no link, ever** — not even the Impressum.
+
+**The sender address MUST live on the app's own domain** — `login@your-domain.de`
+for an app on `your-domain.de`, verified at the provider (DKIM/SPF; at
+Postmark: a sender signature or the whole domain). A sign-in mail whose links
+point at your domain but whose From is somebody else's is the exact shape of a
+phishing mail: recipients report it, filters score it, and enough reports put
+the app's domain on Google's Safe Browsing list — a red **"Dangerous site"**
+page in front of every sign-in link. If that has already happened:
+[`docs/troubleshooting.md`](troubleshooting.md) → *Chrome calls the sign-in
+link a "Dangerous site"*.
 
 ## Google sign-in (optional)
 

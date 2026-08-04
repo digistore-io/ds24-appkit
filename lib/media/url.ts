@@ -28,7 +28,7 @@
 // will behave the same.
 import { mediaConfig } from "./config";
 import type { MediaRow } from "@/db/schema-media";
-import { safeFilename, extensionFor, type MediaKind } from "./rules";
+import { safeFilename, extensionFor, servedThroughApp, type MediaKind } from "./rules";
 import { mediaStore } from "./store";
 
 export interface MediaUrlOptions {
@@ -56,6 +56,15 @@ export function signedUrlSeconds(kind: MediaKind): number {
  */
 export function mediaUrlFor(row: MediaRow, options: MediaUrlOptions = {}): string {
   const store = mediaStore();
+
+  // Subtitle text is served by this app on every driver — a `<track>` fetch
+  // is CORS-restricted and cannot follow a redirect to the bucket, so a
+  // bucket address in a track is a subtitle that silently never appears. The
+  // reasoning lives on `servedThroughApp()` in `rules.ts`; the delivery route
+  // streams these instead of redirecting.
+  if (servedThroughApp(row.mime)) {
+    return appMediaPath(row.id, options.download);
+  }
 
   // Product imagery, on a bucket that serves anonymous reads: the plain
   // address. Cacheable by the CDN, identical for every visitor, and it never

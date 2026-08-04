@@ -24,6 +24,24 @@
 // that is three files pulled on load, billed as egress, on a phone.
 import { cn } from "@/lib/utils";
 
+/**
+ * One selectable subtitle (or caption) track.
+ *
+ * `src` MUST be a same-origin address — `mediaUrlFor()` already answers one
+ * for `text/vtt` rows. A bucket URL here fails silently: a `<track>` fetch is
+ * CORS-restricted, unlike the video's own `src`, so the video plays and the
+ * CC menu just stays empty with nothing logged anywhere.
+ */
+export interface MediaTrack {
+  src: string;
+  /** The track's language, as the two-letter code the script carries ("de"). */
+  srclang: string;
+  /** What the CC menu shows — a proper name ("Deutsch"), data not i18n. */
+  label: string;
+  /** `captions` also transcribes the sounds; the default is spoken word only. */
+  kind?: "subtitles" | "captions";
+}
+
 export interface MediaPlayerProps {
   src: string;
   kind: "video" | "audio";
@@ -41,6 +59,16 @@ export interface MediaPlayerProps {
    * players is a page nobody can navigate.
    */
   label: string;
+  /**
+   * Subtitle tracks, present but OFF until the viewer switches one on.
+   *
+   * That is the contract, and it is why no `default` attribute is ever
+   * rendered below: with tracks listed and none marked default, every browser
+   * shows them in the native CC menu and burns nothing into the picture. The
+   * spoken word is on the audio track; the text is there for whoever wants it.
+   * Only meaningful for video.
+   */
+  tracks?: MediaTrack[];
 }
 
 export function MediaPlayer({
@@ -50,6 +78,7 @@ export function MediaPlayer({
   poster,
   className,
   label,
+  tracks,
 }: MediaPlayerProps) {
   if (kind === "audio") {
     return (
@@ -75,6 +104,16 @@ export function MediaPlayer({
       className={cn("w-full rounded-md bg-muted", className)}
     >
       <source src={src} type={mime} />
+      {/* No `default` attribute, deliberately — see the `tracks` prop. */}
+      {tracks?.map((track) => (
+        <track
+          key={`${track.srclang}-${track.src}`}
+          kind={track.kind ?? "subtitles"}
+          src={track.src}
+          srcLang={track.srclang}
+          label={track.label}
+        />
+      ))}
     </video>
   );
 }

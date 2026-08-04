@@ -1,6 +1,7 @@
 ---
 name: content-production
-description: Produces the media a course or page still lacks — writes lesson scripts in one tool-neutral format, recommends and sets up a video toolset on request (Remotion for animated explainers, a camera plus Descript or the HeyGen API for talking heads — the developer stays free to pick others), renders or guides the recording, and delivers the finished files into the app behind the right plan. Use this when the user says "create my course content", "I need videos for my lessons", "can you produce the videos?", "make an explainer video", "I want a talking-head video", or when a course exists whose units have no media. Material that ALREADY exists is `knowledge-intake`; delivering an existing file is `visuals`; this skill is for media that do not exist yet.
+description: Produces the media a course or page still lacks — writes lesson scripts in one tool-neutral format, recommends and sets up a video toolset on request (Remotion for animated explainers, a camera plus Descript or the HeyGen API for talking heads, a TTS voice per video in de/en/fr/es with edge-tts as the free default — the developer stays free to pick others), renders explainers WITH their voice track and a subtitle file that stays off until the viewer switches it on, and delivers the finished files into the app behind the right plan. Use this when the user says "create my course content", "I need videos for my lessons", "can you produce the videos?", "make an explainer video", "I want a talking-head video", "give the videos a voice", "add subtitles", or when a course exists whose units have no media. Material that ALREADY exists is `knowledge-intake`; delivering an existing file is `visuals`; this skill is for media that do not exist yet.
+requires: 0.12.0
 ---
 <!-- Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA — SPDX-License-Identifier: MIT -->
 
@@ -85,17 +86,33 @@ included, checked against the reference (its figures carry a date; verify
 before quoting) — then ask, and **wait**:
 
 > For the explainer videos I recommend **Remotion** — video rendered from
-> code, free for you at your team size, no account needed. If you also want
-> a talking head: your own camera with **Descript** to edit (free tier: 60
-> min/month), or a generated presenter via the **HeyGen API** (roughly $1
-> per rendered minute). Shall I set that up — or would you rather use other
-> tools?
+> code, free for you at your team size, no account needed. For their voice
+> I recommend **edge-tts** — Microsoft's neural voices in German, English,
+> French and Spanish, free, no account; one caveat said now rather than
+> later: it uses an unofficial endpoint and can stop working without notice
+> (paid fallbacks exist from ~$0.015/min). If you also want a talking head:
+> your own camera with **Descript** to edit (free tier: 60 min/month), or a
+> generated presenter via the **HeyGen API** (roughly $1 per rendered
+> minute). Shall I set that up — or would you rather use other tools?
+
+The voice menu in full — edge-tts, Piper offline, OpenAI TTS, ElevenLabs,
+with prices, voices per language and the licence caveats — is the reference's
+*Voiceover and audio*; quote from there, never from memory. HeyGen and
+Descript bring their own voices, so a pure talking-head plan needs none of it.
 
 - **Yes** → set it up: the Remotion scaffold in `content-studio/` (own
   `package.json`, base composition fed by the script, styled from the app's
   tokens — the recipe is in the reference), and for a service path ask for the
   API key and put it in `.env` plus a commented line in `.env.example`. Prove
   each tool with one small render before relying on it.
+- **Yes to a voice** → check Python first (`python3 --version`; on Windows
+  usually `python --version`), then install without root and without asking
+  twice about what was already agreed: `pipx install edge-tts` or
+  `uvx edge-tts` where those exist, else `pip install --user edge-tts` — and
+  prove it with ONE short sample **in the vendor's own language**, played to
+  them, before any batch. No Python, or a declined install → say what would
+  enable it, record the decision in `docs/app.md`, and carry on — videos
+  without a voice track are still videos.
 - **Other tools** → their choice is as valid as the default; help set those up
   and record the choice in `docs/app.md`.
 - **No tools** ("I record everything myself") → an answer; record it, and step
@@ -111,9 +128,17 @@ never the whole batch.
 
 Per script, the recipe from the reference:
 
-- **Explainer** → compile the scenes into the composition, render locally,
-  watch the result yourself before showing it — length against
-  `duration-target`, text legible, tokens not clashing in either theme.
+- **Explainer** → generate the voice first where one was agreed: one audio
+  file per scene from the SAY lines (edge-tts also writes the subtitle
+  timings in the same call — `--write-subtitles`), scene lengths derived from
+  the audio, `<Audio>` in the composition, ONE render that comes out with its
+  sound. Build the `.vtt` from the per-scene timings (the recipe is the
+  reference's *Subtitles* section). **With a voice on the track, SAY is heard,
+  not shown** — it becomes the subtitle file, off until the viewer switches it
+  on; only the short TEXT channel stays in the picture. Then watch the result
+  yourself before showing it — length against `duration-target`, text legible,
+  tokens not clashing in either theme, and the narration audible, in the right
+  language, in sync.
 - **Talking head, own camera** → hand over cleanly: the SAY lines as
   teleprompter text, what to check on the take (sound first, light second),
   and where to put the file (`.data/` staging, never the repo). If they use
@@ -131,8 +156,15 @@ said out loud, never presented as the full one.
 
 The delivery road is the reference's *Into the app* section: faststart checked,
 media store with `visibility: "entitled"` + the course's `requiresPlan`, the
-media row wired into `videoMediaId` / `worksheetMediaId`, then
-`node run.mjs smoke`, `node run.mjs errors`, and one unit opened by hand.
+media row wired into `videoMediaId` / `worksheetMediaId`. A subtitle `.vtt`
+goes in the same way (`text/vtt`, same visibility and plan as its video) and
+is wired into `subtitleMediaId`; the page passes it to `<MediaPlayer>` as
+`tracks` — its address comes from `mediaUrlFor()` like every file, and for
+`text/vtt` that is deliberately the app's own route (the reference says why a
+bucket URL in a `<track>` fails silently). Then `node run.mjs smoke`,
+`node run.mjs errors`, and one unit opened by hand — where a subtitle was
+wired, switch it ON in the player's CC menu once: it must be off by default
+AND selectable, and no automated check sees an empty CC menu.
 Close each script: `status: produced`, `produced-media:` filled. One entry in
 `docs/app.md` for what was produced and with which tools.
 
