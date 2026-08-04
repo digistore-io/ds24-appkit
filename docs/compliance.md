@@ -320,6 +320,16 @@ blog on your marketing pages can reach this.
 **The app is a separate digital service from your marketing site.** It needs its
 own Impressum, linked from every page. That is what the footer is for.
 
+**On the pages, the footer LINK is the whole answer — do not copy the
+Impressum's text into page footers.** "Easily recognisable, directly
+reachable" is satisfied by a link named Impressum, one click away, on every
+page; an inlined copy is a second copy that drifts. The one place the
+*content* has to travel along is **the mails** (`lib/email.ts` puts it below
+the footer links automatically): a mail sent in the course of business is a
+business letter, and the recipient holds no footer to click — see
+[`docs/auth-setup.md`](auth-setup.md) → *What the mails look like*. Two
+surfaces, two rules; neither transfers to the other.
+
 ---
 
 ## 5. Consumer law

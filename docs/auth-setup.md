@@ -127,12 +127,21 @@ Every mail this app sends renders through **one layout** (`lib/email.ts`): the
 app's name above the card, a greeting, a short body, one button in the app's
 own accent colour — `--primary` from `app/globals.css`, read at send time and
 converted to hex, so a recolour reaches the mails by itself — a *"didn't ask
-for this? ignoring it is safe"* line, and a footer naming the sender and
-linking the legal pages the app actually serves (Impressum and
-Datenschutzerklärung from the start, AGB and Widerrufsbelehrung once
-`compliance-check` has created them; `availableLegalPages()` decides, so a
-link to a 404 cannot happen). A plain-text version with the same content
-travels alongside for clients that prefer it.
+for this? ignoring it is safe"* line, and a footer in three parts: a sentence
+naming the sender, links to the legal pages the app actually serves
+(`availableLegalPages()` decides, so a link to a 404 cannot happen — AGB and
+Widerrufsbelehrung join once `compliance-check` has created them), and **the
+Impressum's content itself**, as plain lines below the links. That last part
+is not decoration: a mail sent in the course of business is a business
+letter, and the provider details belong *in* it — a link to the page does not
+carry them (§ 35a GmbHG / § 125a HGB for registered companies, § 5 DDG behind
+it). **This is a rule about mails and only mails**: on the app's pages the
+footer *link* to `/impressum` is the complete answer, and the Impressum's
+text does not belong in page footers
+([`docs/compliance.md`](compliance.md) → §4). The shipped placeholder Impressum is never mailed — it is instructions
+to the operator, not provider details — so the footer block appears the
+moment `compliance-check` has written the real one. A plain-text version with
+the same content travels alongside for clients that prefer it.
 
 Two values feed the branding, and both are deploy-time environment:
 

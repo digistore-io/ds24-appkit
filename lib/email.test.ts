@@ -5,6 +5,7 @@ import { describe, it, expect } from "vitest";
 import {
   accentFromCss,
   credentialBodies,
+  imprintLines,
   renderMailHtml,
   renderMailText,
   DEFAULT_ACCENT,
@@ -108,6 +109,7 @@ const LAYOUT: MailLayout = {
     { label: "Impressum", url: "https://app.example/impressum" },
     { label: "Datenschutzerklärung", url: "https://app.example/datenschutz" },
   ],
+  imprint: ["Impressum", "Fangfertig GmbH", "Seestraße 1, 12345 Plötzensee"],
   accent: "#123456",
 };
 
@@ -138,6 +140,17 @@ describe("the mail layout", () => {
     expect(text).toContain(LAYOUT.note as string);
   });
 
+  it("prints the Impressum's content in both variants — a link is not enough", () => {
+    // A mail sent in the course of business is a business letter; the
+    // provider details belong in the mail itself, below the footer links.
+    const html = renderMailHtml(LAYOUT);
+    const text = renderMailText(LAYOUT);
+    for (const body of [html, text]) {
+      expect(body).toContain("Fangfertig GmbH");
+      expect(body).toContain("Seestraße 1, 12345 Plötzensee");
+    }
+  });
+
   it("renders complete without app name, note or links", () => {
     const bare: MailLayout = {
       locale: "en",
@@ -150,6 +163,37 @@ describe("the mail layout", () => {
     expect(html).toContain("Sign in");
     expect(html).not.toContain("undefined");
     expect(renderMailText(bare)).not.toContain("undefined");
+  });
+});
+
+describe("the Impressum in the footer", () => {
+  const IMPRESSUM = [
+    "# Impressum",
+    "",
+    "**Fangfertig GmbH**",
+    "Seestraße 1",
+    "12345 Plötzensee",
+    "",
+    "- E-Mail: [kontakt@fangfertig.de](mailto:kontakt@fangfertig.de)",
+    "- Registergericht: *Amtsgericht Plötzensee*, HRB 12345",
+  ].join("\n");
+
+  it("flattens the markdown to plain lines", () => {
+    expect(imprintLines(IMPRESSUM)).toEqual([
+      "Impressum",
+      "Fangfertig GmbH",
+      "Seestraße 1",
+      "12345 Plötzensee",
+      "E-Mail: kontakt@fangfertig.de",
+      "Registergericht: Amtsgericht Plötzensee, HRB 12345",
+    ]);
+  });
+
+  it("keeps a link's words and drops its target", () => {
+    // In an address block the words are the content; clients auto-link
+    // addresses on their own, and a raw URL in the footer is noise.
+    const lines = imprintLines("Siehe [unsere Seite](https://example.com).");
+    expect(lines).toEqual(["Siehe unsere Seite."]);
   });
 });
 

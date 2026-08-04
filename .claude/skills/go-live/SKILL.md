@@ -194,9 +194,14 @@ Once, before selling:
   locally (missing env values, migrations that were never applied).
 - Test the sign-in (Google/e-mail). **Look at the mail itself, not only the
   landing**: does it name the product, does the button work, do the footer's
-  legal links point at the live domain? A generic "Sign in" mail means
-  `NEXT_PUBLIC_APP_NAME` is missing at the host; a footer without links means
-  `APP_URL` is.
+  legal links point at the live domain, and does the Impressum's text stand
+  below them **in the mail's footer**? (Mails only — on the app's pages the
+  footer *link* to `/impressum` is the complete answer; never copy the
+  Impressum's text into page footers. `docs/compliance.md` §4.) A generic
+  "Sign in" mail means `NEXT_PUBLIC_APP_NAME` is missing at the host; a
+  footer without links means `APP_URL` is; a mail footer without the
+  Impressum block means the Impressum still carries the shipped placeholder —
+  which `legal-check` in the pre-flight already refuses.
 - **Domain reputation:** verify the domain in **Google Search Console** now,
   not when something goes wrong — it is where Google reports a Safe-Browsing
   flag, and the only place a review can be requested. Then check the current

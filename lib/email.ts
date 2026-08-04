@@ -18,7 +18,8 @@ import {
   hasSmtpConfig,
   hasEmailConfig,
 } from "@/lib/env-guard";
-import { availableLegalPages } from "@/lib/legal/pages";
+import { availableLegalPages, legalDocument } from "@/lib/legal/pages";
+import { parse as parseLegalMarkdown } from "@/lib/legal/markdown";
 import type { Locale } from "@/i18n/config";
 
 /**
@@ -218,6 +219,17 @@ export interface MailLayout {
   footerLine?: string;
   /** Impressum, Datenschutz, … — MUST stay empty on the credential notice. */
   footerLinks: MailLink[];
+  /**
+   * The Impressum's CONTENT, one plain line each, rendered below the links.
+   *
+   * A mail sent in the course of business is a business letter, and the
+   * provider details belong IN it — a link to the page does not carry them
+   * (§ 35a GmbHG / § 125a HGB for registered companies, § 5 DDG behind it).
+   * Stays empty on the credential notice: an Impressum routinely contains a
+   * web address and a mail address, both of which clients auto-link, and that
+   * mail's no-link rule outranks (see the block comment above it).
+   */
+  imprint?: string[];
   /** Button colour — the app's `--primary` (see `emailAccent`). */
   accent?: string;
 }
@@ -269,6 +281,11 @@ export function renderMailHtml(layout: MailLayout): string {
         .join(" &middot; ")}</p>`,
     );
   }
+  if (layout.imprint?.length) {
+    footer.push(
+      `<p style="margin:12px 0 0">${layout.imprint.map(escapeHtml).join("<br>")}</p>`,
+    );
+  }
 
   return `<!doctype html><html lang="${escapeHtml(layout.locale)}"><body style="margin:0;font-family:system-ui,Segoe UI,sans-serif;background:#f5f5fa;padding:24px">
   <div style="max-width:480px;margin:0 auto">
@@ -294,8 +311,45 @@ export function renderMailText(layout: MailLayout): string {
   const footer: string[] = [];
   if (layout.footerLine) footer.push(layout.footerLine);
   for (const link of layout.footerLinks) footer.push(`${link.label}: ${link.url}`);
+  if (layout.imprint?.length) {
+    if (footer.length) footer.push("");
+    footer.push(...layout.imprint);
+  }
   if (footer.length) lines.push("", "--", ...footer);
   return `${lines.join("\n")}\n`;
+}
+
+/**
+ * A legal document flattened to the plain lines a mail footer can carry.
+ *
+ * Headings become lines, bold and emphasis lose their markers, a link keeps
+ * its TEXT and loses its target — in a footer read as an address block the
+ * words are the content, and clients auto-link addresses on their own.
+ */
+export function imprintLines(markdown: string): string[] {
+  const lines: string[] = [];
+  for (const block of parseLegalMarkdown(markdown)) {
+    if (block.kind === "heading") {
+      lines.push(block.text);
+      continue;
+    }
+    const rows = block.kind === "paragraph" ? block.lines : block.items;
+    for (const row of rows) lines.push(row.map((part) => part.text).join(""));
+  }
+  return lines.map((line) => line.trim()).filter((line) => line !== "");
+}
+
+/**
+ * The Impressum's content for the footer — and nothing while it is the
+ * shipped placeholder: that text is instructions to the operator ("run
+ * `compliance-check`"), not provider details, and it must never reach a
+ * customer's inbox. `node run.mjs legal-check` and `go-live` refuse a launch
+ * while the placeholder stands, so a live app's mails carry the real thing.
+ */
+async function imprintFor(locale: string): Promise<string[]> {
+  const doc = await legalDocument("impressum", locale as Locale);
+  if (!doc || doc.placeholder) return [];
+  return imprintLines(doc.text);
 }
 
 /**
@@ -319,16 +373,17 @@ async function legalFooterLinks(locale: string): Promise<MailLink[]> {
   }));
 }
 
-/** The footer both link-carrying mails share: sender line + legal links. */
+/** The footer both link-carrying mails share: sender, links, Impressum. */
 async function mailFooter(
   locale: string,
-): Promise<{ line?: string; links: MailLink[] }> {
+): Promise<{ line?: string; links: MailLink[]; imprint: string[] }> {
   const name = appName();
   const { getTranslations } = await import("next-intl/server");
   const t = await getTranslations("email");
   return {
     line: name ? t("footerSentBy", { app: name }) : undefined,
     links: await legalFooterLinks(locale),
+    imprint: await imprintFor(locale),
   };
 }
 
@@ -410,6 +465,7 @@ async function linkMailLayout(url: string, texts: MailTexts): Promise<MailLayout
     note: texts.note,
     footerLine: footer.line,
     footerLinks: footer.links,
+    imprint: footer.imprint,
     accent: await emailAccent(),
   };
 }
