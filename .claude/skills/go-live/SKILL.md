@@ -57,6 +57,12 @@ does it really sell once it is up.
 
   Booking one is part of **`setup-hosting`** (step 6b); this is the check that
   it really happened.
+- **The home page sells the product, not the template.** If `app/page.tsx`
+  still carries the shipped placeholder — the three `home.features.*` cards,
+  with or without swapped texts — the first page every visitor to the live
+  domain reads is a README about the template. That is a finding to resolve
+  before the launch, and the skill that builds the real page is
+  **`salespage`** (`docs/salespage.md`).
 - **Migrations ready:** `drizzle/` up to date (`npm run db:generate` after schema changes).
 - **Legally ready:** `node run.mjs legal-check`. It exits non-zero on the things
   that must not meet a customer — an Impressum still carrying the shipped

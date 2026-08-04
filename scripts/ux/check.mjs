@@ -32,6 +32,7 @@ import {
   findRawElements,
   findUnnamedIconButtons,
   findImagesWithoutAlt,
+  findPlaceholderHome,
   navHrefs,
 } from "./rules.mjs";
 
@@ -242,6 +243,32 @@ function checkSources() {
   if (!named) ok("Every icon button has a name");
 }
 
+function checkHomePage() {
+  console.log("\nThe home page — does it sell the product?\n");
+
+  const pagePath = join(ROOT, "app/page.tsx");
+  if (!existsSync(pagePath)) {
+    warn("app/page.tsx is missing", "There is no home page to check.");
+    return;
+  }
+
+  const hits = findPlaceholderHome(readFileSync(pagePath, "utf8")).map((h) => ({
+    file: "app/page.tsx",
+    ...h,
+  }));
+  // A warning, never a failure: a test app keeps the placeholder legitimately,
+  // and so does an app whose products do not exist yet.
+  const found = reportWarning(
+    hits,
+    "The home page still carries the shipped placeholder",
+    "The first page a stranger sees describes the template, not your product " +
+      "— and swapped texts on the shipped structure are still the shipped " +
+      "structure. The skill that builds the real one is: salespage " +
+      "(docs/salespage.md).",
+  );
+  if (!found) ok("app/page.tsx is no longer the shipped placeholder");
+}
+
 function checkNavigation() {
   console.log("\nNavigation\n");
 
@@ -283,6 +310,7 @@ function checkNavigation() {
 function main() {
   checkContrast();
   checkSources();
+  checkHomePage();
   checkNavigation();
 
   console.log("");

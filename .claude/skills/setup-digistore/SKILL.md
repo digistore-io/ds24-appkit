@@ -344,11 +344,16 @@ Then **`billing-modes`** now — it sets up subscriptions (monthly/yearly),
 prepaid tokens with auto top-up (`createBillingOnDemand`) and the subscription
 self-service (cancel, payment details, invoices).
 
-After that, before the launch, in this order: **`ux-gateway`** (the experience —
-now that there is a checkout, the first five minutes can be checked) →
-**`security-gateway`** (security) → **`performance-gateway`** (scaling) →
-**`compliance-check`** (legal) → **`go-live`** (putting it online) →
-**`go-to-market`** (marketing).
+Worth offering in the same breath: **`salespage`**. From this moment the app
+has real products, real prices and a working checkout — everything the home
+page needs to stop being the template's placeholder and start selling. It is
+also step one of the launch order below.
+
+After that, before the launch, in this order: **`salespage`** (the home page
+sells the product) → **`ux-gateway`** (the experience — now that there is a
+checkout, the first five minutes can be checked) → **`security-gateway`**
+(security) → **`performance-gateway`** (scaling) → **`compliance-check`**
+(legal) → **`go-live`** (putting it online) → **`go-to-market`** (marketing).
 
 ## Important rules
 

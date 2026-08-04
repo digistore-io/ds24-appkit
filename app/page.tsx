@@ -14,8 +14,11 @@ import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/ca
 import { Callout } from "@/components/ui/callout";
 import { SiteFooter } from "@/components/site-footer";
 
-// Public home page. Replace this content with your landing page — though the
-// structure (header, hero, three cards) already carries as it is.
+// Public home page — the TEMPLATE'S placeholder, not a salespage. It describes
+// the template to a developer, and its structure does NOT carry for a real
+// product: swapping the texts below leaves a page with no visual, no proof and
+// no offer. The skill `salespage` (reference: docs/salespage.md) replaces this
+// page once the app has products and prices.
 export default async function Home() {
   const t = await getTranslations("home");
 

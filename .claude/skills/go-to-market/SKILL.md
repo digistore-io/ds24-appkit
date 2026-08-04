@@ -60,13 +60,16 @@ Produce concrete content and put it under `docs/marketing/`:
 Adapt the tone to the target audience. Do not invent false claims/
 testimonials — mark placeholders (e.g. "[insert real customer quote]").
 
-**One thing to say once, when this phase is finished:** if `app/page.tsx` and
-the plans page still carry the template's placeholder wording while this
-document carries the real headline and the real promise, the visitor reads the
-weaker version. Putting it there is ordinary work, not a skill. The video is
-different — a script written here is not a file yet: **producing** it (tool
-choice, rendering, a talking head) is **`content-production`**, and giving the
-finished file somewhere to live and a player is **`visuals`** (check `upload`).
+**One thing to do once, when this phase is finished:** if `app/page.tsx` still
+carries a weaker page than this document — the template's placeholder, or a
+salespage without the real headline and the real promise — the visitor reads
+the weaker version. Getting it onto the page is the skill **`salespage`**: it
+transplants the copy from `docs/marketing/` rather than rewriting it, and it
+builds the sections (hero with a real visual, offer block, FAQ) that a copy
+document alone does not give the page. The video is different — a script
+written here is not a file yet: **producing** it (tool choice, rendering, a
+talking head) is **`content-production`**, and giving the finished file
+somewhere to live and a player is **`visuals`** (check `upload`).
 
 ## Phase 5 — measure & iterate
 

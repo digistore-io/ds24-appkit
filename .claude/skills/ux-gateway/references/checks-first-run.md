@@ -8,7 +8,12 @@ second list is short and it is the one worth acting on.
 
 The walk:
 
-1. Land on `/` as a stranger. What is this, who is it for, what does it cost?
+1. Land on `/` as a stranger, and hold it to five questions: **what is this,
+   who is it for, what does it cost, why should I believe you, what do I
+   click?** All five answered within one scroll — and two more looks: is there
+   anything to *see* (a screenshot, a cover, a product image — three icon
+   cards are not a visual), and does the primary button reach a real
+   Digistore24 checkout rather than `/login` or a dead anchor?
 2. Go to `/plans`. Is it clear what each plan gives you?
 3. Buy one (test purchase — `setup-digistore` explains the cookie), land back
    through `/optin/[orderId]`.
@@ -35,3 +40,18 @@ mentioned. That is ❌ HIGH, and the fix is three lines in
 event, and whether this app wants a survey or a nudge around them — is the
 skill **`user-onboarding`**; report the finding here and hand over there when
 the user wants it built.
+
+**Two more named findings, both on `/`:**
+
+- **The home page is still the shipped placeholder — or a re-texted one.** The
+  tell is structural, not verbal: the three-card grid with the template's
+  key/cart/sparkles icons, no visual, no proof, no offer block. Swapped texts
+  do not change the diagnosis — the page still has the shape of a README.
+  Before a launch that is ❌ HIGH: the first page a stranger sees sells the
+  template, not the product. Building the real page is the skill
+  **`salespage`** (the reference is `docs/salespage.md`); report the finding
+  here and hand over there.
+- **The "pricing section" is the `/plans` table verbatim** — the catalog card
+  reused as the offer, six checkmark bullets from the product registry and no
+  argument around them. ⚠️ MEDIUM; the offer-block-versus-catalog reasoning is
+  `docs/salespage.md` § 6, and the fix is `salespage` too.

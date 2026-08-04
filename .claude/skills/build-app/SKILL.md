@@ -17,7 +17,9 @@ bill for. If the user asks for that, ask back what people are supposed to *buy*
 and then *use* — the page they want is almost always the sales page of the app
 and belongs in it as `app/page.tsx` plus `app/plans/page.tsx`, not as a
 separate project alongside. Details in `CLAUDE.md` ("What gets built here —
-without exception").
+without exception"). Building that sales page is its own station — the skill
+**`salespage`**, scheduled in step 6 — because what ships at `/` is a
+placeholder that describes the template, and re-texting it is not a salespage.
 
 **Exception: test apps.** If someone only wants to try things out ("show me
 'Hello World'", a small page to get a feel for it), then build that directly as
@@ -478,15 +480,19 @@ Then run the skill **`billing-modes`** afterwards.
 ## Step 6 — Before the launch: secure it, scale it, legal & live
 
 One after another:
-1. **`ux-gateway`** — look at the app the way the customer will: the first five
+1. **`salespage`** — make the home page sell THIS product. `app/page.tsx` still
+   carries the template's placeholder (three feature cards about sign-in and
+   billing), and a stranger lands there first. It needs the products and prices
+   from step 5, which is why it sits here and not earlier.
+2. **`ux-gateway`** — look at the app the way the customer will: the first five
    minutes after a purchase, dead ends, actions that report nothing back, dark
-   mode and the phone. First, because what it finds changes the interface.
-2. **`security-gateway`** — scan the app for security holes and fix them.
-3. **`performance-gateway`** — make sure ~100 parallel users run smoothly.
-4. **`compliance-check`** — legal pages (imprint/privacy/terms/withdrawal), GDPR.
-5. **`go-live`** — put the app online and verify it live.
-6. **`go-to-market`** — positioning, channels, launch plan and finished content
-   (landing page, emails, video scripts).
+   mode and the phone. Early, because what it finds changes the interface.
+3. **`security-gateway`** — scan the app for security holes and fix them.
+4. **`performance-gateway`** — make sure ~100 parallel users run smoothly.
+5. **`compliance-check`** — legal pages (imprint/privacy/terms/withdrawal), GDPR.
+6. **`go-live`** — put the app online and verify it live.
+7. **`go-to-market`** — positioning, channels, launch plan and finished content
+   (landing page copy, emails, video scripts).
 
 ## The golden rules (don't work against them)
 

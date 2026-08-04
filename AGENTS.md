@@ -133,6 +133,7 @@ frontmatter, so nothing is lost by the brevity:
 - **`ai-companion`** — *(optional)* the app works alongside its customer rather than only delivering ([`docs/ai-in-product.md`](docs/ai-in-product.md)).
 - **`learning-activities`** — *(optional)* what a course's customer DOES, judged on the server; needs template 0.9.0 ([`docs/learning.md`](docs/learning.md)).
 - **`user-onboarding`** — *(optional, but read its first item once)* the END USER's first session, designed on purpose ([`docs/onboarding.md`](docs/onboarding.md)).
+- **`salespage`** — the home page as the product's salespage: sections, imagery, the offer block ([`docs/salespage.md`](docs/salespage.md)).
 - **`ux-gateway`** — once the app has pages: the experience check, report in `docs/reports/` (rules: [`docs/ux.md`](docs/ux.md)).
 - **`security-gateway`** — before the launch: nine checks, serious findings fixed, report in `docs/reports/`.
 - **`performance-gateway`** — the same shape for speed: measured against a production build, fixed, measured again, report.
@@ -159,6 +160,8 @@ produced from scripts; optional `ai-companion` — what the app DOES with them
 while they work; optional `learning-activities` — what the customer DOES,
 judged on the server; optional `user-onboarding` — the customer's first
 session, designed instead of inherited from the blueprint)* →
+**(2g) Salespage** `salespage` — the home page sells the product, now that it
+has real prices and a checkout →
 **(3) Experience** `ux-gateway` → **(4) Security** `security-gateway` →
 **(5) Scaling** `performance-gateway` → **(6) Legal** `compliance-check` →
 **(7) Live** `go-live` *(which begins with `setup-hosting` — host, database,
@@ -1184,6 +1187,36 @@ straight to the bucket, and that path is deliberately not built yet;
 
 `node run.mjs media-check` writes a throwaway object, reads it back, deletes it,
 and prints what may go in.
+
+## The salespage — the home page that sells
+
+The route `/` **is** the app's salespage. What ships there is a placeholder
+describing the template, and its structure does not carry for a real product —
+re-texting the three feature cards produces a README wearing marketing copy.
+The skill that replaces it is **`salespage`**; the reference is
+**[`docs/salespage.md`](docs/salespage.md)**. Five rules hold whoever touches
+that page:
+
+- **The offer block is not the `/plans` table.** `/plans` is the catalog (every
+  product, compared); the salespage features ONE product with a value stack, an
+  honest risk-reversal and a buy button, and links to `/plans` for the
+  comparison. Reusing the plans card as "the pricing section" is the shortcut
+  the skill exists to prevent.
+- **One price, one place.** The page renders `formatPrice()` off
+  `config/digistore-products.json` — a price retyped into prose or a message
+  file is the one that is wrong after the next change. The buy button goes
+  through `checkoutLinksFor()` (`lib/digistore/checkout.ts`), which says
+  "checkout unavailable" instead of rendering a dead link.
+- **Nothing invented.** No made-up testimonials, member numbers, results or
+  guarantees — placeholders are marked and never go live; a new product's
+  honest proof is a founder story or no proof section at all. (UWG; the skill's
+  STOP section and `compliance-check` take it seriously.)
+- **A hero needs a real visual** — a screenshot, a cover, an owned image;
+  three lucide icons are not one. Inventory what the app already owns before
+  generating anything (`visuals`).
+- **Page copy is i18n copy** — both `messages/*.json`, like every page. The
+  registry's product copy stays untranslated checkout text and is therefore
+  never promoted to page copy.
 
 ## Plans & Digistore products
 

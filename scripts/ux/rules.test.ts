@@ -23,6 +23,7 @@ import {
   findRawElements,
   findUnnamedIconButtons,
   findImagesWithoutAlt,
+  findPlaceholderHome,
   navHrefs,
 } from "./rules.mjs";
 
@@ -252,6 +253,39 @@ describe("findImagesWithoutAlt", () => {
     expect(findImagesWithoutAlt('<Image src="/a.png" alt={t("chart")} />')).toEqual(
       [],
     );
+  });
+});
+
+describe("findPlaceholderHome", () => {
+  it("flags the shipped page by its keys AND its icon trio", () => {
+    // Both markers as they stand in the shipped app/page.tsx.
+    const source = `
+import { KeyRound, ShoppingCart, Sparkles, ArrowRight } from "lucide-react";
+const features = [
+  { icon: KeyRound, title: "features.authTitle", body: "features.authBody" },
+] as const;`;
+    expect(findPlaceholderHome(source)).toHaveLength(2);
+  });
+
+  it("still flags a re-texted placeholder — the keys survive a text swap", () => {
+    // The field case: messages/*.json rewritten, the page untouched. The
+    // shipped KEY is still referenced even though the sentences are new.
+    const source = `const features = [{ title: "features.authTitle" }];`;
+    expect(findPlaceholderHome(source)).toHaveLength(1);
+  });
+
+  it("accepts a page that was genuinely replaced", () => {
+    const source = `
+import { ArrowRight, Check } from "lucide-react";
+<h1>{t("hero.title")}</h1>`;
+    expect(findPlaceholderHome(source)).toEqual([]);
+  });
+
+  it("does not flag one shipped icon on its own", () => {
+    // Sparkles is a perfectly normal icon for a real page — only the shipped
+    // trio in one import reads as the placeholder.
+    const source = `import { Sparkles } from "lucide-react";`;
+    expect(findPlaceholderHome(source)).toEqual([]);
   });
 });
 

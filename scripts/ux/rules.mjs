@@ -278,6 +278,42 @@ export function findImagesWithoutAlt(source) {
   return hits;
 }
 
+/**
+ * The shipped placeholder still sitting at `/` (app/page.tsx).
+ *
+ * Two markers, and either one is enough — both chosen because a re-text
+ * touches neither: swapping the sentences in messages/*.json leaves the
+ * shipped `features.authTitle` KEY in the page, and it leaves the shipped
+ * key/cart/sparkles icon trio in the import. A page somebody genuinely
+ * replaced carries neither.
+ *
+ * The caller reports this as a WARNING, never a failure: a test app keeps the
+ * placeholder legitimately, and so does an app before its products exist. The
+ * page that replaces it is the skill `salespage` (docs/salespage.md).
+ */
+export function findPlaceholderHome(source) {
+  const hits = [];
+
+  for (const m of source.matchAll(/["']features\.authTitle["']/g)) {
+    hits.push({ line: lineAt(source, m.index), found: "features.authTitle" });
+  }
+
+  const icons = /import\s*\{[^}]*\}\s*from\s*["']lucide-react["']/.exec(source);
+  if (
+    icons &&
+    ["KeyRound", "ShoppingCart", "Sparkles"].every((name) =>
+      new RegExp(`\\b${name}\\b`).test(icons[0]),
+    )
+  ) {
+    hits.push({
+      line: lineAt(source, icons.index),
+      found: "KeyRound + ShoppingCart + Sparkles",
+    });
+  }
+
+  return hits.sort((a, b) => a.line - b.line);
+}
+
 /** The `href`s declared in NAVIGATION, or null if the list cannot be found. */
 export function navHrefs(appShellSource) {
   const start = appShellSource.indexOf("export const NAVIGATION");

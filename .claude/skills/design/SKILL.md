@@ -163,6 +163,9 @@ docs/ux.md §0 is the base, this is the delta)
 - **Dashboard home:** <e.g. the week's result as a big figure in a Card,
   checklist below, never the other way round>
 - **Result pages:** <…>
+- **The salespage (`/`):** <mood and composition only — e.g. where the
+  signature element shows to a stranger; the sections themselves are the
+  skill `salespage`>
 - **Settings/account:** unchanged — the same on every app, on purpose
 
 ## Signature element
@@ -226,3 +229,6 @@ always.
 - Standalone, on an app that already has pages → offer **`ux-gateway`**
   (check `kit`): it now audits the pages against `docs/design.md` as the
   baseline, and it is the pass that catches a page the recolour left behind.
+- If `/` is still the shipped placeholder, say so once: a recoloured
+  placeholder is still a placeholder — building the page that sells is the
+  skill **`salespage`**, and it follows `docs/design.md` from its first line.
