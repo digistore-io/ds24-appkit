@@ -30,11 +30,16 @@ does it really sell once it is up.
   report it, and enough reports put the domain on Google's Safe Browsing list
   (a red "Dangerous site" page in front of every sign-in link; recovery:
   [`docs/troubleshooting.md`](../../../docs/troubleshooting.md) → *Chrome
-  calls the sign-in link a "Dangerous site"*). So: sender = an address on the
-  app's domain, verified at the provider (Postmark sender signature / DKIM,
-  SPF), and `NEXT_PUBLIC_APP_NAME` set **at the host** — the mails read it
-  too, and without it they open with a generic "Sign in" instead of the
-  product's name.
+  calls the sign-in link a "Dangerous site"*). **The domain half of this is
+  enforced**: STAGING/PROD refuse to start on a foreign or missing From
+  (`lib/env-guard.ts`; deliberate exception: `EMAIL_FROM_FOREIGN_DOMAIN`,
+  `docs/auth-setup.md`), and `node run.mjs doctor --deploy` shows the verdict
+  from this machine before any deploy. What stays a human check here: the
+  address is **verified at the provider** (Postmark sender signature / DKIM,
+  SPF — no code can see DNS records the provider needs), and
+  `NEXT_PUBLIC_APP_NAME` is set **at the host** — the mails read it too, and
+  without it they open with a generic "Sign in" instead of the product's
+  name.
 - **Somewhere for files to live — *if the app takes files*.** On a host a local
   disk is not storage: the next deploy takes every uploaded file with it, and
   with two instances a customer's picture is present about half the time — a

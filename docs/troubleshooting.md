@@ -278,7 +278,11 @@ because each ingredient looks harmless alone:
   single strongest phishing heuristic there is. Recipients hit "report
   phishing", filters agree, and those reports feed the same lists Chrome
   reads. The sender rule in [`docs/auth-setup.md`](auth-setup.md) → *What the
-  mails look like* exists to keep this ingredient out entirely.
+  mails look like* exists to keep this ingredient out entirely — and it is
+  **enforced**: STAGING/PROD refuse to start on a foreign or missing sender
+  (`lib/env-guard.ts`), so meeting this ingredient today means somebody set
+  `EMAIL_FROM_FOREIGN_DOMAIN` and accepted the risk, or the app predates the
+  guard.
 
 **Getting off the list** is a review request, and only the domain owner can
 file it:
@@ -295,9 +299,29 @@ file it:
 
 **Preventing it** is cheaper than clearing it, and it is three lines of
 go-live discipline: the sender address lives on the app's own domain and is
-DKIM/SPF-verified there; the Impressum and privacy policy are filled in before
+DKIM/SPF-verified there (the domain half of this is enforced at boot — see
+below); the Impressum and privacy policy are filled in before
 the first stranger gets a mail (`node run.mjs legal-check` — a placeholder
 Impressum on a live domain reads exactly like a throwaway phishing site); and
 the domain is verified in Search Console **at** launch, not after the flag,
 because Search Console is also where Google would tell you about the flag —
 without it the first person to learn of the interstitial is a customer.
+
+## Startup aborted: the sender address is not on the app's domain
+
+The symptom: in STAGING or PROD the app refuses to start, and the message
+names the sender address, the app's domain and this rule. That is the guard
+for the section above doing its job (`lib/env-guard.ts`): the From of the
+sign-in mails (`POSTMARK_SENDER` / `SMTP_FROM` / `EMAIL_FROM`) lives on a
+different domain than `APP_URL`, or a mail transport is configured with no
+sender at all — which would send as `login@localhost`.
+
+The fix is the fix for the phishing shape, not for the message: use an
+address on the app's own domain (`node run.mjs mail-setup`; subdomains in
+either direction count as the same domain) and verify it at the provider.
+If the foreign sender is a deliberate, informed decision, set
+`EMAIL_FROM_FOREIGN_DOMAIN=<that domain>` — the value must name the domain,
+`=1` is refused — and read what stays your risk in
+[`docs/auth-setup.md`](auth-setup.md) → *the sender rule*.
+`node run.mjs doctor --deploy` gives the same verdict on your own machine,
+before a deploy ever runs into it.

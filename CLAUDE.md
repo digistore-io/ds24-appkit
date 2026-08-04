@@ -292,7 +292,11 @@ their way around one skill has then found their way around all of them:
   `new Date(value)` is the wrong way out, is in **Dates and raw SQL** below.
 - **Environments are binding: DEV / STAGING / PROD** (`APP_ENV`). In STAGING
   and PROD, mail delivery is **mandatory** — if it is missing, the app does
-  not start (`instrumentation.ts` → `lib/env-guard.ts`). The development
+  not start (`instrumentation.ts` → `lib/env-guard.ts`) — **and the sign-in
+  mails' sender address must live on the app's own domain**: a From on a
+  foreign domain is the phishing shape that gets domains onto Google's Safe
+  Browsing list, so it is a start condition too (deliberate exception:
+  `EMAIL_FROM_FOREIGN_DOMAIN`, see `docs/auth-setup.md`). The development
   sign-in (`lib/auth/dev-login.ts`, sign-in without a magic link) applies
   **exclusively** in DEV, only on localhost and only as long as no mail
   delivery is configured — never soften these conditions, it is an auth

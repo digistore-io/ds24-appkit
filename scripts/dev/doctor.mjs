@@ -42,6 +42,12 @@
 // decision is a fact about the command, not a judgement to be re-made in prose.
 import { existsSync, readFileSync } from "node:fs";
 import { classifyStatuses, readApprovalCache } from "../ds24/_approval.mjs";
+import {
+  appHost,
+  isUnjudgeableHost,
+  resolvedFrom,
+  senderDomainProblem,
+} from "../../lib/email-from.mjs";
 import { readEnvValue } from "../lib/env-write.mjs";
 import { capture, hasCommand, isWindows } from "../lib/proc.mjs";
 import { configuredDriver, dbDriver } from "../db/driver.mjs";
@@ -446,7 +452,12 @@ export async function inspect({ quick = false } = {}) {
  */
 export async function deployChecks(only = null) {
   const wanted = only ? [only] : Object.keys(DEPLOY_HOSTS);
-  const checks = [];
+  // The sender-domain rule first — it is the one check here about the APP, not
+  // about a CLI, and the one whose failure is invisible until the deployed app
+  // refuses to start (or worse, sends phishing-shaped mail until Safe Browsing
+  // notices). Saying it now means it gets fixed on this machine, before the
+  // host ever boots the app.
+  const checks = [mailSenderCheck()];
 
   for (const id of wanted) {
     const cli = DEPLOY_HOSTS[id];
@@ -470,6 +481,7 @@ export async function deployChecks(only = null) {
       id,
       label,
       ok: auth.code === 0,
+      okDetail: "logged in",
       severity: "optional",
       detail: "installed, but not logged in",
       // The fix here is NOT the install command: it is there. Handing somebody
@@ -481,6 +493,66 @@ export async function deployChecks(only = null) {
   }
 
   return checks;
+}
+
+/**
+ * The sender-domain rule as a deploy-prep check (docs/auth-setup.md): the
+ * sign-in mails' From must live on the app's own domain, or STAGING/PROD
+ * refuse to start (lib/env-guard.ts — the reasoning lives there). This reads
+ * the local .env, so with a local APP_URL it can only announce the rule; the
+ * verdict on the real domain falls at boot, and setup-hosting names the rule
+ * when it sets the host's variables.
+ */
+function mailSenderCheck() {
+  const read = (key) => readEnvValue(".env", key) ?? undefined;
+  const id = "mail-from";
+  const from = resolvedFrom({
+    POSTMARK_SERVER_TOKEN: read("POSTMARK_SERVER_TOKEN"),
+    POSTMARK_SENDER: read("POSTMARK_SENDER"),
+    SMTP_FROM: read("SMTP_FROM"),
+    EMAIL_FROM: read("EMAIL_FROM"),
+  });
+  const appUrl = read("APP_URL");
+  const host = appHost(appUrl);
+
+  if (isUnjudgeableHost(host)) {
+    return {
+      id,
+      label: "Mail sender domain — not judgeable yet (APP_URL is local); STAGING/PROD enforce it at boot",
+      ok: true,
+      severity: "info",
+    };
+  }
+
+  const problem = senderDomainProblem({ from, appUrl, foreignDomainAck: read("EMAIL_FROM_FOREIGN_DOMAIN") });
+  if (!problem) {
+    return {
+      id,
+      label: "Mail sender domain",
+      ok: true,
+      okDetail: `${from} matches ${host}`,
+      severity: "info",
+    };
+  }
+
+  const detail =
+    problem.code === "missingFrom"
+      ? "a mail transport is configured but no sender address is set — the app would send as \"login@localhost\""
+      : problem.code === "badOverride"
+        ? `EMAIL_FROM_FOREIGN_DOMAIN must name the foreign domain itself (${problem.fromDomain ?? "<domain>"}), not a yes-flag`
+        : `${problem.from} is not on the app's domain (${host}) — the shape of a phishing mail; STAGING/PROD refuse to start on it (docs/auth-setup.md)`;
+
+  return {
+    id,
+    label: "Mail sender domain",
+    ok: false,
+    severity: "blocker",
+    detail,
+    fix: everywhere({
+      command: "node run.mjs mail-setup",
+      note: `use an address on ${host}`,
+    }),
+  };
 }
 
 /**
@@ -556,7 +628,15 @@ export async function doctor(args = []) {
     console.log(["Hosting from this machine:", ""].join("\n"));
     for (const check of checks) {
       const hint = [check.detail, fixLine(fixFor(check))].filter(Boolean).join(" — ");
-      console.log(check.ok ? `  ✓ ${check.label} — logged in` : `  · ${check.label} — ${hint}`);
+      // "logged in" belongs to the CLI checks; app-state checks (mail-from)
+      // carry their own okDetail or none. A failing blocker is ✗, a missing
+      // optional CLI stays ·.
+      const mark = check.severity === "blocker" ? "✗" : "·";
+      console.log(
+        check.ok
+          ? `  ✓ ${check.label}${check.okDetail ? ` — ${check.okDetail}` : ""}`
+          : `  ${mark} ${check.label} — ${hint}`,
+      );
     }
     console.log("\nRender needs no CLI — it deploys from the connected GitHub repo.");
     console.log("What to book, and what each one costs: docs/DEPLOY.md");

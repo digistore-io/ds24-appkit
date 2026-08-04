@@ -154,6 +154,15 @@ So before the deploy: `node run.mjs mail-setup` (Postmark or SMTP,
 with everything else. If the user has no sender domain yet, that is a thing to
 solve now, not after the app is online and refusing to boot.
 
+**The startup refusal covers the sender's domain too**: the From must be an
+address on the app's own domain (the one going into `APP_URL`), or
+STAGING/PROD abort — a foreign sender is the phishing shape that gets domains
+onto Google's Safe Browsing list (`docs/auth-setup.md` → the sender rule;
+deliberate exception: `EMAIL_FROM_FOREIGN_DOMAIN`). `node run.mjs doctor
+--deploy` previews the verdict from this machine, so set the host's mail
+variables to an address on the live domain now, not after the first aborted
+boot.
+
 ## 6b. A bucket for files — the second thing that stops the app booting
 
 **In production this app does not start on a local disk either.** Same shape as

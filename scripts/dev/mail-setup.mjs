@@ -15,6 +15,13 @@
 //
 // Usage:  node scripts/dev/mail-setup.mjs   (or: node run.mjs mail-setup)
 import { createInterface } from "node:readline/promises";
+import {
+  appHost,
+  emailDomain,
+  isUnjudgeableHost,
+  resolvedFrom,
+  senderDomainProblem,
+} from "../../lib/email-from.mjs";
 import { commentEnvValue, setEnvValue } from "../lib/env-write.mjs";
 import "../lib/env.mjs";
 
@@ -38,6 +45,43 @@ async function askRequired(text, fallback = "") {
 }
 
 /**
+ * The sender address, held against the sender-domain rule (docs/auth-setup.md):
+ * the From must live on the app's own domain, or the sign-in mails have the
+ * exact shape of a phishing mail. This is the earliest moment anybody can say
+ * so — the address is being typed right now. The wizard warns and asks rather
+ * than refuses: DEV is where trying things out is legitimate, and the hard
+ * line is held by the boot guard (lib/env-guard.ts) in STAGING/PROD.
+ */
+async function askSender(text, fallback = "") {
+  const appUrl = process.env.APP_URL || "";
+  const host = appHost(appUrl);
+
+  for (;;) {
+    const from = await askRequired(text, fallback);
+
+    if (isUnjudgeableHost(host)) {
+      console.log("  Note: once this app is live, the sender must be an address on the");
+      console.log("  app's own domain — STAGING/PROD refuse to start otherwise");
+      console.log("  (docs/auth-setup.md, \"the sender rule\").");
+      return from;
+    }
+
+    if (!senderDomainProblem({ from, appUrl })) return from;
+
+    console.log(`\n  ⚠ ${from} is not on the app's domain (${host}).`);
+    console.log("  A mail whose links point at one domain but whose sender lives on another");
+    console.log("  is the exact shape of a phishing mail. Recipients report it, and enough");
+    console.log("  reports put the domain on Google's Safe Browsing \"Dangerous site\" list —");
+    console.log("  blocking the whole app in Chrome. STAGING/PROD refuse to start like this");
+    console.log(`  unless EMAIL_FROM_FOREIGN_DOMAIN=${emailDomain(from) ?? "<domain>"} acknowledges it`);
+    console.log("  (docs/auth-setup.md).");
+    const anyway = await ask("  Use this address anyway? (y/N)", "N");
+    if (anyway.toLowerCase().startsWith("y")) return from;
+    console.log("");
+  }
+}
+
+/**
  * Writes values into .env: existing lines (commented-out ones too) are
  * replaced, missing ones are appended. The rest of the file stays untouched.
  *
@@ -57,7 +101,8 @@ function disable(keys) {
 // process.env via Object.assign beforehand).
 async function sendTestMail(to) {
   const isPostmark = Boolean(process.env.POSTMARK_SERVER_TOKEN && process.env.POSTMARK_SENDER);
-  const from = isPostmark ? process.env.POSTMARK_SENDER : process.env.SMTP_FROM || process.env.EMAIL_FROM;
+  // One From resolution for the whole template — lib/email.ts uses the same.
+  const from = resolvedFrom(process.env);
   const subject = "Test mail from your app";
   const text = "If you are reading this, mail delivery works.\nThe magic-link sign-in is ready to use now.";
 
@@ -111,7 +156,7 @@ if (choice === "2" || choice.toLowerCase().startsWith("s")) {
   const port = await ask("  Port (587 = STARTTLS, 465 = SSL)", process.env.SMTP_PORT || "587");
   const user = await askRequired("  Username", process.env.SMTP_USER || "");
   const pass = await askRequired("  Password", process.env.SMTP_PASSWORD || "");
-  const from = await askRequired("  Sender address (From)", process.env.SMTP_FROM || user);
+  const from = await askSender("  Sender address (From)", process.env.SMTP_FROM || user);
   values = {
     SMTP_HOST: host,
     SMTP_PORT: port,
@@ -126,7 +171,7 @@ if (choice === "2" || choice.toLowerCase().startsWith("s")) {
   console.log("\nPostmark credentials (Server → API Tokens):");
   console.log("The sender address has to be verified there as a sender signature.");
   const token = await askRequired("  Server token", process.env.POSTMARK_SERVER_TOKEN || "");
-  const sender = await askRequired("  Sender address", process.env.POSTMARK_SENDER || "");
+  const sender = await askSender("  Sender address", process.env.POSTMARK_SENDER || "");
   const stream = await ask("  Message stream", process.env.POSTMARK_MESSAGE_STREAM || "outbound");
   values = {
     POSTMARK_SERVER_TOKEN: token,

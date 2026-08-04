@@ -18,6 +18,7 @@ import {
   hasSmtpConfig,
   hasEmailConfig,
 } from "@/lib/env-guard";
+import { resolvedFrom } from "@/lib/email-from.mjs";
 import { availableLegalPages, legalDocument } from "@/lib/legal/pages";
 import { parse as parseLegalMarkdown } from "@/lib/legal/markdown";
 import type { Locale } from "@/i18n/config";
@@ -56,13 +57,14 @@ export function isEmailLoginEnabled(): boolean {
   return hasEmailConfig(process.env);
 }
 
-/** Sender address (From), depending on the configured transport. */
+/**
+ * Sender address (From), depending on the configured transport. The precedence
+ * lives in `lib/email-from.mjs` (one resolution, shared with the boot guard
+ * and the tooling); the localhost fallback exists for DEV only — in STAGING
+ * and PROD a missing sender stops the app from starting (`lib/env-guard.ts`).
+ */
 export function emailFrom(): string {
-  return (
-    (isPostmarkConfigured() ? process.env.POSTMARK_SENDER : process.env.SMTP_FROM) ||
-    process.env.EMAIL_FROM ||
-    "login@localhost"
-  );
+  return resolvedFrom(process.env) ?? "login@localhost";
 }
 
 /**

@@ -39,6 +39,8 @@ describe("checkEnvironment", () => {
     APP_ENV: "production",
     AUTH_SECRET: "secret",
     emailConfigured: true,
+    APP_URL: "https://example.com",
+    emailFrom: "login@example.com",
     MEDIA_DRIVER: "s3",
     mediaBucketConfigured: true,
   };
@@ -89,8 +91,123 @@ describe("checkEnvironment", () => {
   });
 });
 
+describe("the sender address in a real environment", () => {
+  // The fangfertig.de failure, as a start condition: sign-in mails whose links
+  // point at the app but whose From lives on a foreign domain are the exact
+  // shape of a phishing mail, and enough recipient reports put the app's
+  // domain on Google's Safe Browsing "Dangerous site" list. Green on the day
+  // it is configured, expensive weeks later — so it refuses at boot, like the
+  // media rule above.
+  const complete = {
+    AUTH_SECRET: "secret",
+    emailConfigured: true,
+    APP_URL: "https://fangfertig.de",
+    emailFrom: "login@fangfertig.de",
+    MEDIA_DRIVER: "s3",
+    mediaBucketConfigured: true,
+  };
+
+  it("lets DEV send from anywhere", () => {
+    expect(
+      checkEnvironment({ ...complete, APP_ENV: "development", emailFrom: "login@elsewhere.com" }),
+    ).toEqual([]);
+  });
+
+  for (const environment of ["staging", "production"]) {
+    it(`refuses ${environment} with a sender on a foreign domain`, () => {
+      const problems = checkEnvironment({
+        ...complete,
+        APP_ENV: environment,
+        emailFrom: "login@other-agency.com",
+      });
+      expect(problems).toHaveLength(1);
+      expect(problems[0]).toContain("other-agency.com");
+      expect(problems[0]).toContain("Safe Browsing");
+      expect(problems[0]).toContain("EMAIL_FROM_FOREIGN_DOMAIN");
+    });
+
+    it(`refuses ${environment} with a transport but no sender at all`, () => {
+      // SMTP counts as configured with host+user+password alone, so without
+      // this the app would quietly send as "login@localhost".
+      const problems = checkEnvironment({ ...complete, APP_ENV: environment, emailFrom: null });
+      expect(problems).toHaveLength(1);
+      expect(problems[0]).toContain("no sender");
+    });
+
+    it(`starts ${environment} with a sender on a subdomain of the app`, () => {
+      expect(
+        checkEnvironment({ ...complete, APP_ENV: environment, emailFrom: "login@mail.fangfertig.de" }),
+      ).toEqual([]);
+    });
+
+    it(`starts ${environment} on a matching override — the deliberate decision`, () => {
+      expect(
+        checkEnvironment({
+          ...complete,
+          APP_ENV: environment,
+          emailFrom: "login@other-agency.com",
+          emailFromForeignDomain: "other-agency.com",
+        }),
+      ).toEqual([]);
+    });
+
+    it(`still refuses ${environment} on a yes-flag override`, () => {
+      // The override must name the domain — "=1" acknowledges nothing in
+      // particular and would silence the check for every future sender too.
+      const problems = checkEnvironment({
+        ...complete,
+        APP_ENV: environment,
+        emailFrom: "login@other-agency.com",
+        emailFromForeignDomain: "1",
+      });
+      expect(problems).toHaveLength(1);
+      expect(problems[0]).toContain("yes-flag");
+    });
+  }
+
+  it("does not double-report when no transport is configured at all", () => {
+    // "No email delivery" already covers that case; two messages for one
+    // missing setup read like two faults.
+    const problems = checkEnvironment({
+      ...complete,
+      APP_ENV: "production",
+      emailConfigured: false,
+      emailFrom: null,
+    });
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toMatch(/email delivery/);
+  });
+
+  it("skips the domain comparison behind a local APP_URL, but not the missing sender", () => {
+    // A staging instance fronted by an IP or tunnel has no public host to
+    // compare against — but a configured transport with no From is a fault
+    // everywhere.
+    expect(
+      checkEnvironment({
+        ...complete,
+        APP_ENV: "staging",
+        APP_URL: "http://localhost:3000",
+        emailFrom: "login@anywhere.com",
+      }),
+    ).toEqual([]);
+    const problems = checkEnvironment({
+      ...complete,
+      APP_ENV: "staging",
+      APP_URL: "http://localhost:3000",
+      emailFrom: null,
+    });
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain("no sender");
+  });
+});
+
 describe("media storage in a real environment", () => {
-  const base = { AUTH_SECRET: "s", emailConfigured: true };
+  const base = {
+    AUTH_SECRET: "s",
+    emailConfigured: true,
+    APP_URL: "https://example.com",
+    emailFrom: "login@example.com",
+  };
 
   it("lets development do whatever it likes", () => {
     // A fresh clone has no bucket and must still start.

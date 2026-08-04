@@ -17,6 +17,8 @@ export async function register() {
   const { checkEnvironment, appEnv, hasEmailConfig } = await import(
     "@/lib/env-guard"
   );
+  // Pure, zero imports (lib/email-from.mjs) — edge-safe by construction.
+  const { resolvedFrom } = await import("@/lib/email-from.mjs");
 
   const environment = appEnv(process.env.APP_ENV);
 
@@ -51,6 +53,9 @@ export async function register() {
     NODE_ENV: process.env.NODE_ENV,
     AUTH_SECRET: process.env.AUTH_SECRET,
     emailConfigured: hasEmailConfig(process.env),
+    APP_URL: process.env.APP_URL,
+    emailFrom: resolvedFrom(process.env),
+    emailFromForeignDomain: process.env.EMAIL_FROM_FOREIGN_DOMAIN,
     MEDIA_DRIVER: process.env.MEDIA_DRIVER,
     mediaBucketConfigured: s3Configured,
     mediaEnabled,

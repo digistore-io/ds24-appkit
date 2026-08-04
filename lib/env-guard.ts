@@ -20,6 +20,8 @@
 
 export type AppEnv = "development" | "staging" | "production";
 
+import { senderDomainProblem } from "./email-from.mjs";
+
 // --- Detecting the mail transport ----------------------------------------
 // Deliberately here and not in lib/email.ts: these checks only read env values
 // and pull in no dependencies. lib/email.ts depends on nodemailer — if
@@ -54,6 +56,20 @@ export interface EnvCheckInput {
   NODE_ENV?: string;
   AUTH_SECRET?: string;
   emailConfigured: boolean;
+  /** The declared public URL — what the sender-domain rule compares against. */
+  APP_URL?: string;
+  /**
+   * The From address the app would send with (`resolvedFrom(process.env)`,
+   * `lib/email-from.mjs`) — null when a transport is configured but no sender
+   * is set, which is a fault of its own in a real environment: mails would go
+   * out as "login@localhost".
+   */
+  emailFrom?: string | null;
+  /**
+   * EMAIL_FROM_FOREIGN_DOMAIN — the deliberate-decision override for a sender
+   * on a foreign domain. Must name that domain itself; see `senderProblem()`.
+   */
+  emailFromForeignDomain?: string;
   /**
    * Which media driver this machine is set to, and whether its bucket is
    * configured. See `mediaProblem()` below for why this is a start condition
@@ -118,10 +134,95 @@ export function checkEnvironment(env: EnvCheckInput): string[] {
     );
   }
 
+  // Only when a transport IS configured — without one, the "no email delivery"
+  // problem above already covers the case, and two messages for one missing
+  // setup read like two faults.
+  if (env.emailConfigured) {
+    const sender = senderProblem(environment, env);
+    if (sender) problems.push(sender);
+  }
+
   const media = mediaProblem(environment, env);
   if (media) problems.push(media);
 
   return problems;
+}
+
+/**
+ * The sender address on a real environment: on the app's own domain, or the
+ * app does not start.
+ *
+ * ── Why this is a refusal and not a warning ────────────────────────────────
+ * A sign-in mail whose links point at the app's domain but whose From lives on
+ * another one is the exact shape of a phishing mail. Nothing breaks on the day
+ * it is configured — the mails arrive, sign-in works, every test is green. The
+ * failure arrives weeks later, from outside: recipients report the mails, and
+ * enough reports put the app's domain on Google's Safe Browsing "Dangerous
+ * site" list — which blocks the whole app in Chrome, for every visitor, and
+ * takes a Search Console appeal to undo. A warning is the wrong instrument for
+ * a fault that is invisible until it is expensive — the same shape as the mail
+ * and media rules above.
+ *
+ * ── Why the override must NAME the domain ──────────────────────────────────
+ * A foreign sender can be a deliberate, informed decision (a mail service on
+ * its own domain, properly DKIM/SPF-verified there). The override for that is
+ * EMAIL_FROM_FOREIGN_DOMAIN=<the foreign domain itself> — not a boolean,
+ * because `=1` acknowledges nothing in particular: set once, it would silence
+ * this check for every future sender too. Naming the domain makes the
+ * acknowledgment specific — if the From later moves to yet another foreign
+ * domain, the guard fires again.
+ */
+function senderProblem(environment: AppEnv, env: EnvCheckInput): string | null {
+  const verdict = senderDomainProblem({
+    from: env.emailFrom ?? null,
+    appUrl: env.APP_URL,
+    foreignDomainAck: env.emailFromForeignDomain,
+  });
+  if (!verdict) return null;
+
+  if (verdict.code === "missingFrom") {
+    return (
+      `APP_ENV=${environment}: A mail transport is configured, but no sender ` +
+      'address is set — mails would go out as "login@localhost", which ' +
+      "receiving servers treat as spam at best. Set SMTP_FROM (SMTP) or " +
+      "POSTMARK_SENDER (Postmark), or EMAIL_FROM as the fallback, to an " +
+      "address on the app's own domain. `node run.mjs mail-setup` does it " +
+      "interactively."
+    );
+  }
+
+  if (verdict.code === "badOverride") {
+    return (
+      `APP_ENV=${environment}: EMAIL_FROM_FOREIGN_DOMAIN is set to a yes-flag. ` +
+      "It must name the foreign sender domain itself " +
+      `(EMAIL_FROM_FOREIGN_DOMAIN=${verdict.fromDomain ?? "<domain>"}) — a ` +
+      "specific acknowledgment, so a sender that later moves to yet another " +
+      "domain is caught again. See docs/auth-setup.md."
+    );
+  }
+
+  if (!verdict.fromDomain) {
+    return (
+      `APP_ENV=${environment}: The sign-in mails' sender address ` +
+      `("${verdict.from}") has no parseable domain, so it cannot be checked ` +
+      `against the app's domain (${verdict.host}) — and an address that ` +
+      "cannot be judged must not pass silently. Set a real address on " +
+      `${verdict.host}; \`node run.mjs mail-setup\` does it interactively.`
+    );
+  }
+
+  return (
+    `APP_ENV=${environment}: The sign-in mails' sender address ` +
+    `(${verdict.from}) is not on the app's own domain — the mails' links ` +
+    `point at ${verdict.host}, the sender lives on ${verdict.fromDomain}. ` +
+    "That is the exact shape of a phishing mail: recipients report it, and " +
+    "enough reports put the domain on Google's Safe Browsing \"Dangerous " +
+    "site\" list, which blocks the whole app in Chrome. Use an address on " +
+    `${verdict.host} (\`node run.mjs mail-setup\`) and verify it at the ` +
+    "provider (DKIM/SPF). If the foreign sender is a deliberate, informed " +
+    `decision, set EMAIL_FROM_FOREIGN_DOMAIN=${verdict.fromDomain} — the ` +
+    "Safe Browsing risk is then yours to carry. See docs/auth-setup.md."
+  );
 }
 
 /**

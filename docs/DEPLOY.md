@@ -111,8 +111,8 @@ sign in to):
 | `AUTH_TRUST_HOST` | `true` — all four run the app behind a proxy |
 | `APP_URL` | the live domain, `https://…`, no trailing slash |
 | `APP_ENV` | `production` (or `staging`) |
-| **mail — one of the two** | `POSTMARK_SERVER_TOKEN` + `POSTMARK_SENDER`, **or** `SMTP_HOST` + `SMTP_USER` + `SMTP_PASSWORD` |
-| `EMAIL_FROM` | the sender address |
+| **mail — one of the two** | `POSTMARK_SERVER_TOKEN` + `POSTMARK_SENDER`, **or** `SMTP_HOST` + `SMTP_USER` + `SMTP_PASSWORD` (+ `SMTP_FROM`) |
+| `EMAIL_FROM` | the sender address (fallback when no `SMTP_FROM`/`POSTMARK_SENDER`) — **must live on the app's own domain** (boot-enforced; `docs/auth-setup.md` → the sender rule; deliberate exception: `EMAIL_FROM_FOREIGN_DOMAIN`) |
 | `MEDIA_DRIVER` | `s3` — see below. Anything else and the app refuses to start |
 | `MEDIA_S3_ENDPOINT` | your bucket provider's endpoint |
 | `MEDIA_S3_BUCKET` | the bucket's name |

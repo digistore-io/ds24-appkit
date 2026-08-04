@@ -166,6 +166,32 @@ page in front of every sign-in link. If that has already happened:
 [`docs/troubleshooting.md`](troubleshooting.md) → *Chrome calls the sign-in
 link a "Dangerous site"*.
 
+**Since this failure is invisible until it is expensive, the rule is enforced,
+not just stated.** In STAGING and PROD the app refuses to start when the
+resolved From (`POSTMARK_SENDER` / `SMTP_FROM` / `EMAIL_FROM`) is not on
+`APP_URL`'s domain — or when a transport is configured with no sender at all,
+which would quietly send as `login@localhost` (`lib/env-guard.ts`;
+`node run.mjs doctor --deploy` shows the verdict before you deploy, and
+`node run.mjs mail-setup` warns the moment the address is typed). The
+comparison is generous in the one way that is safe: subdomains match in both
+directions, so `login@mail.your-domain.de` for an app on `your-domain.de` is
+fine, and so is `login@your-domain.de` for an app on `app.your-domain.de`.
+Behind a local `APP_URL` (localhost, an IP) there is no public domain to
+compare against, and the check skips itself.
+
+Sending from a foreign domain CAN be a deliberate, informed decision — a mail
+service on its own domain, properly verified there. The override is:
+
+```bash
+EMAIL_FROM_FOREIGN_DOMAIN=their-domain.com   # must NAME the sender's domain
+```
+
+It deliberately takes the domain, not `1`: naming it makes the acknowledgment
+specific, so a sender that later moves to yet another foreign domain is caught
+again. What the override does NOT change: the mails still look like phishing
+to recipients and filters, the Safe Browsing risk is now yours to carry, and
+DKIM/SPF must be valid on that foreign domain or delivery fails on top.
+
 ## Google sign-in (optional)
 
 Convenient for users, but **setup + approval take time**: Google reviews apps
