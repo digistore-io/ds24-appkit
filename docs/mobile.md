@@ -29,6 +29,7 @@ through all of it is `mobile-companion`.
 | The stamp | `.core-version` in the target — a file you changed there is yours, re-exports keep it |
 | The admission test | `scripts/core/purity.test.ts` — a core file imports no react/next/db/node/env |
 | Consumer wiring | tsconfig `"@/*": ["./core/*"]` — exported files keep their template layout |
+| Shipping | Expo + EAS: cloud builds, managed signing, `eas submit`, OTA via `eas update` — see *Shipping the companion* below |
 
 ---
 
@@ -134,3 +135,69 @@ the Digistore24 domain model (`products`, `plan-sections`, `next-payment`,
 **Renaming or deleting a manifest file is a breaking change** for every
 exported copy — the next export reports it `withdrawn` and the companion's
 imports of it go red. Treat manifest paths with the same care as API routes.
+
+## Shipping the companion — Expo and EAS
+
+Once the companion runs against the backend, getting it **into the app
+stores** is its own craft — and the traditional version of it (certificates,
+provisioning profiles, a Mac for the iOS build, store uploads by hand) is
+exactly the kind of work this template exists to take off people. The
+recommended path is **Expo with EAS** (Expo Application Services), and the
+recommendation is load-bearing, not a taste:
+
+- **Nobody handles certificates.** `eas credentials` creates and stores the
+  signing material for both stores; no keystore on a laptop, no provisioning
+  profile to renew by hand. This is the single biggest source of failed first
+  releases, removed.
+- **Builds run in EAS's cloud** — an iOS build does not need a Mac. That
+  matters here for the same reason the rest of this template runs on three
+  systems: a developer on Linux or Windows can ship to the App Store.
+- **Everything is a CLI command**, so your agent can run it and read the
+  output back — the same way it runs `node run.mjs` here: `eas build`,
+  `eas submit`, `eas update`.
+- **OTA updates come with it.** `eas update` pushes JavaScript changes to
+  installed apps without a store review — fixes reach customers in minutes,
+  not days. Native changes (a new library with native code) still need a
+  store build.
+- **Push notifications come with it** — `expo-notifications` on the device,
+  Expo's push service behind it, no per-platform Firebase/APNs plumbing.
+
+### The one-time setup — about half an hour, then never again
+
+Two accounts have to exist, and each is connected to EAS **once**:
+
+| | What | Who can do it |
+|---|---|---|
+| Apple | an Apple Developer Program membership (paid, yearly — check the current fee) | only the account owner — this is the human step |
+| Google | a Google Play Console account (paid, one-off — check the current fee) | only the account owner — this is the human step |
+| EAS | an Expo account, then `eas credentials` connects both of the above | the agent walks through it with the owner present |
+
+After that, signing, building, uploading and push all run through the
+connected accounts — the certificates question never comes back.
+
+### The path
+
+```bash
+npx create-expo-app@latest .        # in the companion repo (see Wiring above)
+npx eas-cli init                    # link the repo to an EAS project
+eas build --platform all            # cloud build, both stores
+eas submit --platform all           # upload to App Store Connect / Play Console
+eas update                          # later: OTA for JS-only changes
+```
+
+What stays manual, honestly: the store listing (name, description,
+screenshots, privacy declarations) and the review wait — both stores review
+first submissions in days, not minutes. Plan the first release around that;
+`eas update` is why most later releases do not have to be.
+
+### Push notifications — the server half
+
+The device side is `expo-notifications`: it yields a push token per install.
+The server side is this app's job — a member's devices are rows the backend
+has to know about, so the companion needs an endpoint that stores and removes
+push tokens for the authenticated member. That endpoint is **not shipped**;
+build it the way every other endpoint is built —
+[`docs/api.md`](api.md) → *Adding an endpoint*: logic in `lib/`,
+`guardApi()`-first handler, no member id in the payload (the token belongs to
+the key's owner), colocated test. Sending then goes from your server to
+Expo's push API with the stored tokens.

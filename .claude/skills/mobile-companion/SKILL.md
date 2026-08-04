@@ -1,6 +1,6 @@
 ---
 name: mobile-companion
-description: Sets up a mobile app on this app's backend — switches the HTTP API on, decides which endpoints the companion needs, exports the shared core into the companion repo and wires its imports, so a separate Expo/React Native app reads and writes the same accounts, entitlements and balances. Use this when the user says "I want an app for my phone", "a mobile app for my customers", mentions Expo, React Native, an app store, or asks how another program can talk to this app on a member's behalf.
+description: Sets up a mobile app on this app's backend — switches the HTTP API on, decides which endpoints the companion needs, exports the shared core into the companion repo and wires its imports, so a separate Expo/React Native app reads and writes the same accounts, entitlements and balances — and ships it through Expo's EAS (cloud builds, managed signing, store submission, OTA updates, push). Use this when the user says "I want an app for my phone", "a mobile app for my customers", "publish to the app store", mentions Expo, React Native, EAS, push notifications, signing certificates, or asks how another program can talk to this app on a member's behalf.
 requires: 0.11.0
 ---
 <!-- Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA — SPDX-License-Identifier: MIT -->
@@ -78,6 +78,36 @@ companion needs something to accompany.
 4. From here the companion is ordinary app development in its own repo. What
    this template keeps owning: the API surface, the core's contents
    (`config/core-export.json`), and the re-export whenever the core changes.
+
+## Step 4 — ship it: Expo + EAS
+
+The reasoning and the full path live in
+[`docs/mobile.md`](../../../docs/mobile.md) → *Shipping the companion — Expo
+and EAS*; read that section before this step. The short of it: EAS does the
+signing, the builds (in the cloud — no Mac needed for iOS), the store upload,
+OTA updates and push, all as CLI commands you run yourself.
+
+1. Ask ONE question: into the stores now, or develop locally first? Local
+   development needs none of this — Expo Go on the owner's phone runs the app
+   against the local backend today; come back to this step when the stores
+   are wanted.
+2. Scaffold the app if step 3 has not already: `npx create-expo-app@latest`
+   in the companion repo, then the wiring from step 3 on top.
+3. Name the one human step and wait for it: an Apple Developer Program
+   membership and a Google Play Console account (both paid — have the user
+   check the current fees), each connected to EAS once via `eas credentials`.
+   About half an hour, once ever — after it, nobody touches a certificate
+   again. Only the account owner can do this part; sit with them through it.
+4. Then you run the rest and report what comes back: `npx eas-cli init`,
+   `eas build --platform all`, `eas submit --platform all`. Say plainly what
+   stays manual: store listing, screenshots, and a first-submission review
+   that takes days. Later JS-only changes go out in minutes with
+   `eas update` — no review.
+5. Push notifications, if wanted: `expo-notifications` on the device; the
+   backend needs a push-token endpoint that does not exist yet — build it
+   exactly as [`docs/api.md`](../../../docs/api.md) → *Adding an endpoint*
+   prescribes (the doc's *Push notifications — the server half* names the
+   rules; never accept a member id in the payload).
 
 ## When something does not fit
 

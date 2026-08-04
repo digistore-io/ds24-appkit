@@ -127,7 +127,7 @@ frontmatter, so nothing is lost by the brevity:
 - **`ai-chat-knowledge`** — *(optional)* switch the in-app assistant on and write her handbook.
 - **`ai-providers`** — *(optional)* choose the AI company, get the key in, bind tasks to models, set prices.
 - **`mcp-server`** — *(optional)* let customers connect Claude to the app: choose the tools, switch MCP on.
-- **`mobile-companion`** — *(optional)* a mobile app on the same backend: switch the API on, export the shared core; needs template 0.11.0 ([`docs/mobile.md`](docs/mobile.md)).
+- **`mobile-companion`** — *(optional)* a mobile app on the same backend: switch the API on, export the shared core, ship it via Expo/EAS; needs template 0.11.0 ([`docs/mobile.md`](docs/mobile.md)).
 - **`visuals`** — *(optional)* what the customer SEES: images, video, files behind a purchase ([`docs/visuals.md`](docs/visuals.md)).
 - **`content-production`** — *(optional)* produce the media a course still lacks: lesson scripts in one tool-neutral format, video tools recommended and set up on request ([`docs/content-production.md`](docs/content-production.md)).
 - **`ai-companion`** — *(optional)* the app works alongside its customer rather than only delivering ([`docs/ai-in-product.md`](docs/ai-in-product.md)).
@@ -1114,7 +1114,12 @@ path.
 A mobile app for this product is a separate repo with its own UI that talks
 to the HTTP API above — and shares the pure decision layer via
 `node run.mjs export-core`. The guide is **[`docs/mobile.md`](docs/mobile.md)**;
-the skill is `mobile-companion`. Four invariants:
+the skill is `mobile-companion`. Shipping to the stores runs through **Expo's
+EAS** — managed signing (nobody handles certificates), cloud builds (an iOS
+build needs no Mac), store submission, OTA updates and push, all CLI-driven;
+the accounts are connected once and the path is
+[`docs/mobile.md`](docs/mobile.md) → *Shipping the companion*. Four
+invariants:
 
 - **The cut is `config/core-export.json`, and purity is the admission test.**
   A file goes in only when it and its whole import closure are free of
