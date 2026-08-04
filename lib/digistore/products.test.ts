@@ -219,6 +219,77 @@ describe("Sprache → Digistore24-Produkt", () => {
   });
 });
 
+// Jede Umgebung hat ihren EIGENEN Produktsatz (dev/staging/prod) — `ds24-sync
+// --env <env>` pflegt einen davon, APP_ENV waehlt zur Laufzeit
+// (lib/digistore/runtime-env.ts; diese Datei bleibt pur und nimmt env als
+// Parameter, Default "prod" fuer den exportierten Core).
+describe("Umgebung → Produktsatz", () => {
+  const beide: ProductDef = {
+    key: "pro",
+    name: "Pro",
+    kind: "token",
+    productIds: { dev: { de: "d1" }, prod: { de: "p1", en: "p2" } },
+  };
+
+  it("verkauft im eigenen Satz, sobald es einen gibt — dev sieht prod nicht", () => {
+    expect(checkoutProductFor(beide, "de", "dev")?.productId).toBe("d1");
+    expect(checkoutProductFor(beide, "de", "prod")?.productId).toBe("p1");
+    // Isolation: die englische Sprache existiert nur in prod — der dev-Satz
+    // ist nicht leer, also faellt NICHTS auf prod zurueck; der Kaeufer bekommt
+    // das deutsche dev-Produkt (die normale Sprach-Kette).
+    expect(checkoutProductFor(beide, "en", "dev")?.productId).toBe("d1");
+    expect(productLanguages(beide, "dev")).toEqual(["de"]);
+  });
+
+  it("faellt auf den PROD-Satz zurueck, solange der eigene Satz leer ist", () => {
+    // Das Verhalten von vor dem Split ("alle Umgebungen nutzen dieselben
+    // Live-Produkte"): eine App, die nie `--env dev` gesynct hat, verkauft
+    // lokal weiter ueber die Live-Produkte.
+    const nurProd: ProductDef = {
+      key: "pro",
+      name: "Pro",
+      kind: "token",
+      productIds: { prod: { de: "p1" } },
+    };
+    expect(checkoutProductFor(nurProd, "de", "dev")?.productId).toBe("p1");
+    expect(checkoutProductFor(nurProd, "de", "staging")?.productId).toBe("p1");
+    // Auch die Legacy-Form ist "der PROD-Satz" und traegt den Fallback:
+    const legacy: ProductDef = {
+      key: "pro",
+      name: "Pro",
+      kind: "token",
+      productIdByLanguage: { de: "111" },
+    };
+    expect(checkoutProductFor(legacy, "de", "dev")?.productId).toBe("111");
+  });
+
+  it("prod faellt NIE auf einen anderen Satz zurueck", () => {
+    // Ein Live-Checkout, der mangels prod-Sync ein "[DEV]"-Produkt verkauft,
+    // waere der teuerste Bug dieser Achse.
+    const nurDev: ProductDef = {
+      key: "pro",
+      name: "Pro",
+      kind: "token",
+      productIds: { dev: { de: "d1" } },
+    };
+    expect(checkoutProductFor(nurDev, "de", "prod")).toBeNull();
+    expect(productLanguages(nurDev, "prod")).toEqual([]);
+  });
+
+  it("productIdsOf liest genau den gefragten Satz, Legacy nur als prod", () => {
+    expect(productIdsOf(beide, "dev")).toEqual({ de: "d1" });
+    expect(productIdsOf(beide, "staging")).toEqual({});
+    const legacy: ProductDef = {
+      key: "pro",
+      name: "Pro",
+      kind: "token",
+      productIdByLanguage: { de: "111" },
+    };
+    expect(productIdsOf(legacy, "prod")).toEqual({ de: "111" });
+    expect(productIdsOf(legacy, "dev")).toEqual({});
+  });
+});
+
 describe("productByDs24Id — the reverse lookup", () => {
   const synced: ProductDef[] = [
     { key: "basis", name: "Basis", kind: "subscription", productId: "111" },
@@ -291,6 +362,34 @@ describe("productByDs24Id — the reverse lookup", () => {
       { key: "pro", name: "Pro", kind: "token", productIdByLanguage: { de: "111", en: "222" } },
     ];
     expect(productByDs24Id("222", bilingual)?.key).toBe("pro");
+  });
+
+  it("finds an offering by ANY of its environments' products", () => {
+    // Same rule widened: a dev test purchase names the dev product id, and it
+    // is still this offering. Which set it came in on is the per-environment
+    // IPN connections' business, not this lookup's.
+    const envs: ProductDef[] = [
+      {
+        key: "pro",
+        name: "Pro",
+        kind: "token",
+        productIds: { dev: { de: "d1" }, prod: { de: "p1" } },
+      },
+    ];
+    expect(productByDs24Id("d1", envs)?.key).toBe("pro");
+    expect(productByDs24Id("p1", envs)?.key).toBe("pro");
+  });
+
+  it("does not call two environments of ONE offering ambiguous", () => {
+    const both: ProductDef[] = [
+      {
+        key: "pro",
+        name: "Pro",
+        kind: "token",
+        productIds: { dev: { de: "555" }, prod: { de: "555" } },
+      },
+    ];
+    expect(productByDs24Id("555", both)?.key).toBe("pro");
   });
 });
 

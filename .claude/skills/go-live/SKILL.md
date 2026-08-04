@@ -1,7 +1,7 @@
 ---
 name: go-live
 description: Brings the app online and proves that a purchase really unlocks access. Runs the pre-flight check, hands the hosting itself to setup-hosting (host, CLI, secrets, managed Postgres, migration hook, domain), then does the live part — Digistore products and approval, the IPN on the live domain, a smoke test, a test purchase and a re-check of security/performance against the live instance. Use this when the app is built, secured and scaled — before marketing.
-requires: 0.7.0
+requires: 0.14.0
 ---
 <!-- Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA — SPDX-License-Identifier: MIT -->
 
@@ -108,22 +108,36 @@ node run.mjs user-create --email you@example.com --role owner --apply
 
 ## 4. Digistore: products, approval & IPN on live
 
-All environments use **the same live products** (see `docs/environments.md`).
-Once, before selling:
+**Every environment has its own product set** (see `docs/environments.md`) —
+what the user has been test-buying locally is the `[DEV]` set, and it never
+goes live. This step creates the **PROD set**: clean names, the live domain,
+its own IPN connection. Once, before selling — and **after the app is
+deployed and answers**, because registering the IPN requires
+`https://YOUR-DOMAIN/api/ipn` to return HTTP 200:
 
-1. **Sync the products + IPN** (from `config/digistore-products.json`) — **you
-   run this**, do not hand the command to the user:
-   `node run.mjs ds24-sync`
-   → creates them via `createProduct` / updates them via `updateProduct`, writes
-   the ids back into `productIdByLanguage` **and** registers the IPN. Do not
-   call `node scripts/ds24/sync-products.mjs` directly: that skips the IPN, and
-   purchases then unlock nothing.
+1. **Sync the prod products + IPN** (from `config/digistore-products.json`) —
+   **you run this**, do not hand the command to the user. Set
+   `APP_URL_PROD=https://YOUR-DOMAIN` in the local `.env` (NOT `APP_URL` —
+   that must stay local, or the development login dies), then:
+   `node run.mjs ds24-sync --env prod`
+   → creates the live products via `createProduct` / updates them via
+   `updateProduct`, writes the ids back into `productIds.prod` **and**
+   registers the prod IPN connection, scoped to exactly these products. Do not
+   call `node scripts/ds24/sync-products.mjs` directly: that skips the IPN,
+   and purchases then unlock nothing.
+
+   **An app from before the environment split** (products without a set,
+   `productIdByLanguage`): the first `--env prod` run **adopts** those
+   products as the prod set — it updates them in place, so existing sales,
+   subscriptions and approvals survive. It must never recreate them; if the
+   dry run announces `would create` for a product that already sells, stop
+   and look before applying.
 
    **One product per plan AND language, and this is the last moment to get it
    right.** A Digistore24 product carries exactly one language, and that is the
    language of the **order form** — `createBuyUrl` cannot override it. If this
-   app's UI speaks two languages and a plan declares only one under
-   `"productIdByLanguage"`, half your customers are asked for their card details
+   app's UI speaks two languages and a plan declares only one language under
+   `"productIds"`, half your customers are asked for their card details
    in the wrong language, on a live shop. The sync warns about every such gap:
    **read those warnings, fix the registry, run it again.** Fixing it after the
    launch means new products, new approvals and links you have already given
@@ -133,9 +147,11 @@ Once, before selling:
    `payment_plan[...]`. Do **not** create payment plans in the DS24 interface —
    a second price would only drift from the first.
 3. **Request approval:** `node run.mjs ds24-approval --apply`
-   → sets `approval_status = pending` per product (via `updateProduct`). The
-   marketplace follows **the product's own language** — the key it sits under in
-   `productIdByLanguage`: German → Germany reseller (id 1), anything else → USA
+   → sets `approval_status = pending` per **prod** product (via
+   `updateProduct`) — always the prod set; the `[DEV]` products need no
+   approval and are never submitted. The
+   marketplace follows **the product's own language** — the key it sits under
+   in the `productIds` maps: German → Germany reseller (id 1), anything else → USA
    (id 2). So a plan sold in both languages is **two products** and is submitted
    to **two marketplaces**, each getting its own verdict; they are listed as
    `pro (de)` and `pro (en)`. **Approved in Germany says nothing about the
@@ -184,13 +200,18 @@ Once, before selling:
    > `node run.mjs ds24-testpay --recreate`. The key is account-level; a copy
    > from the development phase, pasted onto a live checkout URL, would unlock
    > test purchases for whoever holds it. Rotating invalidates every old copy.
-4. **Point the IPN at the live domain**: as soon as `APP_URL` points to the
-   public domain, `node run.mjs ds24-sync` registers the IPN automatically
-   via the API (the URL is always `/api/ipn`) and writes the generated SHA512
-   passphrase into the `.env` as `DIGISTORE_IPN_PASSPHRASE`. Store this value
-   **and** the `DIGISTORE_IPN_DOMAIN_ID` as secrets at the host. Separately it
-   works with `node scripts/ds24/ipn-setup.mjs --url "https://YOUR-DOMAIN/api/ipn"
-   --domain "YOUR-DOMAIN" --apply`.
+4. **Get the IPN secrets to the host.** The `--env prod` sync in step 1
+   already registered the IPN on the live domain and wrote the generated
+   SHA512 passphrase and the stable domain id into the local `.env` — as
+   `DIGISTORE_IPN_PASSPHRASE_PROD` and `DIGISTORE_IPN_DOMAIN_ID_PROD`
+   (reference copies; the sync prints exactly this). Store both values as
+   secrets at the host under the **unsuffixed** names
+   `DIGISTORE_IPN_PASSPHRASE` / `DIGISTORE_IPN_DOMAIN_ID` and redeploy —
+   **until then the live app rejects every IPN signature**, and a paid
+   purchase unlocks nothing. (A sync run ON the host writes the unsuffixed
+   keys directly; separately it works with
+   `node scripts/ds24/ipn-setup.mjs --url "https://YOUR-DOMAIN/api/ipn"
+   --domain "YOUR-DOMAIN" --apply`.)
 
 > Testing locally (DEV): receive IPNs via a free Cloudflare Quick Tunnel —
 > `node run.mjs ds24-tunnel` opens the address and registers it as the IPN endpoint in one

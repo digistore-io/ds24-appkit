@@ -20,6 +20,7 @@ import { tokenAccounts, tokenLedger } from "@/db/schema";
 import { and, desc, eq, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import { createBillingOnDemand, type BillOnDemandArgs } from "@/lib/digistore/billing";
 import { productId } from "@/lib/digistore/products";
+import { runtimeSyncEnv } from "@/lib/digistore/runtime-env";
 import { getTokenPackage } from "./packages";
 import { buildIdentity } from "@/lib/digistore/custom";
 import { ensureCheckoutToken } from "@/lib/users/checkout-token";
@@ -810,7 +811,10 @@ export async function autoReloadIfNeeded(args: {
     const checkoutToken = await ensureCheckoutToken(args.memberId);
     await bill(args.apiKey, {
       purchaseId: acct.ds24PurchaseId,
-      productId: productId(pkg.key), // Live-Produkt-ID aus der Registry
+      // The registry product id of THIS instance's environment — an auto
+      // top-up in a dev app recharges against the dev product, live against
+      // the live one.
+      productId: productId(pkg.key, undefined, runtimeSyncEnv()),
       priceCents: pkg.priceCents,
       currency: pkg.currency,
       custom: buildIdentity({

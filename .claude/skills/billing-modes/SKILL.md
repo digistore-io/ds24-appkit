@@ -1,7 +1,7 @@
 ---
 name: billing-modes
 description: Sets up the billing models beyond the one-off purchase — fixed subscriptions (monthly/yearly), usage-based prepaid tokens with auto top-up (createBillingOnDemand) as well as subscription self-service for customers (cancel, change payment details, view invoices). Use this after setup-digistore, when the app is meant to bill recurring or by usage (e.g. tokens for AI usage).
-requires: 0.6.0
+requires: 0.14.0
 ---
 <!-- Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA — SPDX-License-Identifier: MIT -->
 
@@ -67,15 +67,16 @@ type it:
 node run.mjs ds24-sync
 ```
 
-That writes the id(s) back into `productIdByLanguage` (one Digistore24 product
-per offer **and language** — a DS24 product carries exactly one, and it is the
-language of the buyer's order form) and registers the IPN. Use
+That writes the id(s) back into `productIds.<env>` (one Digistore24 product
+per offer, language **and environment** — a DS24 product carries exactly one
+language, the buyer's order form; a plain run on your machine maintains the
+dev set) and registers that environment's IPN. Use
 the `make` target, **not** `node scripts/ds24/sync-products.mjs` directly — the
 script alone skips the IPN hookup, and purchases then never unlock anything.
 
 **No payment plans in the DS24 interface.** Price, currency and interval come
-from the registry and travel with the checkout call as `payment_plan[...]`. All
-environments use the same live products (see `docs/environments.md`).
+from the registry and travel with the checkout call as `payment_plan[...]`.
+Each environment sells its own product set (see `docs/environments.md`).
 
 Checkout for a signed-in Member runs through **`checkoutLinkFor`** from a
 server action, carrying `buildIdentity({ memberId, checkoutToken, productKey,

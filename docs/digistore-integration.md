@@ -247,13 +247,20 @@ language, which is exactly the moment a purchase gets abandoned.
 "basis_monatlich": {
   "name": "Basic (monthly)",
   "priceCents": 1900,
-  "productIdByLanguage": { "de": null, "en": null }
+  "productIds": {
+    "dev":  { "de": null, "en": null },
+    "prod": { "de": null, "en": null }
+  }
 }
 ```
 
 `node run.mjs ds24-sync` creates one Digistore24 product per entry — with
-`data[language]` set — and writes the ids back. At checkout the visitor's
-locale picks which of them they are sent to
+`data[language]` set — and writes the ids back, **per environment**: `--env
+dev|staging|prod` maintains one of the sets in `productIds` (default from
+`APP_ENV`; dev/staging names carry a visible ` [DEV]`/` [STAGING]` suffix, and
+all of the app's products sit in one Digistore24 product group — see
+`docs/environments.md`). At checkout the visitor's locale picks which of the
+running environment's products they are sent to
 (`lib/digistore/products.ts` → `checkoutProductFor`).
 
 Four things follow, and none of them is optional reading:
@@ -278,10 +285,12 @@ Four things follow, and none of them is optional reading:
 
 > **Since template 0.6.0.** Before that an offering had a single `productId`
 > plus a `language` field, and the order form's language was whatever the API
-> session happened to default to. That shape is still read, so an older
-> registry keeps selling, and `ds24-sync` migrates it to
-> `productIdByLanguage` the next time it runs — without creating a duplicate of
-> the product you already have.
+> session happened to default to. And before template 0.14.0 every environment
+> shared one `productIdByLanguage` map. Both shapes are still read (as the
+> PROD set), so an older registry keeps selling, and `ds24-sync --env prod`
+> migrates them into `productIds.prod` the next time it runs — updating the
+> products you already have, never duplicating them, so sales and approvals
+> survive.
 
 ### The checkout
 
@@ -335,10 +344,12 @@ and which one follows the **product's own language**, not the app's:
 | `de` (or anything starting with "de") | Digistore24 GmbH, Germany — siteowner **1** |
 | anything else | Digistore24 Inc., USA — siteowner **2** |
 
-The languages are the keys of `productIdByLanguage` (see above), and there is
-one Digistore24 product per key — so **an offering sold in both languages is
-submitted to both marketplaces**, each product where it belongs, and each gets
-its own verdict. `node run.mjs ds24-approval` lists them as `pro (de)` and
+The languages are the keys of the per-language maps in `productIds` (see
+above), and there is one Digistore24 product per key — so **an offering sold
+in both languages is submitted to both marketplaces**, each product where it
+belongs, and each gets its own verdict. Submitted is always the **prod set**:
+approval is a go-live step, and `[DEV]`/`[STAGING]` products have no business
+on a marketplace. `node run.mjs ds24-approval` lists them as `pro (de)` and
 `pro (en)`; an offering with a single language keeps its bare key.
 
 That is not a feature of the approval command. It falls out of the registry

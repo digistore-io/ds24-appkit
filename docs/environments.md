@@ -2,24 +2,41 @@
 
 # Environments: DEV · STAGING · PROD
 
-The app runs in up to three environments. **All of them use the same live products on
-Digistore24** (`digistore24.com`) — there is exactly **one** set of products and **one**
-`productId` per offer (`config/digistore-products.json`). So environments do
-**not** differ in the DS24 products, only in:
+The app runs in up to three environments, and **each one has its own product
+set at Digistore24** (`config/digistore-products.json` → `productIds.<env>`).
+`node run.mjs ds24-sync --env dev|staging|prod` maintains exactly one set per
+run and never touches the others; without `--env` the environment follows
+`APP_ENV`, so a plain `ds24-sync` on your machine syncs DEV and the same
+command on the deployed host syncs PROD.
+
+**STAGING is optional.** Most apps go dev → prod and never create a staging
+set — that is fine as long as they test (test purchases against the dev set,
+`node run.mjs smoke`/`errors`, and go-live's live checks). A staging set earns
+its place when real people test on a public domain before the launch.
 
 | What | DEV (local) | STAGING (optional) | PROD |
 |-----|-------------|--------------------|------|
 | `APP_URL` | `http://localhost:3000` | staging domain | live domain |
 | `DATABASE_URL` | local Postgres (Docker) | staging DB | prod DB |
-| Products / `productId` | **the same live products** | the same | the same |
-| IPN target | Cloudflare Quick Tunnel → localhost | staging domain | live domain |
+| Products (`productIds.<env>`) | own set, names carry ` [DEV]` | own set, ` [STAGING]` | own set, clean names |
+| Thank-you/IPN target | Cloudflare Quick Tunnel / redirect → localhost | `APP_URL_STAGING` | `APP_URL_PROD` (or `APP_URL` on the host) |
+| IPN connection | own (`DIGISTORE_IPN_DOMAIN_ID`, scoped to the dev ids) | own | own |
 | Payments | **DS24 test purchases** | test purchases | real purchases |
+| Marketplace approval | not needed | not needed | **the** approval (prod set only) |
 | Mail delivery | optional | **mandatory** | **mandatory** |
 | Sign-in without a mail account | **yes** (development sign-in) | no | no |
 
-> Because all environments go against the live products, DEV/STAGING work with
-> **Digistore24 test purchases** (test payment method) — no real money,
-> but real products/IPNs.
+All sets live in one vendor account, told apart by the internal name
+(`key__language__env`) and — for a human in the DS24 backend — by the name
+suffix and the app's own **product group** (folder), which the sync creates
+once and records in the registry (`productGroupId`).
+
+> **Compatibility:** an app that has never run an env-aware sync keeps its old
+> shared products — they count as the PROD set (`ds24-sync --env prod` adopts
+> them, updating instead of recreating, so sales and approvals survive), and
+> an environment without a set of its own falls back to the prod set at
+> runtime. So nothing breaks on update; the dev set starts to exist the first
+> time you run `node run.mjs ds24-sync` locally.
 >
 > **In DEV the test payment sets itself up:** every checkout link the app
 > builds carries the Digistore24 test-payment parameter (fetched via the API,
@@ -107,21 +124,36 @@ Notes:
 - A brand-new address takes half a minute or so to be reachable worldwide.
   Until then Digistore24 answers "http error 0" — `node run.mjs ds24-tunnel` knows that and
   simply tries again.
-- DS24 always sends IPNs to **the URL set up most recently for the vendor**. For
-  a dev session point the target at the tunnel, afterwards back to the
-  live domain for PROD (or use a separate test vendor/sub-account).
+- Every environment has its **own IPN connection** (its own `domain_id`),
+  scoped to that environment's product ids — so a dev test purchase reports to
+  your machine and a live purchase to the live app, at the same time, in one
+  vendor account. One consequence to know: a dev app whose dev set is empty
+  falls back to the prod products at checkout, and those purchases arrive at
+  the **prod** connection, not the tunnel — sync the dev set
+  (`node run.mjs ds24-sync`) and the loop closes locally.
 - The IPN signature check (SHA512) applies locally too — `DIGISTORE_IPN_PASSPHRASE`
   in the `.env` has to match the DS24 setting.
 
-## Products & go-live
+## Products per environment & go-live
 
-Products are maintained **once** against the live products (not per environment):
+One command, one environment per run:
 
 ```bash
-node run.mjs ds24-sync     # create/update products AND register the IPN
+node run.mjs ds24-sync                 # your machine: the DEV set (names carry [DEV])
+node run.mjs ds24-sync --env prod      # the LIVE set — needs APP_URL_PROD in the .env
+                                       # (or run it on the deployed host, where APP_URL is the domain)
+node run.mjs ds24-sync --env staging   # optional, only if you run a staging host
 # No payment plans in the DS24 UI: price and interval travel with each checkout
 # call as a payment_plan. One price, one place — config/digistore-products.json.
-node run.mjs ds24-approval --apply   # approval (approval_status=pending); reseller from language (DE→1, otherwise US→2)
+node run.mjs ds24-approval --apply     # approval for the PROD set (approval_status=pending);
+                                       # reseller from language (DE→1, otherwise US→2)
 ```
+
+A locally-run `--env prod` stores the prod connection's values as reference
+copies (`DIGISTORE_IPN_PASSPHRASE_PROD`, `DIGISTORE_IPN_DOMAIN_ID_PROD`) —
+copy them into the host's secrets as the unsuffixed keys and redeploy; until
+then the live app rejects every IPN signature. And it can only register the
+IPN once the prod host already answers (`/api/ipn` must return HTTP 200), so
+the order is: deploy first, then `--env prod`, then the secrets.
 
 Details on go-live: skill **`go-live`**.

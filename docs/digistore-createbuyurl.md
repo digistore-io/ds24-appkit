@@ -55,8 +55,8 @@ product** (`data[language]`), and a product carries exactly one. Whatever you
 pass here, a buyer sent to the German product fills in a German form.
 
 So the language is chosen one level up, by choosing *which product* to send
-them to. `config/digistore-products.json` holds one id per language
-(`productIdByLanguage`), and `checkoutLinkFor(def, ctx, locale)` /
+them to. `config/digistore-products.json` holds one id per language and
+environment (`productIds`), and `checkoutLinkFor(def, ctx, locale)` /
 `checkoutLinksFor(defs, ctx, locale)` resolve the visitor's locale to the right
 one. Reach for those and it is already handled; the full reasoning is in
 [`digistore-integration.md`](digistore-integration.md) → *The order form's

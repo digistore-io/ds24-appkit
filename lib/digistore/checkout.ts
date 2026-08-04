@@ -13,7 +13,8 @@
 // affiliate commissions, none of which a plain product link can express.
 // See docs/digistore-createbuyurl.md.
 import { getOrCreateBuyUrl, type BuyerContext, type Offer } from "./buyUrl";
-import { checkoutProductFor, type ProductDef } from "./products";
+import { checkoutProductFor, type ProductDef, type SyncEnv } from "./products";
+import { runtimeSyncEnv } from "./runtime-env";
 import { publicUrlFor } from "./public-url";
 import { ds24ApiKey, hasDigistoreApiKey } from "./settings";
 import { withTestpayParam } from "./testpay";
@@ -57,8 +58,12 @@ export type CheckoutLink =
  *    purchase_id later — auto top-up via createBillingOnDemand then cannot
  *    work at all (see lib/tokens/account.ts, docs/digistore-billing-modes.md).
  */
-export function offerFor(def: ProductDef, locale: string = DEFAULT_LOCALE): Offer {
-  const resolved = checkoutProductFor(def, locale);
+export function offerFor(
+  def: ProductDef,
+  locale: string = DEFAULT_LOCALE,
+  env: SyncEnv = runtimeSyncEnv(),
+): Offer {
+  const resolved = checkoutProductFor(def, locale, env);
   if (!resolved) {
     throw new Error(
       `Product "${def.key}" has no productId yet. Run: node run.mjs ds24-sync`,
@@ -157,7 +162,8 @@ export async function checkoutBlockersFor(
     // gets the German form and can still buy (checkoutProductFor). Saying
     // "checkout unavailable" there would refuse money over a missing
     // translation; `node run.mjs ds24-sync` is where that gap is reported.
-    if (!checkoutProductFor(def, DEFAULT_LOCALE)) blockers.set(def.key, "notSynced");
+    if (!checkoutProductFor(def, DEFAULT_LOCALE, runtimeSyncEnv()))
+      blockers.set(def.key, "notSynced");
     else if (!connected) blockers.set(def.key, "notConnected");
     else blockers.set(def.key, null);
   }
@@ -205,7 +211,8 @@ async function resolveOne(
   ctx: BuyerContext,
   locale: string,
 ): Promise<CheckoutLink> {
-  if (!checkoutProductFor(def, locale)) return { url: null, blocker: "notSynced" };
+  if (!checkoutProductFor(def, locale, runtimeSyncEnv()))
+    return { url: null, blocker: "notSynced" };
   if (!connected) return { url: null, blocker: "notConnected" };
 
   try {

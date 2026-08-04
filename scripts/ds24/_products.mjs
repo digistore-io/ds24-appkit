@@ -43,30 +43,50 @@ export function appLanguages() {
   }
 }
 
+/** Every environment a product set can exist for (see _env.mjs). */
+const ENVS = ["dev", "staging", "prod"];
+
 /**
- * The Digistore24 product ids of one registry entry, by language — the `.mjs`
- * twin of `productIdsOf()` in `lib/digistore/products.ts`. Change one, change
- * the other; `_products.test.ts` pins the shape.
+ * The Digistore24 product ids of one registry entry FOR ONE ENVIRONMENT, by
+ * language — the `.mjs` twin of `productIdsOf()` in
+ * `lib/digistore/products.ts`. Change one, change the other;
+ * `_products.test.ts` pins the shape.
  *
  * Includes languages declared but not created yet (value `null`), because the
  * sync's whole job is to fill exactly those in. Readers that want only the
  * live ones filter for a truthy value.
  *
- * The legacy `productId`/`language` pair from before template 0.6.0 reads as
- * one entry, so a registry written against the old shape syncs without being
- * migrated by hand first.
+ * Two legacy shapes read as PROD and only as prod — they predate the
+ * environment split, and the products they name are the ones that may carry
+ * real sales and approvals (see adoptLegacyAsProd):
+ *   - `productIdByLanguage` (template < 0.14.0, one shared set for every env)
+ *   - the `productId`/`language` pair (template < 0.6.0, one product total)
  */
-export function productIdsOf(def) {
-  const ids = { ...(def.productIdByLanguage ?? {}) };
+export function productIdsOf(def, env) {
+  const ids = { ...(def.productIds?.[env] ?? {}) };
+  if (env !== "prod") return ids;
+  for (const [lang, id] of Object.entries(def.productIdByLanguage ?? {})) {
+    if (ids[lang] == null) ids[lang] = id == null ? id : String(id);
+  }
   const legacyLang = def.language || FALLBACK_LANGUAGE;
   if (def.productId && !ids[legacyLang]) ids[legacyLang] = String(def.productId);
   return ids;
 }
 
-/** The languages one offering is sold in — declared, not necessarily created. */
+/**
+ * The languages one offering is sold in — declared, not necessarily created,
+ * and declared ONCE for every environment: the union across all env maps and
+ * the legacy fields. A language listed in the dev set is a language the
+ * offering speaks, so a later prod sync creates it there too.
+ */
 export function languagesOf(def) {
-  const languages = Object.keys(productIdsOf(def));
-  return languages.length > 0 ? languages : [FALLBACK_LANGUAGE];
+  const languages = new Set();
+  for (const env of ENVS) {
+    for (const lang of Object.keys(def.productIds?.[env] ?? {})) languages.add(lang);
+  }
+  for (const lang of Object.keys(def.productIdByLanguage ?? {})) languages.add(lang);
+  if (def.productId) languages.add(def.language || FALLBACK_LANGUAGE);
+  return languages.size > 0 ? [...languages] : [FALLBACK_LANGUAGE];
 }
 
 /**
@@ -81,12 +101,13 @@ export function languagesOf(def) {
  * `label` is what the terminal prints. It stays the bare key while an offering
  * has one language, so a single-language app's output is unchanged, and only
  * grows the ` (en)` suffix where there is genuinely more than one thing to
- * tell apart.
+ * tell apart. The environment is deliberately NOT in the label — it is the
+ * same for every row of a run and belongs in the run's banner, once.
  */
-export function productTargets(products) {
+export function productTargets(products, env) {
   const targets = [];
   for (const [key, def] of Object.entries(products)) {
-    const ids = productIdsOf(def);
+    const ids = productIdsOf(def, env);
     const languages = languagesOf(def);
     for (const language of languages) {
       targets.push({
@@ -103,21 +124,68 @@ export function productTargets(products) {
 
 /**
  * Records a created/found product id back into the registry object, always in
- * the current shape.
+ * the current shape: `productIds.<env>.<language>`.
  *
- * It also RETIRES the legacy pair for that entry once the map covers it —
- * leaving both behind is how a registry ends up with two answers to "which
- * product is the German one", and the readers would then have to pick a winner
- * for ever.
+ * Legacy fields are NOT touched here — retiring them is `adoptLegacyAsProd`'s
+ * job, and it only runs on a prod sync, because prod is the set they belong
+ * to. A dev sync that deleted them would unsync the live checkout.
  */
-export function setProductId(config, key, language, id) {
+export function setProductId(config, key, language, id, env) {
   const def = config.products[key];
-  def.productIdByLanguage = { ...(def.productIdByLanguage ?? {}) };
-  def.productIdByLanguage[language] = String(id);
-  if (def.productId && def.productIdByLanguage[def.language || FALLBACK_LANGUAGE]) {
+  def.productIds = { ...(def.productIds ?? {}) };
+  def.productIds[env] = { ...(def.productIds[env] ?? {}) };
+  def.productIds[env][language] = String(id);
+}
+
+/**
+ * Folds the pre-environment fields into `productIds.prod` and deletes them —
+ * run by a PROD sync only, before anything else looks at the registry.
+ *
+ * Why prod and not dev: those products predate the split, and they are the
+ * ones that may carry real sales, subscriptions and marketplace approvals —
+ * things that hang off the Digistore24 product_id and must not be recreated.
+ * The dev/staging sets start fresh instead (see findExisting in
+ * sync-products.mjs, which refuses every legacy fallback for them).
+ *
+ * Fill-only: a language the prod map already answers for keeps its answer —
+ * the env map is the one the sync maintains. Returns whether anything moved,
+ * so the caller knows the registry file has to be written back.
+ */
+export function adoptLegacyAsProd(config) {
+  let changed = false;
+  for (const def of Object.values(config.products ?? {})) {
+    const hasMap = def.productIdByLanguage !== undefined;
+    const hasPair = def.productId !== undefined || def.language !== undefined;
+    if (!hasMap && !hasPair) continue;
+    const prod = { ...(def.productIds?.prod ?? {}) };
+    for (const [lang, id] of Object.entries(def.productIdByLanguage ?? {})) {
+      if (prod[lang] == null) prod[lang] = id == null ? id : String(id);
+    }
+    const legacyLang = def.language || FALLBACK_LANGUAGE;
+    if (def.productId && !prod[legacyLang]) prod[legacyLang] = String(def.productId);
+    def.productIds = { ...(def.productIds ?? {}), prod };
+    delete def.productIdByLanguage;
     delete def.productId;
     delete def.language;
+    changed = true;
   }
+  return changed;
+}
+
+/**
+ * Every live product id of ONE environment, across the whole registry — what
+ * the IPN connection for that environment is scoped to (ipn-setup.mjs).
+ * Live ids only: a `null` declaration is a product that does not exist yet
+ * and cannot be named in `product_ids`.
+ */
+export function syncedProductIds(config, env) {
+  const ids = [];
+  for (const def of Object.values(config.products ?? {})) {
+    for (const id of Object.values(productIdsOf(def, env))) {
+      if (id) ids.push(String(id));
+    }
+  }
+  return ids;
 }
 
 export function readProducts() {

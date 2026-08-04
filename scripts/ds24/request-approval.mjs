@@ -16,10 +16,12 @@
 //
 // **Which marketplace a product goes to follows the PRODUCT's language**, not
 // the app's: a German product is submitted to Digistore24 Germany (id 1), an
-// English one to Digistore24 USA (id 2). The languages are the keys of
-// `productIdByLanguage` in config/digistore-products.json, and there is one
-// Digistore24 product per key — so an offering sold in both is submitted to
-// both marketplaces, each in the right one. See _resellers.mjs.
+// English one to Digistore24 USA (id 2). The languages are the keys of the
+// per-language maps in `productIds` (config/digistore-products.json), and
+// there is one Digistore24 product per key — so an offering sold in both is
+// submitted to both marketplaces, each in the right one. See _resellers.mjs.
+// Only the PROD set is ever submitted — approval is a go-live step, and
+// dev/staging products exist for test purchases, which need none.
 //
 // That per-language split is not a feature of this command; it is what the
 // registry already is, because a Digistore24 product carries exactly one
@@ -141,7 +143,11 @@ const config = readProducts();
 // ONE ROW PER DIGISTORE24 PRODUCT — per offering AND language. An offering
 // sold in German and English is two products, and they belong to two different
 // marketplaces; approving one says nothing about the other.
-const targets = productTargets(config.products).filter(
+//
+// Always the PROD set: approval is a go-live step, and a "[DEV]" product has
+// no business on a marketplace. Real sales run on the prod products only —
+// dev/staging are for test purchases, which need no approval.
+const targets = productTargets(config.products, "prod").filter(
   ({ key }) => !onlyKey || key === onlyKey,
 );
 

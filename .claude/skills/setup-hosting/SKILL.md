@@ -1,7 +1,7 @@
 ---
 name: setup-hosting
 description: Puts the app on a server — picks a host with the user (Railway, Render, Fly.io or DigitalOcean), says what they have to book and what it costs, installs the host's CLI, gets the agent authenticated, creates the app and the managed Postgres, sets every environment variable, wires the migration into the deploy and puts a domain on it. Use this when the user wants to deploy, go online, "put it on a server", asks which host to choose, what hosting costs, or when go-live reaches the hosting step.
-requires: 0.7.0
+requires: 0.14.0
 ---
 <!-- Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA — SPDX-License-Identifier: MIT -->
 
@@ -265,9 +265,11 @@ its absence means the app is not the one answering.
 ## 10. Hand back
 
 The app is online. What makes it *sell* is the next thing, and it belongs to
-**`go-live`**: `node run.mjs ds24-sync` against the live `APP_URL` so the IPN
-points at the real domain, product approval, and a test purchase played through
-end to end. Say that in one sentence and start it.
+**`go-live`**: `node run.mjs ds24-sync --env prod` (with `APP_URL_PROD` set)
+to create the LIVE product set and point its IPN at the real domain — the
+`[DEV]` products the user tested with stay local — then product approval, the
+IPN secrets copied to the host, and a test purchase played through end to end.
+Say that in one sentence and start it.
 
 ## The rules
 

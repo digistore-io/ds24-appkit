@@ -1,7 +1,7 @@
 ---
 name: setup-digistore
 description: Sets up Digistore24 billing for the app — fetch the API key into the `.env` via `node run.mjs ds24-connect`, then create products with `node run.mjs ds24-sync` and register the IPN connection (webhook + SHA512 passphrase) via API, test the connection and generate checkout links. The agent runs the commands itself. Use this as soon as the app is meant to receive sales or process completed purchases.
-requires: 0.6.0
+requires: 0.14.0
 ---
 <!-- Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA — SPDX-License-Identifier: MIT -->
 
@@ -131,15 +131,27 @@ deliberately no interface for entering or generating a key.
      source of truth that also feeds `/plans`), creates each one at Digistore24
      or updates it and writes the ids back into the config.
 
+     **One product set per ENVIRONMENT.** `--env dev|staging|prod` says which
+     set a run maintains; without the flag it follows `APP_ENV`, so here — on
+     the user's machine — a plain `ds24-sync` creates the **DEV set**: its
+     product names visibly carry ` [DEV]`, its ids land in `productIds.dev`,
+     and the live set stays untouched. That is the right set for this skill —
+     the prod set is a go-live step (`--env prod`, skill `go-live`), and
+     staging is optional (most apps go dev → prod, fine as long as they test;
+     see `docs/environments.md`). All of the app's products are collected in
+     one Digistore24 product group (folder), created on the first sync and
+     recorded in the registry (`productGroupId`) — tell the user that is where
+     to look in their DS24 backend.
+
      **One Digistore24 product per plan AND language.** A DS24 product carries
      exactly one language, and that language is the language of the **order
      form** the buyer fills in — `createBuyUrl` cannot override it. So a
      bilingual app needs two products per plan, declared as
-     `"productIdByLanguage": { "de": null, "en": null }`, and the visitor's
-     locale decides which one their checkout goes to. **Read the sync's
-     warnings out loud to the user**: a plan missing a language still sells, but
-     those buyers get an order form in the wrong language, and nothing else in
-     the app will ever mention it.
+     `"productIds": { "dev": { "de": null, "en": null }, "prod": … }`, and the
+     visitor's locale decides which one their checkout goes to. **Read the
+     sync's warnings out loud to the user**: a plan missing a language still
+     sells, but those buyers get an order form in the wrong language, and
+     nothing else in the app will ever mention it.
    - **IPN connection:** registers the webhook `…/api/ipn` **via API** directly
      at Digistore24 (`ipnSetup`) — the user has to enter **nothing** in the DS24
      interface for that. The SHA512 passphrase is generated in the process and
@@ -159,10 +171,12 @@ deliberately no interface for entering or generating a key.
        ever set one by hand (`--domain`), put random characters in it yourself.**
      - **`product_ids` says which products the connection covers** (comma
        separated, `111,222,333`; Digistore24's default is `all`). `ds24-sync`
-       sends the ids out of `config/digistore-products.json`, so the connection
-       stays on this app's products — a vendor account usually holds more than
-       this app. `all` is safe too (an unknown product is recorded and grants
-       nothing), it just does not separate. Force either with
+       sends the ids of the environment being synced (out of
+       `config/digistore-products.json`), so the connection stays on this
+       app's products AND this environment's — a dev purchase reports to your
+       machine, a live purchase to the live app, in the same vendor account.
+       `all` is safe too (an unknown product is recorded and grants nothing),
+       it just does not separate. Force either with
        `node run.mjs ds24-ipn --auto --products 111,222 --apply`.
 
    Only needs the `DIGISTORE_API_KEY` from step 1, no browser, no user input.
@@ -318,12 +332,11 @@ Some steps don't belong in the runtime app. That's what the scripts under
 The two common ones run conveniently through `make` (see the steps above):
 
 - **Products + IPN (the normal case):** `node run.mjs ds24-sync`.
-  Synchronizes the entire plan list from `config/digistore-products.json`
-  (idempotent, writes the ids back into `productIdByLanguage`) **and**
-  registers the IPN connection
-  via API (`ipn-setup.mjs --auto`, only with a public `APP_URL`). That is the
-  route from step 2 — use it. This target applies by itself; the preview is
-  `node run.mjs ds24-sync --dry-run`.
+  Synchronizes the entire plan list from `config/digistore-products.json` for
+  ONE environment (idempotent, writes the ids back into `productIds.<env>`)
+  **and** registers that environment's IPN connection via API
+  (`ipn-setup.mjs --auto`). That is the route from step 2 — use it. This
+  target applies by itself; the preview is `node run.mjs ds24-sync --dry-run`.
 - **A single product (special case):** `node scripts/ds24/create-product.mjs
   --saas "…" --plan "…" --apply`. Only needed if you deliberately want to
   create a single product outside the registry; normally take `ds24-sync`.

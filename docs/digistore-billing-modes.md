@@ -17,8 +17,8 @@ Which of the two an app uses is **declared, not guessed** — see
 
 Code:
 - `config/digistore-products.json` — **product registry** (source of truth): one
-  DS24 product per offer **and language**; the ids are written back into
-  `productIdByLanguage` by `sync-products.mjs`.
+  DS24 product per offer, language **and environment** (dev/staging/prod);
+  the ids are written back into `productIds.<env>` by `sync-products.mjs`.
   Also holds `billingMode` — which of the two models this app sells.
 - `lib/billing-mode.ts` — reads it: `sellsPlans()`, `sellsTokens()`.
 - `lib/digistore/products.ts` — registry access (price, interval, features).
@@ -110,7 +110,8 @@ create them:
 node run.mjs ds24-sync
 ```
 
-That writes the id(s) back into `productIdByLanguage` **and** registers the IPN.
+That writes the id(s) back into `productIds.<env>` **and** registers that
+environment's IPN connection.
 (`node scripts/ds24/sync-products.mjs --apply` only does the products — the
 purchases would then unlock nothing.)
 
@@ -150,7 +151,8 @@ site.
 `settings[force_rebilling]=Y` — without which no chargeable `purchase_id` comes
 into being and the auto-reload below cannot work. URLs are cached for 20h
 (`buy_url_cache`) and regenerate whenever the offer changes. Blueprint:
-`app/plans/page.tsx`. All environments use the same live products.
+`app/plans/page.tsx`. Which environment's product a link sells follows
+`APP_ENV` (`docs/environments.md`).
 
 The cache key carries the language (`"<key>:<language>"`), because the visitor's
 locale decides which of the offer's DS24 products they are sent to.

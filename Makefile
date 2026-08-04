@@ -21,6 +21,12 @@
 
 ARGS ?=
 
+# `make ds24-sync ENV=prod` — shorthand for `--env prod`: which environment's
+# Digistore24 product set a sync maintains (dev | staging | prod).
+ifneq ($(ENV),)
+ARGS += --env $(ENV)
+endif
+
 .DEFAULT_GOAL := help
 
 .PHONY: help

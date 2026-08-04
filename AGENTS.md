@@ -301,6 +301,9 @@ their way around one skill has then found their way around all of them:
   **exclusively** in DEV, only on localhost and only as long as no mail
   delivery is configured — never soften these conditions, it is an auth
   bypass. Unknown `APP_ENV` values are deliberately treated as "production".
+  Each environment also sells its **own Digistore24 product set**
+  (`ds24-sync --env …` — see **Plans & Digistore products**); STAGING is
+  optional and most apps go DEV → PROD, which is fine as long as they test.
 - **Use the design system — never rebuild anything yourself.** The UI is
   shadcn/ui components (`components/ui/`) plus the tokens from
   `app/globals.css`: no raw `<button>`, `<input>`, `<select>` or `<table>`,
@@ -1246,17 +1249,28 @@ a second price list in the code.
 
 **One offering is one Digistore24 product PER LANGUAGE, not one product** — a
 product carries exactly one `data[language]`, the language of the order form,
-and `createBuyUrl` cannot override it:
+and `createBuyUrl` cannot override it. **And there is one product SET per
+ENVIRONMENT** (dev / staging / prod — see
+[`docs/environments.md`](docs/environments.md)):
 
 ```json
-"basis_monatlich": { "productIdByLanguage": { "de": null, "en": null } }
+"basis_monatlich": { "productIds": { "dev": { "de": null, "en": null },
+                                     "prod": { "de": null, "en": null } } }
 ```
 
-`node run.mjs ds24-sync` creates one product per entry and writes the ids back;
-the visitor's locale picks the checkout target (`checkoutProductFor` in
-`lib/digistore/products.ts`). Cover every locale from `i18n/config.ts` — a
-missing one still sells, but on another language's form, and `ds24-sync` is the
-only thing that ever says so. Full reasoning:
+`node run.mjs ds24-sync` creates one product per entry and writes the ids
+back, for ONE environment per run: `--env dev|staging|prod`, default from
+`APP_ENV` — so a plain run on your machine maintains the dev set (names carry
+` [DEV]`), and the live set is `--env prod` with `APP_URL_PROD` in the `.env`
+(or a run on the deployed host). Staging is optional — most apps go
+dev → prod, which is fine as long as they test. All of the app's products sit
+in one Digistore24 product group; its id (`productGroupId`) is written back
+like the product ids. At runtime `APP_ENV` picks the set the checkout sells;
+an environment without its own set falls back to prod (the pre-split
+behaviour). The visitor's locale picks the checkout target within the set
+(`checkoutProductFor` in `lib/digistore/products.ts`). Cover every locale from
+`i18n/config.ts` — a missing one still sells, but on another language's form,
+and `ds24-sync` is the only thing that ever says so. Full reasoning:
 [`docs/digistore-integration.md`](docs/digistore-integration.md) → *The order
 form's language*. **Your product copy is deliberately not translated** —
 `name`, `description`, `tagline` and `features` are one text, sent to every
@@ -1290,9 +1304,11 @@ Removing one from the JSON does **not** unpublish it — deactivate it at DS24.
 The commands:
 
 - `node run.mjs ds24-connect` — fetch the API key (browser) into the `.env`.
-- `node run.mjs ds24-sync` — create/update products **and** the IPN connection
-  (idempotent). This one **applies**; the preview is `--dry-run`.
-- `node run.mjs ds24-approval --apply` — request product approval; without
+- `node run.mjs ds24-sync` — create/update ONE environment's products **and**
+  its IPN connection (idempotent per environment; `--env dev|staging|prod`,
+  default from `APP_ENV`). This one **applies**; the preview is `--dry-run`.
+- `node run.mjs ds24-approval --apply` — request product approval (always for
+  the **prod** set); without
   `--apply` it is the status view. **Approval is a go-live step** — before it,
   only test purchases, and in DEV every checkout link carries the DS24
   test-payment parameter by itself (`lib/digistore/testpay.ts`). Marketplaces,
@@ -1324,7 +1340,9 @@ id you pass with `--domain` is yours to make unique.
 `node run.mjs ds24-purchase --order ABC12345`; a *rejected* IPN is `node run.mjs ds24-ipn-verify`.
 
 **Leave `APP_URL` alone** — a non-local value switches off the development
-login (`lib/auth/dev-login.ts`) and locks you out of your own app.
+login (`lib/auth/dev-login.ts`) and locks you out of your own app. The
+deployed domain a locally-run `ds24-sync --env prod|staging` needs goes into
+`APP_URL_PROD` / `APP_URL_STAGING` instead.
 
 **Prices don't belong on the DS24 product** — the API discards `data[amount]`.
 `priceCents` and `billingInterval` travel with every `createBuyUrl` call as

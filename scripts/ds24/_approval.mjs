@@ -452,7 +452,11 @@ export async function approvalReport(now = Date.now()) {
       // One entry per Digistore24 product — per offering AND language. Each is
       // approved separately, at the marketplace its language belongs to, so
       // each needs its own row here; see request-approval.mjs.
-      entries = productTargets(readProducts().products)
+      //
+      // PROD only, like the write side: approval exists for the live set. An
+      // app that has only synced dev products has nothing to approve yet, and
+      // the greeting stays quiet until the first prod sync (a go-live step).
+      entries = productTargets(readProducts().products, "prod")
         .filter(({ productId }) => productId)
         .map(({ label, productId }) => [label, { productId }]);
     } catch {

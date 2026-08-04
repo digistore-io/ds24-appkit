@@ -9,13 +9,23 @@
 //   1. Declare the products in the JSON — including price and interval.
 //   2. `scripts/ds24/sync-products.mjs` creates them via createProduct or
 //      updates them via updateProduct and writes the ids back into
-//      `productIdByLanguage`.
+//      `productIds.<env>`.
 //   3. Checkout runs through createBuyUrl: price, currency and interval travel
 //      WITH the call as a payment_plan (lib/digistore/checkout.ts →
 //      lib/digistore/buyUrl.ts). Nothing about the price is maintained a second
 //      time inside Digistore24.
 //
-// All environments (DEV/STAGING/PROD) use THE SAME live products.
+// EVERY ENVIRONMENT HAS ITS OWN PRODUCT SET (dev / staging / prod).
+// `node run.mjs ds24-sync --env <env>` maintains one set at a time; at runtime
+// APP_ENV decides which set this instance sells (`runtimeSyncEnv`). Two rules
+// keep existing apps selling:
+//   - An environment whose own set is empty falls back to the PROD set —
+//     that is exactly the pre-split behaviour ("all environments use the same
+//     live products"), so an app that never ran an env sync keeps working.
+//   - The reverse lookup (`productByDs24Id`) matches across ALL environments:
+//     whichever set a purchase came in on, it is the same offering.
+// Staging is optional — most apps go dev → prod, which is fine as long as
+// they test.
 //
 // ============================================================================
 // WHY ONE OFFERING CAN NEED SEVERAL DIGISTORE24 PRODUCTS
@@ -32,8 +42,8 @@
 // So an app whose UI speaks German and English cannot send both audiences to
 // one product: one of the two lands on a form in the other's language, right at
 // the moment they are asked for their card details. **Two products, one per
-// language, is the only way** — hence `productIdByLanguage`, and hence the
-// per-language loop in `scripts/ds24/sync-products.mjs`.
+// language, is the only way** — hence the per-language maps in `productIds`,
+// and hence the per-language loop in `scripts/ds24/sync-products.mjs`.
 //
 // What does NOT follow from this: translated product copy. `name`,
 // `description`, `tagline` and `features` stay single-language on purpose (it
@@ -42,6 +52,21 @@
 // ============================================================================
 import productsFile from "@/config/digistore-products.json";
 import { DEFAULT_LOCALE } from "@/i18n/config";
+
+/**
+ * The environment axis of the product sets — the TS side of
+ * `scripts/ds24/_env.mjs` (the scripts are plain `.mjs` and cannot import
+ * this file; `_env.test.ts` pins the two against each other).
+ *
+ * This file is part of the exported core (config/core-export.json) and stays
+ * PURE — it never reads APP_ENV itself. The env-sensitive functions below
+ * take the environment as a parameter, **defaulting to "prod"**: the right
+ * answer for an exported companion, which always talks to the live backend.
+ * Callers inside the app pass `runtimeSyncEnv()` from
+ * `lib/digistore/runtime-env.ts` (deliberately outside the core).
+ */
+export const SYNC_ENVS = ["dev", "staging", "prod"] as const;
+export type SyncEnv = (typeof SYNC_ENVS)[number];
 
 /**
  * Every kind the registry may declare. The union below is DERIVED from this
@@ -80,32 +105,43 @@ export interface ProductDef {
   /** Product image for Digistore24 (publicly reachable URL). */
   imageUrl?: string | null;
   /**
-   * **One Digistore24 product per language** — the id, keyed by the language
-   * its order form is in. `null` = declared but not created yet;
-   * `sync-products.mjs` writes the ids back here.
+   * **One product set per ENVIRONMENT, one Digistore24 product per language
+   * inside each set** — the id, keyed by env and by the language its order
+   * form is in. `null` = declared but not created yet;
+   * `sync-products.mjs --env <env>` writes the ids back here.
    *
-   *   "productIdByLanguage": { "de": "412345", "en": "412346" }
+   *   "productIds": {
+   *     "dev":  { "de": "412345", "en": "412346" },
+   *     "prod": { "de": null, "en": null }
+   *   }
    *
-   * The keys are the languages this offering is SOLD in, and they should cover
-   * the app's `LOCALES` (`i18n/config.ts`) — a locale with no entry falls back
-   * to another product, and its buyers get a form in the wrong language (see
-   * `checkoutProductFor`). `node run.mjs ds24-sync` warns about the gap.
+   * The language keys are the languages this offering is SOLD in, and they
+   * should cover the app's `LOCALES` (`i18n/config.ts`) — a locale with no
+   * entry falls back to another product, and its buyers get a form in the
+   * wrong language (see `checkoutProductFor`). `node run.mjs ds24-sync` warns
+   * about the gap. Declaring a language in ANY environment declares it for
+   * all of them (the sync reads the union).
    *
    * The language also decides **which Digistore24 marketplace the approval is
    * requested from**: German → Digistore24 Germany (siteowner 1), everything
-   * else → USA (2). So each language product is submitted where it belongs.
+   * else → USA (2). Approval is requested for the PROD set only — a "[DEV]"
+   * product has no business on a marketplace.
    * See `scripts/ds24/request-approval.mjs` and `scripts/ds24/_resellers.mjs`.
+   */
+  productIds?: Partial<Record<SyncEnv, Record<string, string | null>>>;
+  /**
+   * LEGACY, read but never written: the shared per-language map from before
+   * the environment split (template < 0.14.0), when every environment used
+   * the same products. Reads as the PROD set — those products may carry real
+   * sales and approvals; the first `ds24-sync --env prod` adopts them into
+   * `productIds.prod`. Do not add this to a new registry.
    */
   productIdByLanguage?: Record<string, string | null>;
   /**
    * LEGACY, read but never written: the single-product shape from before
    * template 0.6.0, where an offering had one `productId` and `language` said
-   * which language it was in.
-   *
-   * Still understood so a registry written against the old shape keeps
-   * selling — it reads as `productIdByLanguage: { [language ?? "de"]: productId }`
-   * (see `productIdsOf`). `ds24-sync` rewrites such an entry into the new
-   * shape the next time it runs. Do not add these to a new registry.
+   * which language it was in. Reads as one PROD entry (see `productIdsOf`);
+   * `ds24-sync --env prod` rewrites it. Do not add these to a new registry.
    */
   productId?: string | null;
   /** LEGACY, see `productId`. The language of that single product. */
@@ -113,28 +149,56 @@ export interface ProductDef {
 }
 
 /**
- * The DS24 product ids of an offering, by language — only the ones that exist,
- * so an entry declared as `null` (not synced yet) is absent rather than empty.
+ * The DS24 product ids of an offering FOR ONE ENVIRONMENT, by language — only
+ * the ones that exist, so an entry declared as `null` (not synced yet) is
+ * absent rather than empty.
  *
- * The ONE place the legacy `productId`/`language` shape is understood; every
- * reader goes through here so there is exactly one translation between the two
- * and no call site has to know that the old one existed. The legacy pair only
- * fills a language the map does not already name — a registry mid-migration
- * has both, and the map is the one `ds24-sync` maintains.
+ * The ONE place the legacy shapes are understood; every reader goes through
+ * here so there is exactly one translation and no call site has to know that
+ * the old shapes existed. Both legacy shapes — the shared
+ * `productIdByLanguage` map and the pre-0.6.0 `productId`/`language` pair —
+ * read as PROD and only as prod: they predate the environment split, and the
+ * products they name are the live ones. Each only fills a language the env
+ * map does not already name — a registry mid-migration has both, and the env
+ * map is the one `ds24-sync` maintains.
  */
-export function productIdsOf(def: ProductDef): Record<string, string> {
+export function productIdsOf(
+  def: ProductDef,
+  env: SyncEnv = "prod",
+): Record<string, string> {
   const ids: Record<string, string> = {};
-  for (const [lang, id] of Object.entries(def.productIdByLanguage ?? {})) {
+  for (const [lang, id] of Object.entries(def.productIds?.[env] ?? {})) {
     if (id) ids[lang] = String(id);
+  }
+  if (env !== "prod") return ids;
+  for (const [lang, id] of Object.entries(def.productIdByLanguage ?? {})) {
+    if (id && !ids[lang]) ids[lang] = String(id);
   }
   const legacyLang = def.language || DEFAULT_LOCALE;
   if (def.productId && !ids[legacyLang]) ids[legacyLang] = String(def.productId);
   return ids;
 }
 
+/**
+ * The ids this instance actually SELLS in `env`: the environment's own set —
+ * or the PROD set when that is empty and `env` is not prod. The fallback is
+ * the pre-split behaviour, and it is what keeps an app selling that updated
+ * the template but never ran `ds24-sync --env dev`: its dev checkout keeps
+ * using the live products, exactly as before. An app that HAS a dev set is
+ * isolated — its dev checkout never touches prod.
+ */
+function sellableIdsOf(def: ProductDef, env: SyncEnv): Record<string, string> {
+  const own = productIdsOf(def, env);
+  if (Object.keys(own).length > 0 || env === "prod") return own;
+  return productIdsOf(def, "prod");
+}
+
 /** Every language this offering has a live Digistore24 product for. */
-export function productLanguages(def: ProductDef): string[] {
-  return Object.keys(productIdsOf(def));
+export function productLanguages(
+  def: ProductDef,
+  env: SyncEnv = "prod",
+): string[] {
+  return Object.keys(sellableIdsOf(def, env));
 }
 
 /**
@@ -157,8 +221,9 @@ export function productLanguages(def: ProductDef): string[] {
 export function checkoutProductFor(
   def: ProductDef,
   locale: string,
+  env: SyncEnv = "prod",
 ): { productId: string; language: string } | null {
-  const ids = productIdsOf(def);
+  const ids = sellableIdsOf(def, env);
   const language =
     (ids[locale] && locale) ||
     (ids[DEFAULT_LOCALE] && DEFAULT_LOCALE) ||
@@ -290,11 +355,14 @@ export function productsByKind(kind: ProductKind): ProductDef[] {
  * asserted by tests rather than trusted (products.test.ts). It governs which
  * plan a payment unlocks; nothing in this repo can test a DB-bound function.
  *
- * **It searches EVERY language product of an offering.** A German buyer and an
- * English one arrive on two different Digistore24 products, and the IPN names
- * whichever one was actually bought — so matching only the first id would leave
- * every English purchase unattributed, and `orders.productKey` is never
- * reconstructed later.
+ * **It searches EVERY language product of an offering, in EVERY environment.**
+ * A German buyer and an English one arrive on two different Digistore24
+ * products, and the IPN names whichever one was actually bought — so matching
+ * only the first id would leave every English purchase unattributed, and
+ * `orders.productKey` is never reconstructed later. The environments widen the
+ * same rule: a dev test purchase arrives on a dev product id, and it is still
+ * this offering — which set it came in on is not this function's question
+ * (the per-environment IPN connections keep the instances apart).
  *
  * THE GUARD IS BOTH SIDES BEING NON-EMPTY. The ids are null for every offering
  * until `node run.mjs ds24-sync` has run, and an IPN payload may arrive with
@@ -307,7 +375,8 @@ export function productsByKind(kind: ProductKind): ProductDef[] {
  *
  * Ambiguity resolves to `null` as well: two offerings sharing one Digistore24
  * product id cannot be told apart, and guessing would grant the wrong one. Two
- * LANGUAGES of the SAME offering are not ambiguous — they are one answer.
+ * LANGUAGES — or two ENVIRONMENTS — of the SAME offering are not ambiguous;
+ * they are one answer.
  */
 export function productByDs24Id(
   id: string | null | undefined,
@@ -315,7 +384,9 @@ export function productByDs24Id(
 ): ProductDef | null {
   if (!id) return null;
   const matches = products.filter((p) =>
-    Object.values(productIdsOf(p)).includes(String(id)),
+    SYNC_ENVS.some((env) =>
+      Object.values(productIdsOf(p, env)).includes(String(id)),
+    ),
   );
   return matches.length === 1 ? matches[0] : null;
 }
@@ -329,8 +400,12 @@ export function productByDs24Id(
  * "not synced" and "not sold in this language" are different states, and only
  * the first is an error.
  */
-export function productId(key: string, locale: string = DEFAULT_LOCALE): string {
-  const resolved = checkoutProductFor(getProduct(key), locale);
+export function productId(
+  key: string,
+  locale: string = DEFAULT_LOCALE,
+  env: SyncEnv = "prod",
+): string {
+  const resolved = checkoutProductFor(getProduct(key), locale, env);
   if (!resolved) {
     throw new Error(
       `Produkt "${key}" hat noch keine productId. Erst 'node run.mjs ds24-sync' ausfuehren.`,
@@ -340,8 +415,8 @@ export function productId(key: string, locale: string = DEFAULT_LOCALE): string 
 }
 
 /** Does this offering have at least one live Digistore24 product? */
-export function hasProductId(key: string): boolean {
-  return productLanguages(getProduct(key)).length > 0;
+export function hasProductId(key: string, env: SyncEnv = "prod"): boolean {
+  return productLanguages(getProduct(key), env).length > 0;
 }
 
 // Checkout links are NOT built here. A plain product link

@@ -145,8 +145,9 @@ sign in to):
 > app at all.
 
 **Required as soon as the app sells anything** — written into the local `.env`
-by `node run.mjs ds24-connect` and `node run.mjs ds24-sync`, and copied from
-there to the host:
+by `node run.mjs ds24-connect` and `node run.mjs ds24-sync --env prod` (there
+as `…_PROD` reference copies), and copied from there to the host under the
+**unsuffixed** names:
 
 `DIGISTORE_API_KEY` · `DIGISTORE_IPN_PASSPHRASE` · `DIGISTORE_IPN_DOMAIN_ID`
 
@@ -461,13 +462,22 @@ Then `doctl apps create --spec .do/app.yaml`, and afterwards
 1. `node run.mjs ds24-connect` in the terminal. The browser opens, the user
    confirms at Digistore24 — the API key lands in the local `.env`
    (`DIGISTORE_API_KEY`). There is deliberately **no** UI for entering keys.
-2. Set `APP_URL` to the live domain, then `node run.mjs ds24-sync`. It creates
-   the products **and** registers the IPN connection via API (the URL is always
-   `https://YOUR-DOMAIN/api/ipn`, signature SHA512). The generated passphrase and
-   the stable `DIGISTORE_IPN_DOMAIN_ID` are written into the `.env`. Nothing has
-   to be entered by hand in the Digistore24 interface.
-3. Copy those three values into the host's secrets:
-   `DIGISTORE_API_KEY`, `DIGISTORE_IPN_PASSPHRASE`, `DIGISTORE_IPN_DOMAIN_ID`.
+2. Once the app is deployed and answers, sync the **prod product set**: set
+   `APP_URL_PROD=https://YOUR-DOMAIN` in the local `.env` and run
+   `node run.mjs ds24-sync --env prod`. It creates the live products (their
+   own set — your local `[DEV]` products stay untouched) **and** registers the
+   prod IPN connection via API (the URL is always
+   `https://YOUR-DOMAIN/api/ipn`, signature SHA512). `APP_URL` itself stays
+   local — changing it kills the development login. The generated passphrase
+   and the stable domain id are written into the `.env` as
+   `DIGISTORE_IPN_PASSPHRASE_PROD` / `DIGISTORE_IPN_DOMAIN_ID_PROD`
+   (reference copies). Nothing has to be entered by hand in the Digistore24
+   interface. (Running the sync **on** the host works too — there `APP_ENV` is
+   `production`, so a plain `node run.mjs ds24-sync` targets prod and writes
+   the unsuffixed keys.)
+3. Copy the values into the host's secrets — **unsuffixed**, that is what the
+   app reads: `DIGISTORE_API_KEY`, `DIGISTORE_IPN_PASSPHRASE` (= the `_PROD`
+   value), `DIGISTORE_IPN_DOMAIN_ID` (= the `_PROD` value). Redeploy.
 4. Trigger "test connection" in Digistore24 → the IPN must answer `200`.
 
 ## Scheduled cleanup
@@ -537,8 +547,9 @@ node run.mjs smoke --url https://YOUR-DOMAIN
 
 Then by hand, because no script can: sign in, buy something (test purchase), and
 check that the order arrived and the access was unlocked. `docs/environments.md`
-explains why all environments share the same live products, and the skill
-`go-live` walks the whole sequence.
+explains the environment split — every environment has its own Digistore24
+product set and IPN connection — and the skill `go-live` walks the whole
+sequence.
 
 ## Where the secrets live
 

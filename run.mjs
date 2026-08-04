@@ -324,7 +324,7 @@ const TASKS = {
   },
   "ds24-sync": {
     group: "Digistore24",
-    help: "Create/update products + the IPN hookup (idempotent; preview: --dry-run)",
+    help: "Create/update products + the IPN hookup, per environment (--env dev|staging|prod, default from APP_ENV; idempotent; preview: --dry-run)",
     // This one is expected to really create the products, so it passes --apply
     // by itself; the scripts themselves stay at "a dry run is the normal case".
     // Whoever only wants to look: `node run.mjs ds24-sync --dry-run`.

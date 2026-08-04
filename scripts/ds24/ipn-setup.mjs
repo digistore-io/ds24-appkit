@@ -61,6 +61,9 @@
 // Usage:
 //   node scripts/ds24/ipn-setup.mjs --auto --apply
 //        # URL from APP_URL, domain_id from .env or derived+saved
+//   node scripts/ds24/ipn-setup.mjs --auto --env prod --apply
+//        # the PROD connection: URL from APP_URL_PROD, keys suffixed _PROD when
+//        # run away from the prod host (see _env.mjs — one connection per env)
 //   node scripts/ds24/ipn-setup.mjs --url "https://app.example.de/api/ipn" \
 //        --domain "app.example.de" --apply
 //   node scripts/ds24/ipn-setup.mjs --auto --products 111,222,333 --apply
@@ -70,7 +73,8 @@
 import { randomBytes } from "node:crypto";
 
 import { ds24Call, requireApiKey, parseArgs, isYes } from "./_client.mjs";
-import { readProducts } from "./_products.mjs";
+import { readProducts, syncedProductIds } from "./_products.mjs";
+import { resolveSyncEnv, syncEnvFromAppEnv, appUrlForEnv, envScopedKey } from "./_env.mjs";
 import { setEnvValue } from "../lib/env-write.mjs";
 import {
   CLOUDFLARED_MISSING,
@@ -86,6 +90,22 @@ const args = parseArgs(process.argv.slice(2));
 // asking for a preview has to be able to override that.
 const apply = Boolean(args.apply) && !args["dry-run"];
 const auto = Boolean(args.auto);
+
+// ONE IPN CONNECTION PER ENVIRONMENT — each env's products report to the app
+// instance that sells them. `env` is which environment this run wires up;
+// `machineEnv` is which one this machine runs as (APP_ENV). When they differ —
+// a locally-run `--env prod` — the connection's values are stored under
+// suffixed .env keys (…_PROD) as reference copies, and the deployed host has
+// to receive them as its own unsuffixed secrets (see the closing message).
+const resolvedEnv = resolveSyncEnv(args);
+if (resolvedEnv.error) {
+  console.error(`ERROR: ${resolvedEnv.error}`);
+  process.exit(2);
+}
+const env = resolvedEnv.env;
+const machineEnv = syncEnvFromAppEnv(process.env.APP_ENV);
+const passphraseKey = envScopedKey("DIGISTORE_IPN_PASSPHRASE", env, machineEnv);
+const domainIdKey = envScopedKey("DIGISTORE_IPN_DOMAIN_ID", env, machineEnv);
 
 function slug(s) {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
@@ -119,7 +139,26 @@ function withRandomTail(base) {
 let url = args.url;
 let viaTunnel = false;
 let openedTunnel = false;
-const mayOpenTunnel = apply && !args["no-tunnel"];
+// A tunnel is a DEV answer: it points at the app on THIS machine, which is
+// never where staging/prod purchases should report to.
+const mayOpenTunnel = env === "dev" && apply && !args["no-tunnel"];
+
+if (!url && auto && env !== "dev") {
+  // staging/prod: the deployed domain (APP_URL_STAGING / APP_URL_PROD — or
+  // APP_URL on the deployed host itself). Missing is a loud refusal, not a
+  // skip: the products of this environment are synced by now, and an IPN
+  // pointing nowhere means paid purchases that never arrive in the app.
+  const resolved = appUrlForEnv(env);
+  if (resolved.error) {
+    console.error(`ERROR: ${resolved.error}`);
+    console.error(
+      `The ${env} products are synced, but the IPN connection is NOT set up yet — ` +
+        `set the URL and run \`node run.mjs ds24-sync --env ${env}\` again.`,
+    );
+    process.exit(2);
+  }
+  url = `${resolved.url}/api/ipn`;
+}
 
 if (!url && auto) {
   const appUrl = (process.env.APP_URL || "").replace(/\/$/, "");
@@ -208,32 +247,34 @@ if (viaTunnel) {
 // by themselves, and the loser of that collision loses its IPN silently (see
 // the header). Only a value we derive gets one: --domain and an id already in
 // the .env are taken exactly as they are.
-const isDev = ["", "development", "dev", "local"].includes(
-  (process.env.APP_ENV || "").toLowerCase(),
-);
-let domainId = args.domain || (args.saas ? slug(`${args.saas}-${args.env || "prod"}`) : null);
+let domainId = args.domain || null;
 let domainIdIsNew = false;
-if (!domainId) domainId = process.env.DIGISTORE_IPN_DOMAIN_ID || null;
+if (!domainId) domainId = process.env[domainIdKey] || null;
 if (!domainId) {
   const project = process.env.APP_NAME || process.cwd().split("/").filter(Boolean).pop() || "app";
-  domainId = withRandomTail(isDev ? slug(`local-${project}`) : slug(new URL(url).hostname));
+  domainId = withRandomTail(
+    env === "dev"
+      ? slug(`local-${project}`)
+      : slug(`${new URL(url).hostname}-${env}`),
+  );
   domainIdIsNew = true;
 }
 
 const name = args.name || domainId;
-const hasPassphrase = Boolean(args.passphrase || process.env.DIGISTORE_IPN_PASSPHRASE);
-const passphrase = args.passphrase || process.env.DIGISTORE_IPN_PASSPHRASE || "random";
+const hasPassphrase = Boolean(args.passphrase || process.env[passphraseKey]);
+const passphrase = args.passphrase || process.env[passphraseKey] || "random";
 const vendorId = args.vendor ? String(args.vendor) : undefined;
 
 // --- product_ids: --products > the registry's synced ids > "all". ------------
-// See the header for why naming them beats "all". A product with no productId
-// has not been synced yet and cannot be named — `ds24-sync` creates the
+// See the header for why naming them beats "all" — and with one product set
+// per environment it carries a second job: the ids are THIS environment's, so
+// a dev purchase reports to the dev app and never to prod. A product with no
+// id has not been synced yet and cannot be named — `ds24-sync` creates the
 // products BEFORE it gets here, so by the time this runs they normally all
 // have one.
 function registryProductIds() {
   try {
-    const products = Object.values(readProducts().products ?? {});
-    return products.map((p) => p?.productId).filter(Boolean).map(String);
+    return syncedProductIds(readProducts(), env);
   } catch {
     // A missing or broken registry is not this script's error to raise — the
     // sync would already have said so. Fall back to the safe, wide setting.
@@ -291,8 +332,8 @@ if (!apply) {
 // Pin down the stable domain_id before the call goes out — then the next run is
 // idempotent, even if the URL has changed in the meantime.
 if (domainIdIsNew) {
-  setEnvValue(ENV_FILE, "DIGISTORE_IPN_DOMAIN_ID", domainId);
-  console.log(`→ DIGISTORE_IPN_DOMAIN_ID="${domainId}" saved in ${ENV_FILE}.`);
+  setEnvValue(ENV_FILE, domainIdKey, domainId);
+  console.log(`→ ${domainIdKey}="${domainId}" saved in ${ENV_FILE}.`);
 }
 
 // Delete-then-create: remove any existing connection for this exact domain_id
@@ -331,8 +372,22 @@ if (hasPassphrase) {
   console.log("  SHA512 passphrase: taken over from the .env, unchanged.");
 } else if (res.sha_passphrase) {
   // DS24 generated one — save it right away, from now on the run is idempotent.
-  setEnvValue(ENV_FILE, "DIGISTORE_IPN_PASSPHRASE", res.sha_passphrase);
-  console.log(`  ✓ SHA512 passphrase generated and saved as DIGISTORE_IPN_PASSPHRASE in ${ENV_FILE}.`);
+  setEnvValue(ENV_FILE, passphraseKey, res.sha_passphrase);
+  console.log(`  ✓ SHA512 passphrase generated and saved as ${passphraseKey} in ${ENV_FILE}.`);
 } else {
   console.log("  (No passphrase returned — please check manually.)");
+}
+
+// A sync for another machine's environment leaves that machine one step to do:
+// the deployed app reads the UNSUFFIXED keys from its own secrets, and until
+// the passphrase is there it rejects every IPN signature.
+if (env !== machineEnv && (env === "prod" || env === "staging")) {
+  console.log(
+    `\n→ This wired up the ${env.toUpperCase()} environment from this machine. ` +
+      `The values here are reference copies —\n` +
+      `  set them as secrets at your ${env} host and redeploy:\n` +
+      `    DIGISTORE_IPN_PASSPHRASE = <value of ${passphraseKey} in ${ENV_FILE}>\n` +
+      `    DIGISTORE_IPN_DOMAIN_ID  = <value of ${domainIdKey} in ${ENV_FILE}>\n` +
+      `  Until then the ${env} app rejects every IPN signature ("paid, but nothing happened").`,
+  );
 }
