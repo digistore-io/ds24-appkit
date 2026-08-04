@@ -64,8 +64,9 @@ testimonials — mark placeholders (e.g. "[insert real customer quote]").
 the plans page still carry the template's placeholder wording while this
 document carries the real headline and the real promise, the visitor reads the
 weaker version. Putting it there is ordinary work, not a skill. The video is
-different — a script written here becomes a file, and a file wants somewhere to
-live and a player: that part is **`visuals`** (check `upload`).
+different — a script written here is not a file yet: **producing** it (tool
+choice, rendering, a talking head) is **`content-production`**, and giving the
+finished file somewhere to live and a player is **`visuals`** (check `upload`).
 
 ## Phase 5 — measure & iterate
 

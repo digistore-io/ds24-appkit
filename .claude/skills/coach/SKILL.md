@@ -121,6 +121,7 @@ below.
 | "my people never find their way around the course" — the one phrase with two answers | Ask which: lost in the COURSE's order → the shape may not match how it is sold — `docs/courses.md` (the chooser, including its tie-break). Lost in the APP → **`ux-gateway`**. On a LIVE app, changing shape is a data migration, not a refactor — plan it before touching tables |
 | "I cannot see who is where in the course", "who has actually finished?" | progress is derived, never stored twice, and each shape derives it differently — `docs/courses.md`: shape 1 from `unit_completions`, shape 2 from the grant date, shape 3 from the submissions. For judged self-checks (never the submitted text) → skill **`learning-activities`** (needs template 0.9.0) |
 | "my people never finish the course", "they watch the videos and drift away" | the course asks nothing of them — skill **`learning-activities`** (item `decide`, needs template 0.9.0): a check or a game per block, judged on the server. A recorded "no" in `docs/app.md` is an answer — say so and stop |
+| "my lessons have no videos yet", "how do I create the course content?", "can you produce the videos?", "I need an explainer / talking-head video" | media that do not exist yet are production work → **`content-production`** (scripts in one format, tools recommended and set up on request — `docs/content-production.md`). Material that already EXISTS as files or recordings is **`knowledge-intake`** instead — one question settles which |
 
 ## 4. Most work is not a skill
 

@@ -21,7 +21,9 @@ shipped, tested code in this template to use as the model. What already has its 
 is pointed at, not restated: files behind a purchase are
 [`docs/visuals.md`](visuals.md), access is [`docs/entitlements.md`](entitlements.md),
 scheduled work is [`docs/cron.md`](cron.md), migrations are
-[`docs/database.md`](database.md).
+[`docs/database.md`](database.md) — and lesson media that do not exist yet are
+produced via [`docs/content-production.md`](content-production.md) (skill
+`content-production`).
 
 ## Which shape is this vendor's course?
 
@@ -455,3 +457,13 @@ corpus is the interview, already answered. Four derivations, in order:
   instruction points at the handbook pages written for that topic — the same
   distillation the chat answers from, so the course and the chat cannot tell a
   learner two different stories.
+
+And the fifth derivation is the one that is NOT in the corpus: **the media the
+Gap List says are missing.** A topic with a note but no recording, a unit whose
+`videoMediaId` has nothing to point at — that is production work, not planning
+work, and it has its own reference and skill:
+[`docs/content-production.md`](content-production.md) / `content-production`.
+Offer it once the course skeleton stands, the same way `build-app` offers
+everything — a menu and a wait, never a default. The same holds for a course
+planned WITHOUT a corpus: units exist, media do not, and the honest next
+sentence to the vendor is "the lessons are empty — shall we produce them?"

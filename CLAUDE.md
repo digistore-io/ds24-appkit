@@ -129,6 +129,7 @@ frontmatter, so nothing is lost by the brevity:
 - **`mcp-server`** — *(optional)* let customers connect Claude to the app: choose the tools, switch MCP on.
 - **`mobile-companion`** — *(optional)* a mobile app on the same backend: switch the API on, export the shared core; needs template 0.11.0 ([`docs/mobile.md`](docs/mobile.md)).
 - **`visuals`** — *(optional)* what the customer SEES: images, video, files behind a purchase ([`docs/visuals.md`](docs/visuals.md)).
+- **`content-production`** — *(optional)* produce the media a course still lacks: lesson scripts in one tool-neutral format, video tools recommended and set up on request ([`docs/content-production.md`](docs/content-production.md)).
 - **`ai-companion`** — *(optional)* the app works alongside its customer rather than only delivering ([`docs/ai-in-product.md`](docs/ai-in-product.md)).
 - **`learning-activities`** — *(optional)* what a course's customer DOES, judged on the server; needs template 0.9.0 ([`docs/learning.md`](docs/learning.md)).
 - **`user-onboarding`** — *(optional, but read its first item once)* the END USER's first session, designed on purpose ([`docs/onboarding.md`](docs/onboarding.md)).
@@ -153,7 +154,8 @@ optional `ai-chat-knowledge` for the in-app assistant, optional `ai-providers`
 to choose the AI company, optional `mcp-server` for the AI interface)* →
 *(optional `design` — a look of the app's own, chosen once and written into
 `docs/design.md`; optional `visuals` — pictures, video, files, and what the
-customer actually sees; optional `ai-companion` — what the app DOES with them
+customer actually sees; optional `content-production` — the course's own media,
+produced from scripts; optional `ai-companion` — what the app DOES with them
 while they work; optional `learning-activities` — what the customer DOES,
 judged on the server; optional `user-onboarding` — the customer's first
 session, designed instead of inherited from the blueprint)* →

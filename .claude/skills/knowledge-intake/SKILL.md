@@ -265,9 +265,11 @@ only convenience.
   a topic folder with no notes, a topic many notes link to that nobody wrote.
 
 Present the list. For each entry there are three honest answers: the user
-records or writes something new (best), you research it on the web (step 8's
-rules apply), or it stays open — an open gap named is worth more than a thin
-note written to close it.
+records or writes something new (best — and where that is a video or worksheet
+still to be made, the skill `content-production` carries the production, script
+to finished file), you research it on the web (step 8's rules apply), or it
+stays open — an open gap named is worth more than a thin note written to close
+it.
 
 ## Step 8 — Web research is quarantined
 
