@@ -15,3 +15,11 @@ out/
 .DS_Store
 next-env.d.ts
 *.tsbuildinfo
+
+# Agent working artifacts — Playwright MCP output and session screenshots
+# dropped in the repo root. Real app images live in public/ and .data/;
+# the leading slash keeps these patterns from reaching either.
+.playwright-mcp/
+/*.png
+/*.jpg
+/*.jpeg

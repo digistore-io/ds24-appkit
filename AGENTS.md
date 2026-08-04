@@ -334,6 +334,15 @@ their way around one skill has then found their way around all of them:
   every script under `scripts/` MUST work on all three — not "mostly": a
   developer on Windows who cannot start the app has no way around it.
   Details, and the reasoning, in **Three systems** further down.
+- **Commit your work — a finished change is a commit, every time.** Untracked
+  files left lying around are the most common way work gets lost; even
+  unfinished work is better off as its own small commit than sitting in
+  `git status` for days. Working artifacts of a session — screenshots,
+  comparison notes, throwaway scripts — are not work and never get committed:
+  delete them when they have served, or keep them in `.dev/` (gitignored)
+  while they still serve. At the end of a unit of work `git status` is empty;
+  anything the repo should never see belongs in `.gitignore`, not in the
+  status list. (`AGENTS.md` is generated from this file — never edit it.)
 
 ## UI
 
