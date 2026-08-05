@@ -67,7 +67,14 @@ second skill — you ask exactly one question first:
 > find one together that fits your experience and your reach?"
 
 - **Idea is there** (the user can say in 1–2 sentences what the app does and for
-  whom) → continue with step 1.
+  whom) → write those sentences down as a **minimal product brief** in
+  `docs/product-brief.md` — the idea as the user said it, plus who it is for
+  and, if they volunteered it, how it bills. Half a page at most, no research,
+  no sources, and **none of the labels** `market-research` writes (their
+  absence is how steps 1b/1c know those questions are still open). Then
+  continue with step 1. The point: the first written record of what is being
+  built must exist BEFORE the code does — an app whose requirements live only
+  in a chat transcript gets rebuilt from memory in session three.
 - **No idea, or a vague one** ("don't know", "something with…", an industry) →
   start the skill **`market-research`**. It interviews the user about expertise
   and reach, researches a target audience along with their challenges and
@@ -283,6 +290,24 @@ first one. **A "no" is an answer and is not negotiated.**
 
 ## Step 2 — Extend the data model
 
+- **Before the first content table, settle who authors the content** — when the
+  developer IS the author, the content lives in code, not in tables, and gets
+  no admin UI; only customer STATE gets tables. The fork is
+  [`docs/content-authority.md`](../../../docs/content-authority.md) — decide it
+  before `db-generate`, and record the answer in `docs/app.md` (the coach
+  reads it back as the `Content authority:` line).
+- **And settle, in the same breath, how that content reaches PROD** — because
+  the answer is never "by itself": each environment has its own database and
+  its own media store, and a deploy carries the repo and nothing else. Content
+  in code travels with every deploy; content in tables is written as content
+  files plus an idempotent applier (`scripts/content/appliers/`, upsert by
+  slug) from the FIRST table on — **never only INSERTed into the local
+  database**, which is how a finished course goes live with empty pages while
+  every local gate stays green. Product media are declared in
+  `content/media-manifest.json` and referenced **by path, never by media id**
+  (an id exists in one database only). The transport rules and the applier
+  convention are [`docs/content.md`](../../../docs/content.md); the go-live
+  proof is `node run.mjs content-check --env prod`.
 - New tables in `db/schema.ts` (or a separate file that is re-exported there —
   model to follow: `db/schema-digistore.ts`).
 - Link purchase-dependent content to the **Member** (`users.id`, the same id
@@ -294,6 +319,12 @@ first one. **A "no" is an answer and is not negotiated.**
   commit (see `docs/database.md`). No `db:push`.
 
 ## Step 3 — Pages & logic
+
+**First, complete the brief:** append the page/feature list that steps 1–1d's
+menus produced to `docs/product-brief.md` — the 3–5 MVP features about to be
+built, one line each, BEFORE the first page is coded. That turns the brief
+into a true record of what was agreed on both entry paths (with and without
+`market-research`), and it is what session three reads instead of guessing.
 
 **One question per result surface, asked while you build it:** wherever a page
 hands the customer a RESULT, ask once whether it is a result to look at. Not a
@@ -464,6 +495,11 @@ Three rules about it:
   was already settled.
 - **The decisions section is the valuable half.** A feature can be read out of
   the code; the reason something is *not* built cannot.
+
+An entry also carries its **`Done when:`** line — the plain-words sentence the
+user OK'd before the feature was built (CLAUDE.md → *Adding a feature*, step
+0), recorded once it held. For the first feature that sentence is in the brief;
+quote it, checked.
 
 The greeting checks this by itself: a page under `app/dashboard/` that
 `docs/app.md` does not mention is named at the next session start.

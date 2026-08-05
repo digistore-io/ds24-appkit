@@ -45,12 +45,34 @@ node scripts/users/list-users.mjs            # all
 node scripts/users/list-users.mjs --role owner
 ```
 
+## The smoke account (deployed apps)
+
+`smoke-account.mjs` provisions the member account `node run.mjs smoke --url …`
+signs in as on a **deployed** app — the development login does not exist there,
+so smoke uses the real password sign-in instead. Run it locally with the
+deployed database, exactly like `create-user.mjs` at go-live:
+
+```bash
+DATABASE_URL="postgresql://…prod…" node run.mjs smoke-account            # dry run
+DATABASE_URL="postgresql://…prod…" node run.mjs smoke-account --apply    # write
+node run.mjs smoke-account --env staging --apply                         # staging set
+```
+
+It creates/updates `smoke@<host of APP_URL_PROD>` (role `member`, deliberately
+never `owner` — the script header carries the reasoning), generates a random
+password and writes `SMOKE_PROD_EMAIL` / `SMOKE_PROD_PASSWORD` into the local
+`.env`. Re-running rotates the password. It refuses a localhost
+`DATABASE_URL`, an owner row and a blocked row — those refusals are tested
+(`smoke-account.test.ts`), do not soften them.
+
 ## Via the runner (from the repo root)
 
 ```bash
 node run.mjs user-create --email owner@example.com --role owner --apply
 node run.mjs user-list --role owner
+node run.mjs smoke-account --apply
 ```
 
-Dry run is the default; only `--apply` writes. `create-user.mjs` is idempotent
-(upsert by email), `list-users.mjs` is read-only.
+Dry run is the default; only `--apply` writes. `create-user.mjs` and
+`smoke-account.mjs` are idempotent (upsert by email), `list-users.mjs` is
+read-only.

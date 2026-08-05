@@ -260,17 +260,20 @@ customer's chat.
 ### Filling a store: `kb-media-sync`
 
 ```bash
-node run.mjs kb-media-sync            # dry run — what would be copied
-node run.mjs kb-media-sync --apply    # copy what is missing
+node run.mjs kb-media-sync                    # dry run — what would be copied
+node run.mjs kb-media-sync --apply            # copy what is missing
+node run.mjs kb-media-sync --env prod --apply # the PRODUCTION store
 ```
 
 It walks `.data/knowledge-media/`, refuses names the grammar refuses (a bad
 name must not become a bad object key), and copies **only what is missing** —
-running it twice is the same as once. It fills whichever store the
-environment's `MEDIA_*` variables name, so it is the same command for DEV and
-for production: point it at the environment's store and run it again. Filling
-the production store is a named go-live step, and `kb-check` green under the
-same configuration is its exit condition.
+running it twice is the same as once. It is the same command for DEV and for
+production: without `--env` it fills this machine's store (the plain `MEDIA_*`
+variables), `--env prod` fills the production store off the `MEDIA_S3_*_PROD`
+reference keys (`.env.example`) — the plain keys are never edited to point
+elsewhere, the same contract as `DIGISTORE_IPN_PASSPHRASE_PROD`. Filling the
+production store is a named go-live step, and `kb-check` green under the same
+configuration is its exit condition.
 
 ## Keeping it alive — the maintenance loop
 

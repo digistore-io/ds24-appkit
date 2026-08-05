@@ -1,7 +1,7 @@
 ---
 name: go-live
 description: Brings the app online and proves that a purchase really unlocks access. Runs the pre-flight check, hands the hosting itself to setup-hosting (host, CLI, secrets, managed Postgres, migration hook, domain), then does the live part — Digistore products and approval, the IPN on the live domain, a smoke test, a test purchase and a re-check of security/performance against the live instance. Use this when the app is built, secured and scaled — before marketing.
-requires: 0.14.0
+requires: 0.15.0
 ---
 <!-- Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA — SPDX-License-Identifier: MIT -->
 
@@ -105,6 +105,13 @@ first person through the door may be a customer. Against the production
 ```
 node run.mjs user-create --email you@example.com --role owner --apply
 ```
+
+**And the account is not the only thing a fresh database is missing.** The
+migration created every table and filled none of them — the app's CONTENT
+(course rows, catalog entries, media) is still only on the machine it was
+built on. That is step 5's **content parity** item, with `content-check
+--env prod` as its exit condition; skipping it is how a finished course goes
+live with empty pages while every local gate stays green.
 
 ## 4. Digistore: products, approval & IPN on live
 
@@ -220,10 +227,20 @@ deployed and answers**, because registering the IPN requires
 ## 5. Smoke test (live)
 
 - `https://YOUR-DOMAIN/api/healthz` → `{"status":"ok"}`, `/api/readyz` → `ready`.
+- **Give smoke a way in — once:** the development login does not exist on the
+  live app, so without an account smoke can only watch the protected pages
+  redirect. Provision the smoke member with the production `DATABASE_URL` set
+  exactly as for `user-create` in step 3:
+  `DATABASE_URL="postgres://…" node run.mjs smoke-account --apply` — it writes
+  a random password into the local `.env`; a re-run rotates it.
 - **Call every page:** `node run.mjs smoke --url https://YOUR-DOMAIN` or
   `node scripts/dev/smoke.mjs --url https://YOUR-DOMAIN`. No 5xx — otherwise
   the launch is not finished. Production runs into errors that never showed up
   locally (missing env values, migrations that were never applied).
+  **Read the sign-in line of its output** — "N protected page(s) NOT checked"
+  is still not a pass, it names what to fix. And a green remote run is the
+  smaller half of smoke: owner-only pages count as redirects there, and the
+  server log is not read — both said in the output.
 - Test the sign-in (Google/e-mail). **Look at the mail itself, not only the
   landing**: does it name the product, does the button work, do the footer's
   legal links point at the live domain, and does the Impressum's text stand
@@ -243,18 +260,40 @@ deployed and answers**, because registering the IPN requires
   the blocklist watches for; if it ever flags, the recovery path is
   [`docs/troubleshooting.md`](../../../docs/troubleshooting.md) → *Chrome
   calls the sign-in link a "Dangerous site"*.
+- **Content parity — the app's own content, if it ships any.** No
+  `content/media-manifest.json` and no `scripts/content/appliers/` means
+  nothing to do here — one sentence, walk on. Otherwise: everything the app
+  SELLS — course rows, catalog entries, lesson videos, worksheets — exists so
+  far only in the database and store of the machine it was built on, and a
+  deploy moves none of it. Fill production now
+  ([`docs/content.md`](../../../docs/content.md)): store the `MEDIA_S3_*_PROD`
+  reference keys in the `.env` (the same bucket values `setup-hosting` step 6b
+  stored as secrets at the host), then
+
+  ```
+  node run.mjs content-media-sync --env prod --apply
+  DATABASE_URL="postgres://…prod…" node run.mjs content-apply --env prod
+  DATABASE_URL="postgres://…prod…" node run.mjs content-check --env prod
+  ```
+
+  (the `DATABASE_URL` procedure is step 3's, the `user-create` one).
+  **`content-check --env prod` green is the exit condition** — it HEADs every
+  declared file against the production store and counts every applier's rows
+  in the production database; an unreachable store or database is a failure
+  to fix, never a skip. Then open ONE real content page on the live app with
+  a real slug: `smoke` cannot tell a full course page from an empty one —
+  both are a 200 — so this is the one look no command replaces.
 - **Knowledge media, if this app has any on the bucket leg.** No
   `.data/knowledge-media/` folder and no `media:` entries in
   `content/knowledge/` means nothing to do here — one sentence, walk on.
   Otherwise the production store has to be filled, or every media suggestion
   in the assistant's answers 404s on the live app while every local gate stays
-  green. `kb-media-sync` copies into whichever store the environment's
-  `MEDIA_*` variables name, so run it **with the production store values set**
-  — the same ones `setup-hosting` (step 6b) stored as secrets at the host:
-  `node run.mjs kb-media-sync --apply`, then `node run.mjs kb-check` under the
-  same configuration. **`kb-check` green against the production store is the
-  exit condition** — an unreachable store is a failure to fix, never a skip.
-  The reference is [`docs/knowledge.md`](../../../docs/knowledge.md).
+  green — same `MEDIA_S3_*_PROD` reference keys as the content step above:
+  `node run.mjs kb-media-sync --env prod --apply`, then
+  `node run.mjs kb-check` under the same configuration. **`kb-check` green
+  against the production store is the exit condition** — an unreachable store
+  is a failure to fix, never a skip. The reference is
+  [`docs/knowledge.md`](../../../docs/knowledge.md).
 - **Purchase flow:** trigger "test connection" in Digistore24 (IPN `connection_test`
   → 200) and play through a real/test purchase → the order shows up, access is
   unlocked.

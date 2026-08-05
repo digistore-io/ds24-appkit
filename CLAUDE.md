@@ -332,7 +332,11 @@ their way around one skill has then found their way around all of them:
   `lib/digistore/*.test.ts`); `npm run test` and `npm run typecheck` MUST be
   green before anything moves on — `node run.mjs test` does both in one go.
   They run **locally** only: nothing runs them for you after a push, so a red
-  test that gets committed stays red until somebody looks.
+  test that gets committed stays red until somebody looks. So green is the
+  commit condition, not a courtesy: a commit on red tests or a red typecheck
+  is never made — fix first, commit after. And the tests that shipped with
+  this template are never deleted or weakened to get to green: a shipped test
+  that fails is a finding about your change, not an obstacle in its way.
 - **Call up the app yourself before you say "done", then ask the log.** Green
   tests are no proof that the page loads, and a page that loads is no proof
   that it rendered — `node run.mjs errors` is the second half of that
@@ -347,9 +351,12 @@ their way around one skill has then found their way around all of them:
   `git status` for days. Working artifacts of a session — screenshots,
   comparison notes, throwaway scripts — are not work and never get committed:
   delete them when they have served, or keep them in `.dev/` (gitignored)
-  while they still serve. At the end of a unit of work `git status` is empty;
-  anything the repo should never see belongs in `.gitignore`, not in the
-  status list. (`AGENTS.md` is generated from this file — never edit it.)
+  while they still serve. At the end of a unit of work `git status` is empty —
+  and every commit was made on green: there is no CI behind this repo to catch
+  a red one (see **Tests are mandatory** above). Before a session ends, say
+  where the tests stand, in one line: green, or red and why. Anything the repo
+  should never see belongs in `.gitignore`, not in the status list.
+  (`AGENTS.md` is generated from this file — never edit it.)
 
 ## UI
 
@@ -506,9 +513,13 @@ node run.mjs errors               # what the log picked up — including on a 20
 ```
 
 `node run.mjs smoke` (`scripts/dev/smoke.mjs`) finds the pages by itself under
-`app/` and calls them in **two passes**: first anonymously, then — signed in as
-the owner — exactly those that sent it to `/login`, so the pages with the real
-queries get rendered, not just counted as redirects. It rates them like this:
+`app/` and calls them in **two passes**: first anonymously, then signed in —
+exactly those that sent it to `/login`, so the pages with the real queries get
+rendered, not just counted as redirects. Locally it signs in as the **owner**
+(development login); against a deployed app (`--url https://…`) as the smoke
+**member**, through the real password sign-in — provisioned once with
+`node run.mjs smoke-account` (see **Proving it works** in `docs/DEPLOY.md`).
+It rates them like this:
 
 - **5xx** → error. Fix it, don't argue it away, don't pass it on as a "known
   issue".
@@ -521,10 +532,10 @@ queries get rendered, not just counted as redirects. It rates them like this:
 - **2xx** → fine.
 
 **The second pass can be unavailable, and then it says so** — one line naming
-the reason (it signs in via `scripts/dev/sign-in.mjs`: local app in DEV, no
-mail transport, an `owner` account to sign in as). **Read that line.**
-"9 protected page(s) NOT checked" is not a pass, and `--no-signed-in` turns the
-pass off entirely.
+the reason (it signs in via `scripts/dev/sign-in.mjs`: locally the development
+login and an `owner` account, remotely the smoke credentials from the `.env`).
+**Read that line.** "9 protected page(s) NOT checked" is not a pass, and
+`--no-signed-in` turns the pass off entirely.
 
 On an error the cause is in the log: `node run.mjs logs`. That's where the real
 stack trace is; the page in the browser often shows only the meaningless sentence.
@@ -543,8 +554,12 @@ Three things `node run.mjs smoke` cannot do:
 
 - **Dynamic pages** (`app/…/[id]/page.tsx`) are skipped — call them up by hand
   once with a real record.
-- **It is signed in as the OWNER, and as nobody else** — it never sees what a
-  `member`, a non-buyer or a blocked account gets. A gate needs a test
+- **It is signed in as ONE account, and as nobody else.** Locally that is the
+  OWNER — it never sees what a `member`, a non-buyer or a blocked account
+  gets. Remotely it is the smoke MEMBER — there the owner-only pages are never
+  rendered at all (a member's redirect is the correct answer, and the output
+  says so), and the log check does not exist either, so a remote run is the
+  smaller half of smoke: run it locally too. Either way, a gate needs a test
   (`vitest`, on the rule) or your own eyes; a green smoke test is not evidence
   that a gate holds.
 - **A green smoke test means "loads", not "is correct".** For everything to do
@@ -573,9 +588,22 @@ one machine*.
 
 ## Adding a feature
 
+0. **Say what you are about to build, before you build it.** One or two
+   sentences — what, for whom, and "done when …" in words the user can check
+   ("a member sees their monthly PDF", not "implement report generation") —
+   then **wait** for the OK, exactly as with every menu here. Proportional: a
+   small feature is two sentences; one that spans tables and pages spells its
+   "done when" out. Trying things out is exempt (see **Test apps are exempt**).
+   A feature too big for one session writes its plan down first — a dated
+   `Planned:` line in `docs/app.md` under the decisions, naming the feature in
+   words rather than its route (the route belongs to the finished entry, and
+   the entry is what the greeting's reminder checks for). The OK'd "done when"
+   sentence comes back in step 9 — checked, not promised.
 1. Extend the data model in `db/schema.ts` → `node run.mjs db-generate` (creates a
    migration in `drizzle/`) → check the file → `node run.mjs db-migrate`. The
-   migration belongs in the commit. Details: `docs/database.md`.
+   migration belongs in the commit. Details: `docs/database.md`. Content the
+   operator himself authors is the exception — it belongs in code, not tables:
+   `docs/content-authority.md`.
 2. Build the protected page/route under `app/dashboard/…`; gate
    purchase-dependent content with `hasPlan(memberId, productKey)` from
    `lib/entitlements/manage.ts` — never on a billing table. See **Access** below.
@@ -594,7 +622,8 @@ one machine*.
    thirty seconds each, and they are the three that get skipped. The full pass
    is the skill `ux-gateway`; the rules are [`docs/ux.md`](docs/ux.md).
 9. **One entry in `docs/app.md`** — the page's path, the access gate as code,
-   the tables, the tests. See **This app's own notebook** below.
+   the tables, the tests, and the `Done when:` sentence from step 0 — now
+   checked, not promised. See **This app's own notebook** below.
 
 ### This app's own notebook — `docs/app.md`
 
@@ -611,6 +640,12 @@ Two rules keep it worth reading:
 - **Write down what was decided *against*, and why** — the rejected alternative
   cannot be read out of the code, and it is what gets proposed again three
   sessions later.
+
+An entry also carries the feature's **`Done when:`** sentence — the one the
+user OK'd in step 0, recorded once it held. And a feature too big for one
+session leaves a dated **`Planned:`** line under the decisions until its entry
+exists (step 0 says how); a plan that lives only in a chat transcript is gone
+when the session is.
 
 The session greeting names any page under `app/dashboard/` the file does not
 mention (`scripts/dev/session-start.mjs`, logic and tests in
@@ -1204,6 +1239,43 @@ straight to the bucket, and that path is deliberately not built yet;
 `node run.mjs media-check` writes a throwaway object, reads it back, deletes it,
 and prints what may go in.
 
+## Content that must exist in PROD
+
+**What is in the repo travels with every deploy. What is only on this machine
+— the local database, anything under `.data/` — does not exist in PROD until
+a command puts it there.** Each environment has its own database and its own
+media store; `git push` moves neither rows nor stored files, and the
+migration hook creates tables without filling them. The failure this rule
+prevents is real and silent: a course built locally — rows INSERTed, videos
+in the local store — goes live EMPTY while every local gate stays green,
+because an empty course page is a clean 200. The full story is
+**[`docs/content.md`](docs/content.md)**; who authors content (code vs
+tables) is decided first, in
+[`docs/content-authority.md`](docs/content-authority.md).
+
+- **Define content as repo files from day one, never only as rows in the
+  local database.** Constants in code where the vendor is the author; content
+  files plus an idempotent applier (`scripts/content/appliers/`, upsert by
+  slug, `present(sql)` beside `apply(sql, { mediaIdFor })`) where tables are
+  the right answer.
+- **Product media are declared in `content/media-manifest.json`** and land at
+  the deterministic key `content/<topic-slug>/<file>.<ext>` in every
+  environment — reference them **by path, never by media id** (an id exists
+  in one database only). Files ≤ 10 MB ship under `content/media/`; larger
+  ones stage in `.data/content-media/` and move with `content-media-sync`.
+- **Applying is a deliberate step, and PROD's is at go-live:**
+  `content-media-sync --env prod --apply`, then `content-apply --env prod`
+  with the production `DATABASE_URL` in the shell (the `user-create`
+  procedure). Cross-environment runs read the `MEDIA_S3_*_PROD` reference
+  keys — the plain `MEDIA_*` values are never edited to point elsewhere, and
+  a `--env prod` run with a local `DATABASE_URL` is refused (half a run into
+  each environment is the bug rebuilt inside the fix).
+- **`node run.mjs content-check --env prod` green is the exit condition** —
+  it HEADs every declared file against that store and counts every applier's
+  rows in that database. `smoke` cannot see an empty-but-200 page; this can.
+  The seed is not a loophole: it is development-only and dies with the local
+  database.
+
 ## The salespage — the home page that sells
 
 The route `/` **is** the app's salespage. What ships there is a placeholder
@@ -1368,12 +1440,16 @@ overview). Arguments go straight through — there is no `ARGS="…"` wrapping.
 - `node run.mjs api-check` — check the HTTP API's settings; `--live` mints a key and really calls it once
 - `node run.mjs export-core <dir>` — copy the shared core into a companion repo (plan; `--apply` writes)
 - `node run.mjs media-check` — where uploaded files go, whether that place answers, and what may go in
-- `node run.mjs kb-media-sync` — copy the assistant's large media files (`.data/knowledge-media/`) into the media store; dry run by default, `--apply` writes
+- `node run.mjs kb-media-sync` — copy the assistant's large media files (`.data/knowledge-media/`) into the media store; dry run by default, `--apply` writes, `--env prod` fills the production store
+- `node run.mjs content-apply` — apply the repo's content to an environment: media rows from the manifest, shipped bytes, then every applier under `scripts/content/appliers/`; `--env prod` + prod `DATABASE_URL` at go-live, preview with `--dry-run`
+- `node run.mjs content-media-sync` — copy staged product media (`.data/content-media/`) into the media store; dry run by default, `--apply` writes (and records sha256/bytes in the manifest), `--env prod` fills the production store
+- `node run.mjs content-check` — does an environment hold this app's content? Files against the store, rows against the database, appliers counted; `--env prod` is go-live's exit condition
 - `node run.mjs db-generate` / `node run.mjs db-migrate` — create / apply a migration
 - `node run.mjs db-reset` — clear the local DB, migrate, seed (**locally only**)
 - `node run.mjs cron` — the scheduled jobs: run what is due, `--list` them, `--job <id>` to force one
 - `node run.mjs db-prune-ai` — delete AI-usage rows older than a year (`--dry-run` first)
 - `node run.mjs user-create --email … --role owner --apply` — create an operator/admin account
+- `node run.mjs smoke-account --apply` — provision the member account `smoke --url https://…` signs in as on the deployed app (random password into the local `.env`; re-run = rotation)
 - `node run.mjs data-export --email …` — everything held about one person, as JSON (subject access request)
 - `node run.mjs mail-setup` — set up mail delivery (Postmark or SMTP) + test mail
 - `node run.mjs ds24-connect` — fetch the Digistore24 API key and store it in `.env`

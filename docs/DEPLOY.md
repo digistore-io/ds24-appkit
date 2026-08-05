@@ -186,10 +186,13 @@ provided the migration itself is written that way. `docs/database.md` has the
 two rules for that: new columns nullable or with a default, and a removal only
 after the version that stopped using them is live.
 
-**After the very first deploy there is nothing else to do.** The database is
-empty, the migration creates everything, and the first person to sign in becomes
-a customer — **not** an operator. So create the operator account yourself,
-before you announce the app:
+**After the very first deploy, two things are still missing — and neither
+arrives by itself.** The migration creates every TABLE; it fills none of them.
+A fresh production database is empty, and so is a fresh production bucket.
+
+**First, the operator account.** The first person to sign in becomes a
+customer — **not** an operator. So create the account yourself, before you
+announce the app:
 
 ```
 node run.mjs user-create --email you@example.com --role owner --apply
@@ -198,6 +201,23 @@ node run.mjs user-create --email you@example.com --role owner --apply
 against the production `DATABASE_URL`. (The "first account becomes owner" rule
 is DEV-only, on purpose: a fresh production database is empty in exactly the
 same way, and there the first person through the door is a stranger.)
+
+**Second, your content.** Rows written into the local database and files put
+into the local media store stayed on your machine — a course built and tested
+locally goes live EMPTY unless its content is applied to production, and every
+local gate stays green while it does. If this app ships content
+(`content/media-manifest.json`, `scripts/content/appliers/`), the go-live step
+is:
+
+```
+node run.mjs content-media-sync --env prod --apply    # staged media → prod bucket
+node run.mjs content-apply --env prod                 # rows + shipped media
+node run.mjs content-check --env prod                 # green = prod holds it
+```
+
+with the production `DATABASE_URL` set the same way as for `user-create`. The
+whole story — what travels with a deploy and what never does — is
+[`docs/content.md`](content.md); the guided version is the `go-live` skill.
 
 ---
 
@@ -542,8 +562,25 @@ A deploy that finished is not a deploy that works. In order:
 ```
 https://YOUR-DOMAIN/api/healthz      → {"status":"ok"}
 https://YOUR-DOMAIN/api/readyz       → ready   (this one talks to the database)
+DATABASE_URL="postgres://…" node run.mjs smoke-account --apply   # once — see below
 node run.mjs smoke --url https://YOUR-DOMAIN
 ```
+
+`smoke-account` gives smoke a way IN on the deployed app: the development
+login does not exist there, so it provisions a member account with a random
+password (into your local `.env`) that smoke uses through the real password
+sign-in. It runs locally against the production `DATABASE_URL` — the same
+procedure as `user-create` above. Once is enough; a re-run rotates the
+password.
+
+**Know what a remote smoke run covers, and what it cannot:** it renders the
+member-visible pages with a real session — that is most of the app, and it is
+the pass that catches the query that only breaks with production data. It does
+NOT render owner-only pages (a member's redirect there is the correct answer),
+it does NOT read the server log (a 200 with an error behind it passes — that
+check exists only locally), and dynamic `[id]` pages are skipped as always.
+The output says all of this; read those lines rather than the green alone, and
+keep running smoke locally too.
 
 Then by hand, because no script can: sign in, buy something (test purchase), and
 check that the order arrived and the access was unlocked. `docs/environments.md`

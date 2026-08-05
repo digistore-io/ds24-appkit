@@ -7,7 +7,11 @@ me my course" names three different applications. The difference is not in the
 tables — all three store units and results. It is in **two decisions**: *when
 does a unit become visible*, and *who answers what the learner produced*. Both
 are columns before they are screens, so settle them **before the data model**
-(`build-app` Step 2), not after the pages.
+(`build-app` Step 2), not after the pages. A third decision comes before
+either: **who authors this content** — a course only the developer himself
+maintains keeps its blocks and units in code and needs none of the content
+tables below, only the state tables
+([`docs/content-authority.md`](content-authority.md)).
 
 This file is a specification to build from, not code to copy. Every schema
 block below is written to be pasted into a `db/schema-*.ts` file — **and
@@ -51,6 +55,32 @@ for them.
 knowledge corpus?** If `content/knowledge-sources/` exists, the vendor has
 already told it most of what the interview would ask — plan the course from
 it (see *Planning from a corpus*, at the end of this file).
+
+## Where the rows come from — and how they reach PROD
+
+Two questions come before the first table below, and each has its own page:
+
+1. **Who authors the content?** [`content-authority.md`](content-authority.md).
+   When the vendor writes every word themselves (the usual case), the blocks
+   and units are **not tables at all** — they are constants in the repo, the
+   schemas below become their types, and only the state tables
+   (`unit_completions`, `submissions`) are created. Content in the repo
+   travels with every deploy by itself.
+2. **How does it reach an environment?** [`content.md`](content.md). Whatever
+   the authority answer, this rule is absolute: **a row inserted into the
+   local database and a video put into the local media store do not exist in
+   PROD.** A course built as hand-inserted local rows dies with the local
+   database — the app goes live with empty pages while every local gate stays
+   green. Content that does live in tables is written as content files plus
+   an idempotent applier (`scripts/content/appliers/` — upsert by slug, which
+   is what "a slug survives a re-seed" is for), the media are declared in
+   `content/media-manifest.json`, and `node run.mjs content-check --env prod`
+   proves at go-live that production actually holds it all.
+
+Media are referenced **by path, never by row id** — `videoMediaId` is wired
+per environment (an applier's `mediaIdFor("topic/file.mp4")`, or a lookup on
+`media.storageKey` for constants), because a media row's id exists once, in
+one database.
 
 ---
 

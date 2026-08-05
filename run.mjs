@@ -185,12 +185,41 @@ const TASKS = {
   },
   "kb-media-sync": {
     group: "Tests & quality",
-    help: "Copy .data/knowledge-media/ into the media store (dry run; --apply writes)",
+    help: "Copy .data/knowledge-media/ into the media store (dry run; --apply writes; --env prod)",
     // Only `env`: the MEDIA_* variables decide which store it fills. No
     // `node_modules` — it is plain Node, and filling a store must work in a
     // project that never ran an install.
     needs: ["env"],
     run: (args) => script("scripts/knowledge/kb-media-sync.mjs", args),
+  },
+  // The three content commands: how what this app SELLS reaches an
+  // environment. Rows and files written locally stay local — content-apply
+  // asserts the manifest's media rows + the appliers' tables, content-media-sync
+  // moves the staged bytes, content-check proves an environment holds it all.
+  // The story: docs/content.md.
+  "content-apply": {
+    group: "Tests & quality",
+    help: "Apply the repo's content: media rows, repo-leg bytes, appliers (--env prod; preview: --dry-run)",
+    // This one is expected to really apply (the ds24-sync convention), so it
+    // passes --apply by itself; the script stays at "a dry run is the normal
+    // case". Whoever only wants to look: --dry-run.
+    needs: ["env", "node_modules"],
+    run: (args) => {
+      const apply = args.includes("--dry-run") ? [] : ["--apply"];
+      return script("scripts/content/apply.mjs", [...apply, ...args]);
+    },
+  },
+  "content-media-sync": {
+    group: "Tests & quality",
+    help: "Copy .data/content-media/ into the media store (dry run; --apply writes; --env prod)",
+    needs: ["env"],
+    run: (args) => script("scripts/content/content-media-sync.mjs", args),
+  },
+  "content-check": {
+    group: "Tests & quality",
+    help: "Does an environment hold this app's content? Files, store, media rows, appliers (--env prod)",
+    needs: ["env", "node_modules"],
+    run: (args) => script("scripts/content/check.mjs", args),
   },
   lint: {
     group: "Tests & quality",
@@ -307,6 +336,11 @@ const TASKS = {
     group: "Users & roles",
     help: "List users and roles (--role owner)",
     run: (args) => script("scripts/users/list-users.mjs", args),
+  },
+  "smoke-account": {
+    group: "Users & roles",
+    help: "Provision the smoke sign-in for a deployed app (--env prod --apply)",
+    run: (args) => script("scripts/users/smoke-account.mjs", args),
   },
 
   // ── Mail delivery (sign-in) ───────────────────────────────────────────────

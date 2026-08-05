@@ -142,6 +142,10 @@ Present the proposal and **iterate** until the user is satisfied.
 
 Write the result into a short **product brief** at `docs/product-brief.md`
 (problem, target user, value proposition, MVP features, billing model, sources).
+A minimal brief may already exist — `build-app` step 0 writes one whenever the
+user arrived with a clear idea, and `coach` can route such a project back into
+research. **Extend that file, never start a second one**: two briefs are two
+versions of the truth, and the later skills read exactly one path.
 
 **One line in it has a fixed shape**, because `build-app` reads it back — it is
 how the next skill knows what to propose instead of asking the question again:

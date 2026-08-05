@@ -1,7 +1,7 @@
 ---
 name: content-production
 description: Produces the media a course or page still lacks — writes lesson scripts in one tool-neutral format, recommends and sets up a video toolset on request (Remotion for animated explainers, a camera plus Descript or the HeyGen API for talking heads, a TTS voice per video in de/en/fr/es with edge-tts as the free default — the developer stays free to pick others), renders explainers WITH their voice track and a subtitle file that stays off until the viewer switches it on, and delivers the finished files into the app behind the right plan. Use this when the user says "create my course content", "I need videos for my lessons", "can you produce the videos?", "make an explainer video", "I want a talking-head video", "give the videos a voice", "add subtitles", or when a course exists whose units have no media. Material that ALREADY exists is `knowledge-intake`; delivering an existing file is `visuals`; this skill is for media that do not exist yet.
-requires: 0.12.0
+requires: 0.15.0
 ---
 <!-- Copyright (c) 2026 Digistore24 Inc, St. Petersburg, USA — SPDX-License-Identifier: MIT -->
 
@@ -154,17 +154,33 @@ said out loud, never presented as the full one.
 
 ## Step 5 — Into the app
 
-The delivery road is the reference's *Into the app* section: faststart checked,
-media store with `visibility: "entitled"` + the course's `requiresPlan`, the
-media row wired into `videoMediaId` / `worksheetMediaId`. A subtitle `.vtt`
-goes in the same way (`text/vtt`, same visibility and plan as its video) and
-is wired into `subtitleMediaId`; the page passes it to `<MediaPlayer>` as
-`tracks` — its address comes from `mediaUrlFor()` like every file, and for
-`text/vtt` that is deliberately the app's own route (the reference says why a
-bucket URL in a `<track>` fails silently). Then `node run.mjs smoke`,
-`node run.mjs errors`, and one unit opened by hand — where a subtitle was
-wired, switch it ON in the player's CC menu once: it must be off by default
-AND selectable, and no automated check sees an empty CC menu.
+The delivery road is the reference's *Into the app* section: faststart
+checked, then the manifest road from
+[`docs/content.md`](../../../docs/content.md) — the file to
+`content/media/<topic>/…` (≤ 10 MB) or `.data/content-media/…` (a lesson
+video), one entry in `content/media-manifest.json` with
+`visibility: "entitled"` + the course's `requiresPlan`, then
+`node run.mjs content-apply` and, for staged files,
+`node run.mjs content-media-sync --apply`. Units are wired **by path**, never
+by a copied row id: `mediaIdFor("<topic>/<file>.mp4")` in an applier for
+`videoMediaId` / `worksheetMediaId`. A subtitle `.vtt` goes in the same way
+(`text/vtt`, same visibility and plan as its video) and is wired into
+`subtitleMediaId`; the page passes it to `<MediaPlayer>` as `tracks` — its
+address comes from `mediaUrlFor()` like every file, and for `text/vtt` that
+is deliberately the app's own route (the reference says why a bucket URL in a
+`<track>` fails silently). Then `node run.mjs smoke`, `node run.mjs errors`,
+and one unit opened by hand — where a subtitle was wired, switch it ON in the
+player's CC menu once: it must be off by default AND selectable, and no
+automated check sees an empty CC menu.
+
+**Say the environment sentence out loud once, because it is the failure that
+stays silent:** everything this step filled is THIS machine's database and
+store. PROD gets the rows and bytes at go-live — `content-media-sync --env
+prod --apply`, `content-apply --env prod`, and `content-check --env prod`
+green as the exit condition (go-live §5 carries the step). A course finished
+locally and never applied to production goes live empty, with every local
+gate green.
+
 Close each script: `status: produced`, `produced-media:` filled. One entry in
 `docs/app.md` for what was produced and with which tools.
 

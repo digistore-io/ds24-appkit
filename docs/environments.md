@@ -64,6 +64,29 @@ environment — **hard rules** hang off it:
 
 The concrete values come from the respective `.env` or from the host's secrets.
 
+## What data lives where — nothing crosses by itself
+
+Each environment has its **own database and its own media store.** The table
+above lists three `DATABASE_URL`s because there are three databases — a row
+written into one exists in none of the others, and the same holds for every
+file in a media store. The repo is the only thing all environments share.
+
+| | Travels dev → prod how |
+|---|---|
+| Code, pages, migrations, `content/` and `config/` files | by itself, with every deploy (git) |
+| The schema | `npm run db:migrate` in the deploy hook — structure, never rows |
+| Digistore products | `node run.mjs ds24-sync --env prod` (one set per environment) |
+| **Rows** — courses, catalog entries, media rows | `node run.mjs content-apply --env prod` |
+| Media files (bytes) | shipped ≤ 10 MB: with the repo, via `content-apply` · staged: `node run.mjs content-media-sync --env prod --apply` |
+| Knowledge media (the assistant's) | `node run.mjs kb-media-sync --env prod --apply` |
+| Customer data | **never.** It is born in its environment and stays there |
+
+The failure this table exists to prevent: an app built and tested locally —
+course rows in the local Postgres, videos in the local store — deployed, and
+live **empty**, with every local gate green. `node run.mjs content-check
+--env prod` is the command that catches it, and [`content.md`](content.md) is
+the full story.
+
 ## Receiving IPNs locally (DEV) — Cloudflare Quick Tunnel
 
 Digistore24 has to reach the IPN via HTTPS. Locally that works without extra

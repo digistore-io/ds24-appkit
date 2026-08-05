@@ -194,6 +194,14 @@ Then five variables go to the host with the rest:
 `MEDIA_DRIVER=s3`, `MEDIA_S3_ENDPOINT`, `MEDIA_S3_BUCKET`,
 `MEDIA_S3_ACCESS_KEY_ID`, `MEDIA_S3_SECRET_ACCESS_KEY`.
 
+**And the same values go into the local `.env` once more, under the `_PROD`
+suffix** (`MEDIA_S3_ENDPOINT_PROD`, `MEDIA_S3_BUCKET_PROD`, … — see
+`.env.example`): reference copies, the same contract as
+`DIGISTORE_IPN_PASSPHRASE_PROD`. They are what lets a locally-run
+`content-media-sync --env prod` or `kb-media-sync --env prod` fill the
+production bucket at go-live without ever editing the plain `MEDIA_*` values —
+which keep meaning THIS machine.
+
 Ask for the credentials **scoped to that one bucket**, not an account-wide key.
 Every provider above can do it, and the difference matters the day the key
 leaks: one bucket, or everything the user has there.
@@ -252,11 +260,22 @@ transport works.
 ```
 https://YOUR-DOMAIN/api/healthz     → {"status":"ok"}
 https://YOUR-DOMAIN/api/readyz      → ready      (this one asks the database)
+DATABASE_URL="postgres://…" node run.mjs smoke-account --apply    # once
 node run.mjs smoke --url https://YOUR-DOMAIN
 ```
 
+`smoke-account` runs against the production `DATABASE_URL` exactly like
+`user-create` in step 8 — it provisions the member account smoke signs in as
+on the live app (the development login does not exist there) and writes its
+random password into the local `.env`. Without it, smoke can only watch the
+protected pages redirect — and it will say so; **read the sign-in line** of
+its output, "NOT checked" is not a pass.
+
 No 5xx. Production runs into errors that never appeared locally — a missing
-variable, a migration that did not run — and this is where they surface.
+variable, a migration that did not run — and this is where they surface. A
+remote run does not read the server log and never renders owner-only pages
+(the output says both) — the local `node run.mjs smoke` remains the fuller
+half.
 
 Then read the host's log once with your own eyes (`railway logs`, `fly logs`, the
 dashboard). `✓ Environment: PRODUCTION` in it means the environment check passed;

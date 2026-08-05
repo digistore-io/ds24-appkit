@@ -16,15 +16,25 @@
 //
 //   1. anonymous — every page once. A 307 to /login here is the correct answer
 //      for a protected page, and it says nothing at all about that page.
-//   2. signed in as the owner — exactly the pages that redirected above, now
-//      with a real session (scripts/dev/sign-in.mjs). These are the pages with
-//      the queries in them: the operator's, the member's, everything touching
-//      money and roles. Without this pass they were only ever exercised when a
-//      person opened them by hand.
+//   2. signed in — exactly the pages that redirected above, now with a real
+//      session (scripts/dev/sign-in.mjs). These are the pages with the queries
+//      in them: the operator's, the member's, everything touching money and
+//      roles. Without this pass they were only ever exercised when a person
+//      opened them by hand.
 //
-// The second pass is local-only and needs the development login, so it can be
-// unavailable — and then it SAYS SO, in one line, with the reason. A sweep that
-// quietly stopped being signed in would report green while checking nothing.
+// WHO is signed in depends on where the app runs, and the difference matters:
+//
+//   - locally: the OWNER, via the development login — every protected page
+//     renders, admin pages included.
+//   - deployed (--url): the smoke MEMBER, via the real password sign-in —
+//     provisioned once with `node run.mjs smoke-account`. Owner-only pages
+//     answer a member with a redirect, so remotely they count as redirects,
+//     never as rendered. The log check below is local-only too. A remote run
+//     is therefore the smaller half of smoke — run it locally as well.
+//
+// Either pass can be unavailable — and then it SAYS SO, in one line, with the
+// reason. A sweep that quietly stopped being signed in would report green
+// while checking nothing.
 //
 // Verdict:
 //   5xx                          → FAILURE, exit code 1
@@ -41,7 +51,7 @@
 import { readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { findErrors, markLog } from "./log-errors.mjs";
-import { signInAsOwner } from "./sign-in.mjs";
+import { signInAsOwner, signInAsSmokeMember } from "./sign-in.mjs";
 
 const args = process.argv.slice(2);
 const wantSignedIn = !args.includes("--no-signed-in");
@@ -164,22 +174,27 @@ for (const route of routes) {
 }
 
 // ── the second pass ─────────────────────────────────────────────────────────
-// Only where a session can exist at all: the development login is DEV-only, and
-// the database this script can reach is the local one. Against a staging URL the
-// right answer is that these pages were not checked, said plainly.
+// Locally as the owner (development login), remotely as the smoke member (the
+// real password sign-in, provisioned by `node run.mjs smoke-account`). Where
+// neither door opens, the right answer is that these pages were not checked,
+// said plainly.
 let signedInPages = 0;
-if (gated.length > 0 && wantSignedIn && isLocal) {
-  const session = await signInAsOwner(baseUrl);
+if (gated.length > 0 && wantSignedIn) {
+  const session = isLocal ? await signInAsOwner(baseUrl) : await signInAsSmokeMember(baseUrl);
   if (session.skipped) {
     console.log(`\n·  ${gated.length} protected page(s) NOT checked — ${session.reason}`);
   } else {
-    console.log(`\nSigned in as ${session.as} — the ${gated.length} protected page(s) again:\n`);
+    console.log(
+      `\nSigned in as ${session.as} (${session.role}) — the ${gated.length} protected page(s) again:\n`,
+    );
+    if (session.role === "member") {
+      console.log("·  as a member — owner-only pages count as a redirect here, not as rendered\n");
+    }
     for (const route of gated) await callPage(route, session.cookie);
     signedInPages = gated.length;
   }
 } else if (gated.length > 0) {
-  const why = wantSignedIn ? "not a local app" : "--no-signed-in";
-  console.log(`\n·  ${gated.length} protected page(s) NOT checked — ${why}`);
+  console.log(`\n·  ${gated.length} protected page(s) NOT checked — --no-signed-in`);
 }
 
 if (failures > 0) {
@@ -213,4 +228,9 @@ if (isLocal) {
     process.exit(1);
   }
   console.log("✓ Nothing in the log either.");
+} else {
+  console.log(
+    "·  the server log was not read — that check exists only for the local app,\n" +
+      "   so a 200 with an error behind it passes here. Run smoke locally too.",
+  );
 }

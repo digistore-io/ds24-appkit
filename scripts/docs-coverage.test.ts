@@ -179,7 +179,7 @@ const refsIn = (text: string) => [...text.matchAll(DOC_REF)].map((m) => m[1]);
  * shipped doc as generated would hide a broken link.
  */
 const GENERATED = new Map([
-  ["product-brief.md", "written by the skill market-research"],
+  ["product-brief.md", "written by market-research, or minimally by build-app step 0 when the idea was already there"],
   ["app.md", "this app's own notebook — created by build-app, grown per feature"],
   ["design.md", "this app's visual identity — written by the skill design"],
 ]);

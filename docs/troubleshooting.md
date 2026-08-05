@@ -325,3 +325,42 @@ If the foreign sender is a deliberate, informed decision, set
 [`docs/auth-setup.md`](auth-setup.md) → *the sender rule*.
 `node run.mjs doctor --deploy` gives the same verdict on your own machine,
 before a deploy ever runs into it.
+
+## The app went live empty — content that only ever existed on your machine
+
+The symptom: locally the app is finished — the course renders, the videos
+play, `smoke` and `errors` are green, the tests pass. Deployed, the same
+pages are live and **empty**: no blocks, no units, media cards that 404. No
+error anywhere, because nothing is failing — a course page over an empty
+table is a clean 200, and `smoke` cannot tell it from a full one.
+
+The cause is never the deploy. It is what the deploy carries: **the repo, and
+nothing else.** Rows written into the local Postgres and files put into the
+local media store are not code — `git push` does not move them, the migration
+hook creates tables and fills none of them, and each environment has its own
+database and its own bucket ([`environments.md`](environments.md) → *What
+data lives where*). An app whose content was INSERTed locally has content on
+exactly one machine: yours.
+
+One variant of this deserves its own sentence, because it was seen in the
+field: **an agent invents a local S3 — MinIO or similar — to develop
+against.** This template has no MinIO and needs none; the local driver is
+plain files under `.data/media/` (`MEDIA_DRIVER=local`), and `lib/env-guard.ts`
+refuses to start a STAGING/PROD app on it. A local bucket does not change the
+diagnosis, it just dresses it up: a store on your machine is a store the live
+app cannot read, whatever protocol it speaks.
+
+The fix is the content mechanism, never a workaround:
+
+- Content the vendor authors is repo files from day one —
+  [`content-authority.md`](content-authority.md) (constants in code) and
+  [`content.md`](content.md) (the manifest, the two media legs, the
+  appliers). What is in the repo travels with every deploy by itself.
+- What cannot live in the repo moves by command:
+  `node run.mjs content-apply --env prod` (rows + shipped media) and
+  `node run.mjs content-media-sync --env prod --apply` (staged media).
+- The proof is `node run.mjs content-check --env prod` — it HEADs every
+  declared file against the production store and counts every applier's rows
+  in the production database. Green there, plus one real content page opened
+  live, is what "the content is there" actually means. It is a named go-live
+  step, not an optional extra.

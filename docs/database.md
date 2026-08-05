@@ -83,6 +83,14 @@ all three systems. `.env` does.
 The seed must stay **idempotent** (`on conflict do update/nothing`) so it can
 run several times. No real customer data, no secrets in the seed.
 
+And no product content: the seed creates dev fixtures, not the operator's
+course. Content the developer himself authors lives in code, not in seeded
+rows ([`docs/content-authority.md`](content-authority.md)) — and content that
+must exist in PROD never travels through the seed at all: the seed is
+development-only, so anything it creates dies with the local database. The
+sanctioned path is `node run.mjs content-apply`
+([`docs/content.md`](content.md)).
+
 ## Migrations in production
 
 On deploy, `npm run db:migrate` runs **before** the new app version starts —

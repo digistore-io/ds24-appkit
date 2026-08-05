@@ -9,7 +9,10 @@
 // "on conflict do update/nothing" everywhere).
 //
 // Development data belongs in here (admin account, example content) — NO real
-// customer data and no secrets.
+// customer data and no secrets. And no PRODUCT content: this seed is
+// development-only, so anything it creates dies with the local database.
+// Content that must exist in PROD goes through `node run.mjs content-apply`
+// (docs/content.md).
 import { randomUUID } from "node:crypto";
 import "../lib/env.mjs";
 import postgres from "postgres";

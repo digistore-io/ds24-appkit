@@ -309,18 +309,28 @@ A produced file follows the same road as any other media
    `ffmpeg -movflags +faststart` the player downloads the whole video before
    the first frame (the same rule `kb-media-sync` enforces for knowledge
    media). Remotion's default output is fine; camera exports often are not.
-2. **Into the media store** with `visibility: "entitled"` plus the course's
-   `requiresPlan` — buying the course IS buying the videos. The subtitle
-   `.vtt` travels the same way, with the same visibility and plan as its
-   video. Mind the per-kind upload ceiling in `config/media.json`; a file
-   above it needs the path `docs/visuals.md` describes.
-3. **Wire the unit**: the media row's id into `videoMediaId` (worksheets:
-   `worksheetMediaId`, subtitles: `subtitleMediaId`), then `node run.mjs smoke`
-   and `node run.mjs errors`, and open one unit by hand — dynamic pages are
-   skipped by `smoke`. Where a subtitle track was wired, switch it ON in the
-   player's CC menu once: an empty CC menu on a page that should have one is
-   the silent failure named under *Subtitles* above, and no automated check
-   sees it.
+2. **Declare it, then apply it** — produced media are PRODUCT content, and
+   product content travels the manifest road ([`docs/content.md`](content.md)),
+   never a hand upload into whatever store this machine points at: the file
+   goes to `content/media/<topic>/<file>` (≤ 10 MB) or `.data/content-media/…`
+   (larger — a lesson video is this leg), one entry in
+   `content/media-manifest.json` with `visibility: "entitled"` plus the
+   course's `requiresPlan` — buying the course IS buying the videos. The
+   subtitle `.vtt` travels the same way, with the same visibility and plan as
+   its video. Then `node run.mjs content-apply` (row + shipped bytes) and, for
+   staged files, `node run.mjs content-media-sync --apply`. **This fills the
+   environment you are in — PROD gets the same content at go-live via
+   `--env prod`, and `content-check --env prod` is what proves it arrived.**
+3. **Wire the unit** — by the file's PATH, resolved per environment, never by
+   a copied row id (an id exists in one database only): in an applier,
+   `videoMediaId` comes from `mediaIdFor("<topic>/<file>.mp4")` (worksheets:
+   `worksheetMediaId`, subtitles: `subtitleMediaId`); constants-in-code apps
+   look the row up on `media.storageKey` instead ([`docs/content.md`](content.md)).
+   Then `node run.mjs smoke` and `node run.mjs errors`, and open one unit by
+   hand — dynamic pages are skipped by `smoke`. Where a subtitle track was
+   wired, switch it ON in the player's CC menu once: an empty CC menu on a
+   page that should have one is the silent failure named under *Subtitles*
+   above, and no automated check sees it.
 4. **Close the loop in the script**: `status: produced`,
    `produced-media: <topic>/<file>.mp4`. A script that says `produced` while
    the unit shows nothing is the drift this line exists to catch.

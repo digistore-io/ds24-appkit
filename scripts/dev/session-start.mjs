@@ -138,7 +138,7 @@ if (approvalLine) console.log(approvalLine);
 if (unwritten.length > 0) {
   console.log(
     `[App notes: docs/app.md does not cover ${unwritten.join(", ")}. ` +
-      `Write the entry when the feature works — CLAUDE.md → Adding a feature, step 8.]`,
+      `Write the entry when the feature works — CLAUDE.md → Adding a feature, step 9.]`,
   );
 }
 if (blocked.length > 0) {
